@@ -11,6 +11,7 @@
 #### Features
 
 - Added AI Meeting feature for intelligent meeting assistance
+  - **Requires:** Set the `ASSEMBLYAI_API_KEY` environment variable. [Get your API key here](https://www.assemblyai.com/docs/faq/how-to-get-your-api-key)
 - Enhanced Web API with improved database creation capabilities
 
 #### Improvements
