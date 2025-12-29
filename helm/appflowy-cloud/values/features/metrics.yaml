@@ -1,0 +1,21 @@
+# Optional metrics-only overlay (no Prometheus stack) for environments that already have the
+# Prometheus Operator / kube-prometheus-stack. Apply this on top of your local `values-test.yaml`
+# when you want AppFlowy services to expose `/metrics` and emit ServiceMonitors.
+
+appflowy-cloud:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+appflowy-worker:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+appflowy-ai:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

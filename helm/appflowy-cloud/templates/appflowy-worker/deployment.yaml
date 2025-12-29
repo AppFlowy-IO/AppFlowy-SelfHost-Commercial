@@ -1,0 +1,135 @@
+{{- if index .Values "appflowy-worker" "enabled" }}
+{{- $worker := index .Values "appflowy-worker" }}
+{{- $metrics := $worker.metrics }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appflowy.worker.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-worker
+spec:
+  replicas: {{ $worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-worker
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-global.yaml") . | sha256sum }}
+        {{- with $worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "appflowy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: appflowy-worker
+    spec:
+      {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: appflowy-worker
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $worker.image) | quote }}
+          imagePullPolicy: {{ $worker.image.pullPolicy }}
+          {{- if $worker.metrics.enabled }}
+          ports:
+            - name: {{ $metrics.portName | default "http" }}
+              containerPort: {{ $worker.service.port }}
+              protocol: TCP
+          {{- end }}
+          env:
+            # Application configuration
+            - name: RUST_LOG
+              value: {{ $worker.config.rustLog | quote }}
+            - name: APPFLOWY_ENVIRONMENT
+              value: {{ $worker.config.environment | quote }}
+            - name: APPFLOWY_WORKER_ENVIRONMENT
+              value: {{ $worker.config.environment | quote }}
+
+            # Database configuration
+            - name: POSTGRES_USER
+              value: {{ include "appflowy.postgresql.username" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.postgresql.secretName" . }}
+                  key: {{ include "appflowy.postgresql.secretKey" . }}
+            - name: APPFLOWY_WORKER_DATABASE_URL
+              value: {{ include "appflowy.postgresql.url" . | quote }}
+            - name: APPFLOWY_WORKER_DATABASE_NAME
+              value: {{ include "appflowy.postgresql.database" . | quote }}
+
+            # Redis configuration
+            {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.redis.secretName" . }}
+                  key: {{ include "appflowy.redis.secretKey" . }}
+            {{- end }}
+            - name: APPFLOWY_WORKER_REDIS_URL
+              value: {{ include "appflowy.redis.url" . | quote }}
+
+            # S3/MinIO configuration
+            - name: APPFLOWY_S3_USE_MINIO
+              value: {{ .Values.global.s3.useMinio | quote }}
+            - name: APPFLOWY_S3_MINIO_URL
+              value: {{ include "appflowy.s3.endpoint" . | quote }}
+            - name: APPFLOWY_S3_BUCKET
+              value: {{ include "appflowy.s3.bucket" . | quote }}
+            - name: APPFLOWY_S3_REGION
+              value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.accessKey | default "root-user" }}
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
+
+            # Worker specific settings
+            - name: APPFLOWY_WORKER_IMPORT_TICK_INTERVAL
+              value: {{ $worker.config.importTickInterval | quote }}
+
+            {{- $cloud := index .Values "appflowy-cloud" }}
+            {{- if $cloud.config.mailer.enabled }}
+            # Mailer configuration (shared with cloud)
+            - name: APPFLOWY_MAILER_SMTP_HOST
+              value: {{ $cloud.config.mailer.host | quote }}
+            - name: APPFLOWY_MAILER_SMTP_PORT
+              value: {{ $cloud.config.mailer.port | quote }}
+            - name: APPFLOWY_MAILER_SMTP_USERNAME
+              value: {{ $cloud.config.mailer.username | quote }}
+            - name: APPFLOWY_MAILER_SMTP_EMAIL
+              value: {{ $cloud.config.mailer.email | quote }}
+            - name: APPFLOWY_MAILER_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.cloud.fullname" . }}-secret
+                  key: smtp-password
+            - name: APPFLOWY_MAILER_SMTP_TLS_KIND
+              value: {{ $cloud.config.mailer.tlsKind | quote }}
+            {{- end }}
+
+          resources:
+            {{- toYaml $worker.resources | nindent 12 }}
+      {{- with $worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

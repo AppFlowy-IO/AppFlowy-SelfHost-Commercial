@@ -1,0 +1,34 @@
+{{- if and .Values.ingress.enabled .Values.minio.enabled }}
+{{- $baseAnnotations := .Values.ingress.annotations | default (dict) -}}
+{{- $minioHost := printf "%s:%v" (include "appflowy.s3.host" .) (.Values.global.s3.port | default 9000) -}}
+{{- $annotations := merge (dict) $baseAnnotations (dict "nginx.ingress.kubernetes.io/use-regex" "true" "nginx.ingress.kubernetes.io/rewrite-target" "/$2" "nginx.ingress.kubernetes.io/upstream-vhost" $minioHost) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "appflowy.fullname" . }}-minio-api
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "appflowy.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          - path: /minio-api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "appflowy.s3.host" . }}
+                port:
+                  number: {{ .Values.minio.service.ports.api | default 9000 }}
+{{- end }}

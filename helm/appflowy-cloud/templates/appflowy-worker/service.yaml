@@ -1,0 +1,25 @@
+{{- if and (index .Values "appflowy-worker" "enabled") (index .Values "appflowy-worker" "metrics" "enabled") }}
+{{- $worker := index .Values "appflowy-worker" }}
+{{- $metrics := $worker.metrics }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "appflowy.worker.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-worker
+  {{- if $worker.metrics.serviceAnnotations }}
+  annotations:
+    {{- toYaml $worker.metrics.serviceAnnotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $worker.service.type }}
+  ports:
+    - port: {{ $worker.service.port }}
+      targetPort: {{ $metrics.portName | default "http" }}
+      protocol: TCP
+      name: {{ $metrics.portName | default "http" }}
+  selector:
+    {{- include "appflowy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-worker
+{{- end }}

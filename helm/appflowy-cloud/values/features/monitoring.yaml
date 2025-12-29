@@ -1,0 +1,27 @@
+# Optional monitoring stack (Prometheus Operator + Grafana) for local/dev.
+# This enables kube-prometheus-stack and AppFlowy ServiceMonitors.
+
+kube-prometheus-stack:
+  enabled: true
+  prometheus:
+    prometheusSpec:
+      # Scrape ServiceMonitors without requiring release labels.
+      serviceMonitorSelectorNilUsesHelmValues: false
+
+appflowy-cloud:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+appflowy-worker:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+appflowy-ai:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

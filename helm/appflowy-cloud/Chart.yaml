@@ -1,0 +1,41 @@
+apiVersion: v2
+name: appflowy-cloud
+description: AppFlowy Cloud - Self-hosted collaborative workspace platform
+type: application
+version: 1.0.0
+appVersion: "latest"
+home: https://appflowy.io
+sources:
+  - https://github.com/AppFlowy-IO/AppFlowy-Cloud
+maintainers:
+  - name: AppFlowy Team
+    url: https://github.com/AppFlowy-IO
+keywords:
+  - appflowy
+  - collaboration
+  - workspace
+  - notes
+  - productivity
+
+dependencies:
+  # Infrastructure - Bitnami charts
+  - name: postgresql
+    version: "16.2.1"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+
+  - name: redis
+    version: "20.3.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+
+  - name: minio
+    version: "14.8.3"
+    repository: https://charts.bitnami.com/bitnami
+    condition: minio.enabled
+
+  # Observability (optional)
+  - name: kube-prometheus-stack
+    version: ">=55.0.0 <70.0.0"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: kube-prometheus-stack.enabled

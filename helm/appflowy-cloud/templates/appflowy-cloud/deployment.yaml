@@ -1,0 +1,191 @@
+{{- if index .Values "appflowy-cloud" "enabled" }}
+{{- $cloud := index .Values "appflowy-cloud" }}
+{{- $metrics := $cloud.metrics }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appflowy.cloud.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-cloud
+spec:
+  replicas: {{ $cloud.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-cloud
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-global.yaml") . | sha256sum }}
+        {{- with $cloud.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "appflowy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: appflowy-cloud
+    spec:
+      {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: appflowy-cloud
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $cloud.image) | quote }}
+          imagePullPolicy: {{ $cloud.image.pullPolicy }}
+          ports:
+            - name: {{ $metrics.portName | default "http" }}
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # Application configuration
+            - name: RUST_LOG
+              value: {{ $cloud.config.rustLog | quote }}
+            - name: APPFLOWY_ENVIRONMENT
+              value: {{ $cloud.config.environment | quote }}
+
+            # Database configuration
+            - name: POSTGRES_USER
+              value: {{ include "appflowy.postgresql.username" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.postgresql.secretName" . }}
+                  key: {{ include "appflowy.postgresql.secretKey" . }}
+            - name: APPFLOWY_DATABASE_URL
+              value: {{ include "appflowy.postgresql.url" . | quote }}
+            - name: APPFLOWY_DATABASE_MAX_CONNECTIONS
+              value: {{ $cloud.config.databaseMaxConnections | quote }}
+
+            # Redis configuration
+            {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.redis.secretName" . }}
+                  key: {{ include "appflowy.redis.secretKey" . }}
+            {{- end }}
+            - name: APPFLOWY_REDIS_URI
+              value: {{ include "appflowy.redis.url" . | quote }}
+
+            # GoTrue configuration
+            - name: APPFLOWY_GOTRUE_BASE_URL
+              value: {{ include "appflowy.gotrue.internalUrl" . | quote }}
+            - name: APPFLOWY_GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.jwt.secretName" . }}
+                  key: {{ include "appflowy.jwt.secretKey" . }}
+
+            # S3/MinIO configuration
+            - name: APPFLOWY_S3_USE_MINIO
+              value: {{ .Values.global.s3.useMinio | quote }}
+            - name: APPFLOWY_S3_MINIO_URL
+              value: {{ include "appflowy.s3.endpoint" . | quote }}
+            - name: APPFLOWY_S3_BUCKET
+              value: {{ include "appflowy.s3.bucket" . | quote }}
+            - name: APPFLOWY_S3_REGION
+              value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_CREATE_BUCKET
+              value: {{ .Values.global.s3.createBucket | quote }}
+            {{- if .Values.global.s3.presignedUrlEndpoint }}
+            - name: APPFLOWY_S3_PRESIGNED_URL_ENDPOINT
+              value: {{ .Values.global.s3.presignedUrlEndpoint | quote }}
+            {{- end }}
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.accessKey | default "root-user" }}
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
+
+            # Access control
+            - name: APPFLOWY_ACCESS_CONTROL
+              value: {{ $cloud.config.accessControl | quote }}
+
+            # WebSocket configuration
+            - name: APPFLOWY_WEBSOCKET_MAILBOX_SIZE
+              value: {{ $cloud.config.websocketMailboxSize | quote }}
+
+            # Collaboration settings
+            - name: APPFLOWY_COLLABORATE_MULTI_THREAD
+              value: {{ $cloud.config.collaborateMultiThread | quote }}
+            - name: APPFLOWY_COLLABORATE_REMOVE_BATCH_SIZE
+              value: {{ $cloud.config.collaborateRemoveBatchSize | quote }}
+
+            # Spam detection
+            - name: APPFLOWY_SPAM_DETECT_ENABLED
+              value: {{ $cloud.config.spamDetectEnabled | quote }}
+
+            # File auth
+            - name: APPFLOWY_FILE_AUTH_ENABLED
+              value: {{ $cloud.config.fileAuthEnabled | quote }}
+
+            # AI service configuration
+            {{- if index .Values "appflowy-ai" "enabled" }}
+            - name: AI_SERVER_HOST
+              value: {{ include "appflowy.ai.fullname" . | quote }}
+            - name: AI_SERVER_PORT
+              value: {{ index .Values "appflowy-ai" "service" "port" | quote }}
+            {{- end }}
+
+            # Web URL
+            - name: APPFLOWY_WEB_URL
+              value: {{ include "appflowy.baseUrl" . | quote }}
+
+            {{- if $cloud.config.mailer.enabled }}
+            # Mailer configuration
+            - name: APPFLOWY_MAILER_SMTP_HOST
+              value: {{ $cloud.config.mailer.host | quote }}
+            - name: APPFLOWY_MAILER_SMTP_PORT
+              value: {{ $cloud.config.mailer.port | quote }}
+            - name: APPFLOWY_MAILER_SMTP_USERNAME
+              value: {{ $cloud.config.mailer.username | quote }}
+            - name: APPFLOWY_MAILER_SMTP_EMAIL
+              value: {{ $cloud.config.mailer.email | quote }}
+            - name: APPFLOWY_MAILER_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.cloud.fullname" . }}-secret
+                  key: smtp-password
+            - name: APPFLOWY_MAILER_SMTP_TLS_KIND
+              value: {{ $cloud.config.mailer.tlsKind | quote }}
+            {{- end }}
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ $metrics.portName | default "http" }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: {{ $metrics.portName | default "http" }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml $cloud.resources | nindent 12 }}
+      {{- with $cloud.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cloud.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $cloud.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

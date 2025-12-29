@@ -1,0 +1,32 @@
+{{- if and (index .Values "appflowy-ai" "enabled") (index .Values "appflowy-ai" "metrics" "enabled") (index .Values "appflowy-ai" "metrics" "serviceMonitor" "enabled") }}
+{{- $ai := index .Values "appflowy-ai" }}
+{{- $metrics := $ai.metrics }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "appflowy.ai.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-ai
+    {{- with $metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- if $metrics.serviceMonitor.namespace }}
+  namespace: {{ $metrics.serviceMonitor.namespace }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-ai
+  endpoints:
+    - port: {{ $metrics.portName | default "http" }}
+      path: {{ $metrics.path | default "/metrics" }}
+      interval: {{ $metrics.serviceMonitor.interval | quote }}
+      scrapeTimeout: {{ $metrics.serviceMonitor.scrapeTimeout | quote }}
+  {{- if $metrics.serviceMonitor.namespace }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+{{- end }}

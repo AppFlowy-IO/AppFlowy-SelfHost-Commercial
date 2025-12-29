@@ -1,0 +1,25 @@
+{{- if index .Values "appflowy-cloud" "enabled" }}
+{{- $cloud := index .Values "appflowy-cloud" }}
+{{- $metrics := $cloud.metrics }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "appflowy.cloud.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-cloud
+  {{- if and $cloud.metrics.enabled $cloud.metrics.serviceAnnotations }}
+  annotations:
+    {{- toYaml $cloud.metrics.serviceAnnotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $cloud.service.type }}
+  ports:
+    - port: {{ $cloud.service.port }}
+      targetPort: {{ $metrics.portName | default "http" }}
+      protocol: TCP
+      name: {{ $metrics.portName | default "http" }}
+  selector:
+    {{- include "appflowy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-cloud
+{{- end }}

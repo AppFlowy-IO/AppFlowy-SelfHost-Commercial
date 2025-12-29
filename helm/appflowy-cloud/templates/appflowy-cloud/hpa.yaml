@@ -1,0 +1,26 @@
+{{- if index .Values "appflowy-cloud" "enabled" }}
+{{- $cloud := index .Values "appflowy-cloud" }}
+{{- if $cloud.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "appflowy.cloud.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-cloud
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "appflowy.cloud.fullname" . }}
+  minReplicas: {{ $cloud.autoscaling.minReplicas }}
+  maxReplicas: {{ $cloud.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cloud.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

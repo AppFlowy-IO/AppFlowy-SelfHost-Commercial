@@ -1,0 +1,26 @@
+{{- if index .Values "appflowy-web" "enabled" }}
+{{- $web := index .Values "appflowy-web" }}
+{{- if $web.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "appflowy.web.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "appflowy.web.fullname" . }}
+  minReplicas: {{ $web.autoscaling.minReplicas }}
+  maxReplicas: {{ $web.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $web.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

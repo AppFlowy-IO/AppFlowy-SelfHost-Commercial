@@ -1,0 +1,582 @@
+# =============================================================================
+# AppFlowy Cloud Helm Chart - Default Values
+# =============================================================================
+# This file contains the default configuration values for the AppFlowy Cloud
+# Helm chart. It is intended for production; use values-test.yaml for local dev.
+
+# -----------------------------------------------------------------------------
+# Global Configuration
+# -----------------------------------------------------------------------------
+global:
+  # Domain configuration
+  domain: "localhost"
+  scheme: "http"
+  wsScheme: "ws"
+
+  # Computed URLs (using domain and scheme)
+  # These are templates that will be resolved in _helpers.tpl
+
+  # Image configuration
+  imageRegistry: ""
+  imagePullSecrets: []
+
+  # Common labels applied to all resources
+  labels: {}
+
+  # Common annotations applied to all resources
+  annotations: {}
+
+  # PostgreSQL connection configuration
+  postgresql:
+    # Use internal PostgreSQL (from dependency) or external
+    # When using external, set enabled: false in postgresql section
+    host: "postgres"  # Leave empty to use release-name-postgresql
+    port: 5432
+    database: "postgres"
+    username: "postgres"
+    # Password should be set via --set or existingSecret
+    password: "password"
+    # Use existing secret for credentials
+    existingSecret: ""
+    secretKeys:
+      password: "postgres-password"
+
+  # Redis connection configuration
+  redis:
+    # Use internal Redis (from dependency) or external
+    host: "redis"  # Leave empty to use release-name-redis-master
+    port: 6379
+    password: ""
+    existingSecret: ""
+    secretKeys:
+      password: "redis-password"
+
+  # S3/MinIO configuration
+  s3:
+    useMinio: true
+    # Endpoint for S3 API
+    endpoint: "minio"  # Leave empty to use release-name-minio
+    port: 9000
+    bucket: "appflowy"
+    region: "us-east-1"
+    createBucket: true
+    accessKey: "minioadmin"
+    secretKey: "minioadmin"  # Should be set via --set or existingSecret
+    existingSecret: ""
+    secretKeys:
+      accessKey: "root-user"
+      secretKey: "root-password"
+    # Presigned URL endpoint (external access)
+    presignedUrlEndpoint: ""
+
+  # JWT configuration (shared between GoTrue and AppFlowy Cloud)
+  jwt:
+    secret: "hello456"  # MUST be set - authentication will fail without this
+    existingSecret: ""
+    secretKey: "jwt-secret"
+    expiration: 604800  # 7 days in seconds
+
+# -----------------------------------------------------------------------------
+# Infrastructure Dependencies
+# -----------------------------------------------------------------------------
+
+# PostgreSQL (Bitnami chart)
+# https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: pgvector/pgvector
+    tag: pg16
+  auth:
+    postgresPassword: "password"  # MUST be set
+    database: postgres
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    # Override Bitnami's default readOnlyRootFilesystem: true
+    # Required for PostgreSQL to write to /var/run/postgresql
+    containerSecurityContext:
+      readOnlyRootFilesystem: false
+    initdb:
+      scripts:
+        init-extensions.sql: |
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+# Redis (Bitnami chart)
+# https://github.com/bitnami/charts/tree/main/bitnami/redis
+redis:
+  enabled: true
+  image:
+    tag: latest
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 50m
+      limits:
+        memory: 256Mi
+        cpu: 200m
+
+# MinIO (Bitnami chart)
+# https://github.com/bitnami/charts/tree/main/bitnami/minio
+minio:
+  enabled: true
+  image:
+    repository: minio/minio
+    tag: "RELEASE.2024-02-17T01-15-57Z"
+  command:
+    - minio
+  args:
+    - server
+    - /bitnami/minio/data
+    - --console-address
+    - ":9001"
+  auth:
+    rootUser: minioadmin
+    rootPassword: "minioadmin"  # MUST be set
+  defaultBuckets: "appflowy"
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+      console: 9001
+
+# kube-prometheus-stack (Prometheus Operator + Grafana)
+# https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+kube-prometheus-stack:
+  enabled: false
+
+# -----------------------------------------------------------------------------
+# Application Services
+# -----------------------------------------------------------------------------
+
+# GoTrue Authentication Service
+gotrue:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/gotrue
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 9999
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  # GoTrue specific configuration
+  config:
+    # Admin credentials (created on first startup)
+    adminEmail: "admin@example.com"
+    adminPassword: "password"  # Should be set via secret
+
+    # JWT settings (uses global.jwt by default)
+    jwtExp: 604800
+
+    # User registration
+    disableSignup: false
+    mailerAutoconfirm: true
+
+    # Rate limiting
+    rateLimitEmailSent: 100
+
+    # SMTP configuration
+    smtp:
+      enabled: false
+      host: ""
+      port: 465
+      user: ""
+      password: ""  # From secret
+      adminEmail: ""
+
+    # OAuth providers
+    oauth:
+      google:
+        enabled: false
+        clientId: ""
+        secret: ""  # From secret
+      github:
+        enabled: false
+        clientId: ""
+        secret: ""
+      discord:
+        enabled: false
+        clientId: ""
+        secret: ""
+      apple:
+        enabled: false
+        clientId: ""
+        secret: ""
+
+    # SAML 2.0
+    saml:
+      enabled: false
+      privateKey: ""
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# AppFlowy Cloud Main Backend Service
+appflowy-cloud:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/appflowy_cloud
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 200m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+
+  config:
+    # Rust log level
+    rustLog: "info"
+    environment: "production"
+
+    # Access control
+    accessControl: true
+
+    # WebSocket configuration
+    websocketMailboxSize: 6000
+
+    # Database connection pool
+    databaseMaxConnections: 40
+
+    # Collaboration settings
+    collaborateMultiThread: false
+    collaborateRemoveBatchSize: 100
+
+    # Spam detection
+    spamDetectEnabled: true
+
+    # File auth
+    fileAuthEnabled: true
+
+    # Mailer SMTP (uses same as gotrue or separate)
+    mailer:
+      enabled: false
+      host: ""
+      port: 465
+      username: ""
+      email: ""
+      password: ""
+      tlsKind: "wrapper"
+
+  # Metrics (Prometheus/Grafana)
+  metrics:
+    enabled: false
+    path: /metrics
+    portName: http
+    # Add Prometheus scrape annotations to the service (optional)
+    serviceAnnotations: {}
+    # Create a ServiceMonitor (requires Prometheus Operator)
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
+      # Override namespace for ServiceMonitor (defaults to release namespace)
+      namespace: ""
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# AppFlowy Worker Service (Background Jobs)
+appflowy-worker:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/appflowy_worker
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 4001
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  config:
+    rustLog: "info"
+    environment: "production"
+    importTickInterval: 30
+
+  # Metrics (Prometheus/Grafana)
+  metrics:
+    enabled: false
+    path: /metrics
+    portName: http
+    serviceAnnotations: {}
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
+      namespace: ""
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# AppFlowy Web Frontend
+appflowy-web:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/appflowy_web
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  # Disable probes - nginx in container has permission issues with chown
+  livenessProbe: false
+  readinessProbe: false
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Admin Frontend
+admin-frontend:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/admin_frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+  config:
+    pathPrefix: "/console"
+    # OAuth settings for third-party integrations
+    oauth:
+      clientId: "appflowy_cloud"
+      clientSecret: ""
+      allowableRedirectUris: ""
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# AppFlowy AI Service
+appflowy-ai:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/appflowy_ai
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 5001
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+
+  config:
+    # Default AI models
+    defaultModel: "gpt-4.1-mini"
+    defaultCompletionModel: "gpt-4.1-mini"
+
+  # AI Provider API Keys (from secrets)
+  secrets:
+    openaiApiKey: ""
+    anthropicApiKey: ""
+    deepseekApiKey: ""
+    deepseekApiBase: ""
+    azureOpenaiApiKey: ""
+    azureOpenaiEndpoint: ""
+    azureOpenaiApiVersion: ""
+
+  # Metrics (Prometheus/Grafana)
+  metrics:
+    enabled: false
+    path: /metrics
+    portName: http
+    serviceAnnotations: {}
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
+      namespace: ""
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# -----------------------------------------------------------------------------
+# Ingress Configuration
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+
+  # cert-manager integration (optional)
+  # When enabled, the chart will add the appropriate cert-manager issuer annotation to the Ingress.
+  certManager:
+    enabled: true
+    issuerKind: "ClusterIssuer" # or "Issuer"
+    issuerName: "letsencrypt-prod"
+
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+
+  tls:
+    enabled: true
+    secretName: "appflowy-tls"
+
+  # Additional hosts (besides global.domain)
+  extraHosts: []
+
+# -----------------------------------------------------------------------------
+# Network Policies
+# -----------------------------------------------------------------------------
+networkPolicy:
+  enabled: true
+  # Allow traffic from ingress controller
+  ingressControllerNamespace: "ingress-nginx"
+
+# -----------------------------------------------------------------------------
+# Service Account
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -----------------------------------------------------------------------------
+# Pod Security Context (applied to all pods)
+# -----------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL

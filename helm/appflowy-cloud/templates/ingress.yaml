@@ -1,0 +1,92 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "appflowy.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  {{- $annotations := merge (dict) (.Values.ingress.annotations | default (dict)) -}}
+  {{- $cm := .Values.ingress.certManager | default (dict) -}}
+  {{- if (default false $cm.enabled) }}
+  {{- $issuerName := required "ingress.certManager.issuerName is required when ingress.certManager.enabled is true" $cm.issuerName -}}
+  {{- $issuerKind := lower ($cm.issuerKind | default "clusterissuer") -}}
+  {{- if eq $issuerKind "issuer" }}
+  {{- $_ := set $annotations "cert-manager.io/issuer" $issuerName -}}
+  {{- else }}
+  {{- $_ := set $annotations "cert-manager.io/cluster-issuer" $issuerName -}}
+  {{- end }}
+  {{- end }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+        {{- range .Values.ingress.extraHosts }}
+        - {{ .host | quote }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "appflowy.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          {{- if index .Values "appflowy-cloud" "enabled" }}
+          # API endpoints
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "appflowy.cloud.fullname" . }}
+                port:
+                  number: {{ index .Values "appflowy-cloud" "service" "port" }}
+          # WebSocket endpoint
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "appflowy.cloud.fullname" . }}
+                port:
+                  number: {{ index .Values "appflowy-cloud" "service" "port" }}
+          {{- end }}
+          {{- if index .Values "admin-frontend" "enabled" }}
+          # Admin console
+          - path: {{ index .Values "admin-frontend" "config" "pathPrefix" | default "/console" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "appflowy.admin.fullname" . }}
+                port:
+                  number: {{ index .Values "admin-frontend" "service" "port" }}
+          {{- end }}
+          {{- if index .Values "appflowy-web" "enabled" }}
+          # Web frontend (catch-all, must be last)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "appflowy.web.fullname" . }}
+                port:
+                  number: {{ index .Values "appflowy-web" "service" "port" }}
+          {{- end }}
+    {{- range .Values.ingress.extraHosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ .serviceName }}
+                port:
+                  number: {{ .servicePort }}
+          {{- end }}
+    {{- end }}
+{{- end }}

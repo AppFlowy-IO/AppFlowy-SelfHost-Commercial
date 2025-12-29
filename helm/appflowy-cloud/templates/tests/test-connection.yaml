@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "appflowy.fullname" . }}-test-connection"
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  restartPolicy: Never
+  containers:
+    {{- if .Values.postgresql.enabled }}
+    - name: test-postgresql
+      image: postgres:16-alpine
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing PostgreSQL connection..."
+          PGPASSWORD=$POSTGRES_PASSWORD psql -h {{ include "appflowy.postgresql.host" . }} -U {{ include "appflowy.postgresql.username" . }} -d {{ include "appflowy.postgresql.database" . }} -c "SELECT 1" && echo "PostgreSQL: OK" || exit 1
+      env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "appflowy.postgresql.secretName" . }}
+              key: {{ include "appflowy.postgresql.secretKey" . }}
+    {{- end }}
+
+    {{- if .Values.redis.enabled }}
+    - name: test-redis
+      image: redis:alpine
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing Redis connection..."
+          {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+          REDISCLI_AUTH=$REDIS_PASSWORD redis-cli -h {{ include "appflowy.redis.host" . }} -p {{ include "appflowy.redis.port" . }} ping && echo "Redis: OK" || exit 1
+          {{- else }}
+          redis-cli -h {{ include "appflowy.redis.host" . }} -p {{ include "appflowy.redis.port" . }} ping && echo "Redis: OK" || exit 1
+          {{- end }}
+      {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+      env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "appflowy.redis.secretName" . }}
+              key: {{ include "appflowy.redis.secretKey" . }}
+      {{- end }}
+    {{- end }}
+
+    {{- if .Values.gotrue.enabled }}
+    - name: test-gotrue
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing GoTrue health endpoint..."
+          curl -sf http://{{ include "appflowy.gotrue.fullname" . }}:{{ .Values.gotrue.service.port }}/health && echo "GoTrue: OK" || exit 1
+    {{- end }}
+
+    {{- if index .Values "appflowy-cloud" "enabled" }}
+    - name: test-appflowy-cloud
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing AppFlowy Cloud health endpoint..."
+          curl -sf http://{{ include "appflowy.cloud.fullname" . }}:{{ index .Values "appflowy-cloud" "service" "port" }}/api/health && echo "AppFlowy Cloud: OK" || exit 1
+    {{- end }}
+
+    {{- if index .Values "appflowy-web" "enabled" }}
+    - name: test-appflowy-web
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing AppFlowy Web..."
+          curl -sf http://{{ include "appflowy.web.fullname" . }}:{{ index .Values "appflowy-web" "service" "port" }}/ && echo "AppFlowy Web: OK" || exit 1
+    {{- end }}
+
+    {{- if index .Values "appflowy-ai" "enabled" }}
+    - name: test-appflowy-ai
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing AppFlowy AI health endpoint..."
+          curl -sf http://{{ include "appflowy.ai.fullname" . }}:{{ index .Values "appflowy-ai" "service" "port" }}/health && echo "AppFlowy AI: OK" || exit 1
+    {{- end }}
+
+    {{- if .Values.minio.enabled }}
+    - name: test-minio
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing MinIO health endpoint..."
+          curl -sf http://{{ .Release.Name }}-minio:9000/minio/health/live && echo "MinIO: OK" || exit 1
+    {{- end }}

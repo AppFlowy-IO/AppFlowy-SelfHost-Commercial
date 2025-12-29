@@ -1,0 +1,20 @@
+{{- if index .Values "admin-frontend" "enabled" }}
+{{- $admin := index .Values "admin-frontend" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "appflowy.admin.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin-frontend
+spec:
+  type: {{ $admin.service.type }}
+  ports:
+    - port: {{ $admin.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "appflowy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: admin-frontend
+{{- end }}

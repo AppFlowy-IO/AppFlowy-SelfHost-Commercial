@@ -1,0 +1,107 @@
+
+=======================================================================
+        AppFlowy Cloud has been deployed successfully!
+=======================================================================
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Access your AppFlowy Cloud instance at:
+
+  URL: {{ include "appflowy.baseUrl" . }}
+
+  Web App:       {{ include "appflowy.baseUrl" . }}
+  Admin Console: {{ include "appflowy.baseUrl" . }}/console
+  API:           {{ include "appflowy.baseUrl" . }}/api
+  WebSocket:     {{ include "appflowy.websocketUrl" . }}
+
+{{- if .Values.ingress.tls.enabled }}
+  TLS is enabled. Make sure cert-manager is configured to issue certificates.
+{{- end }}
+
+{{- else }}
+
+To access the application, set up port forwarding:
+
+  # AppFlowy Web
+  kubectl port-forward svc/{{ include "appflowy.web.fullname" . }} 8080:{{ index .Values "appflowy-web" "service" "port" }} -n {{ .Release.Namespace }}
+
+  # AppFlowy Cloud API
+  kubectl port-forward svc/{{ include "appflowy.cloud.fullname" . }} 8000:{{ index .Values "appflowy-cloud" "service" "port" }} -n {{ .Release.Namespace }}
+
+  # Admin Console
+  kubectl port-forward svc/{{ include "appflowy.admin.fullname" . }} 3000:{{ index .Values "admin-frontend" "service" "port" }} -n {{ .Release.Namespace }}
+
+{{- end }}
+
+=======================================================================
+                          Services Status
+=======================================================================
+
+Check the status of all pods:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+View logs for a specific service:
+
+  kubectl logs -f deployment/{{ include "appflowy.cloud.fullname" . }} -n {{ .Release.Namespace }}
+
+=======================================================================
+                        Default Credentials
+=======================================================================
+
+{{- if .Values.gotrue.enabled }}
+
+GoTrue Admin:
+  Email: {{ .Values.gotrue.config.adminEmail }}
+  Password: Retrieve from secret:
+    kubectl get secret {{ include "appflowy.gotrue.fullname" . }}-secret -n {{ .Release.Namespace }} -o jsonpath="{.data.admin-password}" | base64 -d
+{{- end }}
+
+{{- if .Values.postgresql.enabled }}
+
+PostgreSQL:
+  Host: {{ include "appflowy.postgresql.host" . }}
+  Port: {{ include "appflowy.postgresql.port" . }}
+  Database: {{ include "appflowy.postgresql.database" . }}
+  Username: {{ include "appflowy.postgresql.username" . }}
+  Password: Retrieve from secret:
+    kubectl get secret {{ include "appflowy.postgresql.secretName" . }} -n {{ .Release.Namespace }} -o jsonpath="{.data.postgres-password}" | base64 -d
+{{- end }}
+
+{{- if .Values.minio.enabled }}
+
+MinIO:
+  Endpoint: {{ include "appflowy.s3.endpoint" . }}
+  Bucket: {{ include "appflowy.s3.bucket" . }}
+  Console: kubectl port-forward svc/{{ .Release.Name }}-minio 9001:9001 -n {{ .Release.Namespace }}
+  Credentials: Retrieve from secret:
+    kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} -o jsonpath="{.data.root-user}" | base64 -d
+    kubectl get secret {{ .Release.Name }}-minio -n {{ .Release.Namespace }} -o jsonpath="{.data.root-password}" | base64 -d
+{{- end }}
+
+=======================================================================
+                          Useful Commands
+=======================================================================
+
+# Run Helm tests
+helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+# Upgrade the release
+helm upgrade {{ .Release.Name }} appflowy-cloud -n {{ .Release.Namespace }}
+
+# Rollback to previous version
+helm rollback {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+# Uninstall
+helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+=======================================================================
+                          Documentation
+=======================================================================
+
+For more information, visit:
+  - AppFlowy Cloud Docs: https://docs.appflowy.io/docs/documentation/appflowy-cloud
+  - GitHub: https://github.com/AppFlowy-IO/AppFlowy-Cloud

@@ -1,0 +1,23 @@
+{{- if and .Values.gotrue.enabled .Values.gotrue.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "appflowy.gotrue.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gotrue
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "appflowy.gotrue.fullname" . }}
+  minReplicas: {{ .Values.gotrue.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.gotrue.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.gotrue.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

@@ -1,0 +1,33 @@
+{{- if and .Values.ingress.enabled .Values.gotrue.enabled }}
+{{- $baseAnnotations := .Values.ingress.annotations | default (dict) -}}
+{{- $annotations := merge (dict) $baseAnnotations (dict "nginx.ingress.kubernetes.io/use-regex" "true" "nginx.ingress.kubernetes.io/rewrite-target" "/$2") -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "appflowy.fullname" . }}-gotrue
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "appflowy.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          - path: /gotrue(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ include "appflowy.gotrue.fullname" . }}
+                port:
+                  number: {{ .Values.gotrue.service.port }}
+{{- end }}
