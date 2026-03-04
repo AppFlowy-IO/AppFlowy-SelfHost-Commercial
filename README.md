@@ -8,19 +8,42 @@
 
 ### 🚀 v0.13.0 (Latest)
 
-#### Features
+#### New Features
 
 **AppFlowy Search**
-- Added `appflowy_search` service for dedicated document search
-  - Supports keyword search and semantic (vector) search
-  - Runs as a standalone service on port 4002
-  - **Requires:** Set `APPFLOWY_SEARCH_SERVICE_URL` (defaults to `http://appflowy_search:4002`)
+
+A new dedicated search service (`appflowy_search`) is now available, enabling both keyword and semantic (vector) search across your documents. It runs as a standalone service on port 4002.
+
+**Setup:**
+- Pull the latest `docker-compose.yml` from the [AppFlowy Cloud repo](https://github.com/AppFlowy-IO/AppFlowy-Cloud/blob/main/docker-compose.yml), as it has been updated to include this service
+- `APPFLOWY_SEARCH_SERVICE_URL` defaults to `http://appflowy_search:4002` and works out of the box. You only need to set it if you have a custom deployment configuration
 
 **AppFlowy AI**
-- AI now uses the search service for context retrieval, improving chat responses with relevant workspace content
+
+AI chat now leverages the search service for context retrieval, delivering more relevant and accurate responses by drawing from your workspace content.
 
 **Admin Frontend**
-- Added AI tab for configuring AI models dynamically, allowing users to set up and switch AI providers without redeployment
+
+A new **AI** tab has been added to the admin panel, allowing you to configure AI models and switch providers on the fly — no redeployment required.
+
+---
+
+#### ⚠️ Action Required: Nginx Configuration Update
+
+If you are using a **custom Nginx configuration**, you need to add the following location block:
+
+```nginx
+location /ai/ {
+    proxy_pass $appflowy_cloud_backend;
+    proxy_set_header X-Request-Id $request_id;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+> **Note:** If you are using the default Nginx configuration provided by AppFlowy Cloud, this change is already included — no action needed.
 
 ### 🚀 v0.10.1
 
