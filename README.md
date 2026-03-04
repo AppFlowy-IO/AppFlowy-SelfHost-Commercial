@@ -6,7 +6,23 @@
 
 ## Release
 
-### 🚀 v0.10.1 (Latest)
+### 🚀 v0.13.0 (Latest)
+
+#### Features
+
+**AppFlowy Search**
+- Added `appflowy_search` service for dedicated document search
+  - Supports keyword search and semantic (vector) search
+  - Runs as a standalone service on port 4002
+  - **Requires:** Set `APPFLOWY_SEARCH_SERVICE_URL` (defaults to `http://appflowy_search:4002`)
+
+**AppFlowy AI**
+- AI now uses the search service for context retrieval, improving chat responses with relevant workspace content
+
+**Admin Frontend**
+- Added AI tab for configuring AI models dynamically, allowing users to set up and switch AI providers without redeployment
+
+### 🚀 v0.10.1
 
 #### Features
 
