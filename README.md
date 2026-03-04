@@ -26,6 +26,8 @@ AI chat now leverages the search service for context retrieval, delivering more 
 
 A new **AI** tab has been added to the admin panel, allowing you to configure AI models and switch providers on the fly — no redeployment required.
 
+![](./asset/admin_ai_config.png)
+
 ---
 
 #### ⚠️ Action Required: Nginx Configuration Update
