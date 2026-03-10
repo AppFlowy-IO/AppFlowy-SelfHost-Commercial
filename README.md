@@ -6,7 +6,23 @@
 
 ## Release
 
-### 🚀 v0.13.0 (Latest)
+### 🚀 v0.13.2 (Latest)
+
+#### Optimizations
+
+**AppFlowy Search**
+
+- Support cancellable search requests
+- Pipeline search requests with automatic cancellation of in-flight previous requests
+
+**AppFlowy Worker**
+
+- Fix Notion import bug: corrected embedded database view links and mention database links
+- Fix additional Notion import bugs
+
+---
+
+### 🚀 v0.13.0
 
 #### New Features
 
