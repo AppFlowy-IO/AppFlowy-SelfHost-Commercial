@@ -6,7 +6,16 @@
 
 ## Release
 
-### 🚀 v0.13.2 (Latest)
+### 🚀 v0.13.4 (Latest)
+
+#### Optimizations
+
+- Optimize Redis connection
+- Fix missing access to pages after importing a Notion zip file
+
+---
+
+### 🚀 v0.13.2
 
 #### Optimizations
 
