@@ -6,7 +6,20 @@
 
 ## Release
 
-### 🚀 v0.13.4 (Latest)
+### 🚀 v0.13.8 (Latest)
+
+#### Bug Fixes
+
+- Fix Notion import issues: handle inaccessible databases/documents, restore missing database row pages, and abort import gracefully when the zip file is corrupted
+- Fix miscellaneous application logic bugs
+
+#### Optimizations
+
+- Optimize Redis connection handling for different usage scenarios
+
+---
+
+### 🚀 v0.13.4
 
 #### Optimizations
 
