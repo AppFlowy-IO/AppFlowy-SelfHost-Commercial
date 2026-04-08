@@ -6,7 +6,26 @@
 
 ## Release
 
-### 🚀 v0.13.8 (Latest)
+### 🚀 v0.14.17 (Latest)
+
+#### New Features
+
+- Added server-side database row duplication, including row document cloning
+- Improved published database pages so sibling database views are surfaced more consistently in published outlines and page metadata
+
+#### Bug Fixes
+
+- Fixed unpublished collabs to return `RecordNotFound` instead of stale publish metadata
+- Fixed PDF export title and spacing issues
+- Fixed relation rendering in PDF export to use relation titles instead of raw UUIDs
+- Fixed hidden database fields appearing in PDF exports
+- Fixed duplicate-row metadata so failed row-document duplication does not leave dangling document references
+
+**Platform Compatibility**
+
+- Replaced `aws-lc-rs` with `ring` to prevent `SIGILL` crashes on ARM64 Raspberry Pi deployments
+
+### 🚀 v0.13.8
 
 #### Bug Fixes
 
