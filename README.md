@@ -6,7 +6,63 @@
 
 ## Release
 
-### 🚀 v0.14.17 (Latest)
+### 🚀 v0.15.0 (Latest)
+
+#### New Features
+
+- **Signup whitelist** — Admins can control who is allowed to register by managing domain and email allowlists from the admin dashboard. Signup whitelisting can be toggled on or off at any time without redeployment.
+- **System-wide AI toggle** — A single admin setting now disables all AI functionality across the platform. When turned off, all AI features become unavailable instantly across every service.
+- **Guest-invite admin approval** — Workspace owners can now queue guest invitations that require admin approval before the invite email is sent. Admins receive email notifications for new pending requests and can review, approve, or reject invites from the admin dashboard. Clients can distinguish between invites waiting on admin approval and those waiting on the invitee to accept.
+
+---
+
+#### Signup Whitelist
+
+Admins can restrict new user registrations by enabling the signup whitelist in the admin dashboard. When enabled, only users whose email matches the configured allowlist (by domain or individual address) can sign up.
+
+By default, the signup whitelist is **disabled**, so anyone can register.
+![Signup whitelist toggle](asset/signup_control_toggle.png)
+
+**To enable it:**
+
+1. In the admin dashboard, toggle on **Enable Signup Whitelist**.
+2. Add allowed email domains (e.g., `@yourcompany.com`) or specific email addresses.
+
+![Configure allowed domains and emails](asset/enable_signup_control.png)
+
+---
+
+#### Guest-Invite Admin Approval
+
+From the admin frontend, navigate to **Users → Guest Invite** to view pending guest invitations. You can approve or reject each request; approved invites trigger the invitation email automatically.
+
+To require admin approval for all guest invites, toggle on **Require admin approval for guest invites**. This setting is **off** by default.
+
+**Example — admin approval disabled:**
+
+A workspace owner invites `user_a@appflowy.io`. The guest receives the invitation email immediately and can accept it without admin intervention.
+
+![Admin view — approval disabled](asset/admin_approve_guest.png)
+![Invitee view — user_a](asset/user_a.png)
+
+**Example — admin approval enabled:**
+
+A workspace owner invites `user_b@appflowy.io`. The invitation is marked **Pending Admin Approval**. Once an admin approves it, the guest receives the invitation email and can accept it to access the workspace.
+
+![Admin view — approval enabled](asset/admin_approve_guest_on.png)
+![Invitee view — user_b](asset/user_b.png)
+
+---
+
+#### ⚠️ Action Required: Upgrade Services
+
+This release requires upgrading the following services to `0.15.0`:
+
+- `appflowy-cloud`
+- `gotrue`
+- `admin-frontend`
+
+### 🚀 v0.14.17
 
 #### New Features
 
