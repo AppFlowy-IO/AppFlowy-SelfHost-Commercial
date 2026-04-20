@@ -25,8 +25,9 @@ By default, the signup whitelist is **disabled**, so anyone can register.
 
 **To enable it:**
 
-1. In the admin dashboard, toggle on **Enable Signup Whitelist**.
-2. Add allowed email domains (e.g., `@yourcompany.com`) or specific email addresses.
+1. Set the environment variable `GOTRUE_DISABLE_SIGNUP=false`. The signup whitelist only takes effect when signups are enabled at the GoTrue level — if `GOTRUE_DISABLE_SIGNUP=true`, all signups are blocked regardless of the whitelist.
+2. In the admin dashboard, toggle on **Enable Signup Whitelist**.
+3. Add allowed email domains (e.g., `@yourcompany.com`) or specific email addresses.
 
 ![Configure allowed domains and emails](asset/enable_signup_control.png)
 
