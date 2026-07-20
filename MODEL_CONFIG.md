@@ -23,6 +23,8 @@ Open **AI Settings** and turn on **Enable AI Features**. When this setting is of
 
 ## 2. Add a provider
 
+![Add an AI provider](asset/ai-add-provider.png)
+
 Open the **Models** tab and select **Add Provider**.
 
 | Provider        | What to enter                                                                                                                       |
@@ -37,7 +39,6 @@ Open the **Models** tab and select **Add Provider**.
 
 Both the provider and its models must be enabled.
 
-![Add an AI provider](asset/ai-add-provider.png)
 
 ## 3. Add a chat model
 ![Models configured for a provider](asset/ai-provider-models.png)
