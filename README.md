@@ -6,9 +6,17 @@
 
 ## Release
 
-### 🚀 v0.17.0 (Latest)
+### 🚀 v0.17.1 (Latest)
 
-This release focuses on making realtime collaboration more reliable and improving durability, permissions, database integrity, search, AI indexing, throughput, and memory usage.
+#### AppFlowy Server
+
+- **Workspace export** — Fixed failures for large workspaces, stalled tasks, and workspaces with missing or inconsistent data, while preserving all readable content.
+- **Database blob diff API** — Added opt-in paginated responses with bounded page sizes and resumable continuation cursors for `POST /api/workspace/{workspace_id}/database/{database_id}/blob/diff`, while preserving compatibility with existing clients.
+- **Search indexing** — Made workspace index repair bounded and progressive so one problematic document cannot stall indexing for the rest of the workspace.
+- **Client compatibility** — Added `APPFLOWY_MIN_CLIENT_VERSION` so operators can configure the minimum supported client version.
+
+### 🚀 v0.17.0
+
 
 #### Highlights
 
