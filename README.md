@@ -6,7 +6,65 @@
 
 ## Release
 
-### 🚀 v0.15.0 (Latest)
+### 🚀 v0.17.0 (Latest)
+
+This release focuses on making realtime collaboration more reliable and improving durability, permissions, database integrity, search, AI indexing, throughput, and memory usage.
+
+#### Highlights
+
+- **More reliable realtime collaboration** — Stronger sync and reconnection handling keeps documents in sync, recovers cleanly after interruptions, and monitors for stalls.
+- **More durable snapshots and version history** — Improved snapshot recovery and gating so saved versions and history stay dependable.
+- **Stronger permissions** — Explicit per-page permissions for workspace members, with revocations now taking effect immediately.
+- **Better database integrity** — More consistent row identity and safer handling of concurrent edits.
+- **Faster, leaner search and AI** — Lower CPU and memory usage in search and AI indexing, with better prioritization and grounding.
+
+#### Collaboration & Sync
+
+- Improved WebSocket reconnection and recovery after interruptions.
+- More reliable convergence so everyone sees the same, correct document state.
+- Fixed syncing of restored versions.
+- Improved handling of missing or out-of-order updates, including quarantine of problematic gaps.
+
+#### Permissions
+
+- Added explicit page-level permissions for workspace members.
+- Permission revocations now take effect immediately.
+- Fixed cases where stale permissions could linger.
+- Editors can now resolve comments.
+- Isolated notifications per user so people only see what is meant for them.
+
+#### Snapshots & Version History
+
+- Improved snapshot recovery and worker reliability.
+- Version history now relies on durable snapshots.
+
+#### Database
+
+- More consistent database row identity for reliable parent/child relationships.
+- Safer database migrations.
+- Support for concurrent workspace updates.
+- Improved row-permission performance.
+- Reduced memory usage when comparing large database entries.
+
+#### Search & AI
+
+- Lower CPU usage and better backpressure handling in search.
+- Smarter query prioritization.
+- Provider-aware AI indexing with support for dynamic embedding dimensions.
+
+#### Improvements & Fixes
+
+- Improved mention notifications.
+- Isolated the recent-pages cache to prevent cross-contamination.
+
+#### Upgrade & Rollout Notes
+
+- This release includes database identity migrations.
+- Deploy AppFlowy Cloud and AppFlowy Worker together.
+- Deploy AppFlowy Cloud before AppFlowy AI and Admin Frontend.
+- Changing embedding models or dimensions requires re-embedding existing content.
+
+### 🚀 v0.15.0
 
 #### New Features
 
