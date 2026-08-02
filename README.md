@@ -6,7 +6,29 @@
 
 ## Release
 
-### 🚀 v0.17.1 (Latest)
+### 🚀 v0.17.2 (Latest)
+
+#### Workspace Import & Export
+
+- Hardened workspace imports to improve data integrity.
+- Made degraded workspace exports tolerate inactive collabs.
+
+#### Collaboration & Sync
+
+- Upgraded RocksDB to prevent file descriptor leaks.
+- Improved sync speed and performance, especially under heavy workloads.
+
+#### Repair & Migration
+
+- Fixed retained Folder tail recovery when the frontier is missing.
+- Improved the Folder frontier migration so it converges on stalled backlogs.
+
+#### Permissions
+
+- Shared active-identity evidence across sessions during the SLO window.
+
+
+### 🚀 v0.17.1
 
 #### AppFlowy Server
 
