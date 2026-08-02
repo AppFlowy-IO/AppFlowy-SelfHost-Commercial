@@ -11,10 +11,20 @@
 #### Enterprise Identity
 
 - **SCIM 2.0 directory sync** — Provision and deprovision users and Groups from Microsoft Entra ID, Okta, Authentik, and other compatible identity providers. Directory Groups can be mapped to AppFlowy workspace roles.
-- **LDAP login backend** — Authenticate against configured LDAP directories and, when automatic provisioning is enabled, add users to their workspace on first login. Browser login requires a matching AppFlowy Web release.
-- **Enterprise SSO administration** — Configure custom OIDC/OAuth and SAML providers through the AppFlowy Cloud admin APIs. The Admin UI requires a matching Admin Frontend release; browser sign-in for custom OIDC requires a matching AppFlowy Web release.
+- **LDAP login** — Authenticate against configured LDAP directories and, when automatic provisioning is enabled, add users to their workspace on first login.
+- **Enterprise identity administration** — Configure LDAP, SCIM, and custom OIDC connections through AppFlowy Admin.
 
 These enterprise-authentication features require the Seed plan or higher. SCIM handles directory provisioning only; users continue to sign in through LDAP, SAML, or OIDC.
+
+#### Required Companion Versions
+
+Use these component versions with the v0.17.3 enterprise identity features:
+
+| Component | Version | Purpose |
+| --- | --- | --- |
+| Admin Frontend | `0.16.5` | Configure LDAP, SCIM, and custom OIDC connections |
+| AppFlowy Desktop | `0.17.1` | Desktop LDAP and custom OIDC sign-in |
+| AppFlowy Web | `0.16.5` | Web LDAP and custom OIDC sign-in |
 
 #### ⚠️ Action Required: Expose SCIM Through Nginx
 
@@ -48,7 +58,7 @@ For rollout:
 
 1. Upgrade `appflowy_cloud` and wait for its migrations and health checks to complete.
 2. Reload or recreate Nginx with the SCIM route.
-3. Create the SCIM connection through a matching Admin Frontend release or the `/api/admin/directory-sync` management API. Copy the bearer token when it is returned, then configure the identity provider to use `https://<host>/scim/v2`. AppFlowy stores only the token hash, and the token must be rotated before its 90-day expiry.
+3. In Admin Frontend `0.16.5`, create the SCIM connection and copy the bearer token when it is returned. Configure the identity provider to use `https://<host>/scim/v2`. AppFlowy stores only the token hash, and the token must be rotated before its 90-day expiry.
 
 The bundled Nginx listens on `443 ssl`, which is why the block above checks `$scheme`. Replace its development certificate with a valid certificate trusted by the identity provider. If a trusted load balancer terminates TLS before Nginx, enforce HTTPS at that outer edge and configure Nginx's trusted real-client-IP boundary explicitly instead of copying the guard unchanged. Do not redirect SCIM bearer-token requests from HTTP to HTTPS.
 
