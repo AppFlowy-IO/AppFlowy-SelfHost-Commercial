@@ -6,6 +6,64 @@
 
 ## Release
 
+### 🚀 v0.17.3 (Upcoming)
+
+#### Enterprise Identity
+
+- **SCIM 2.0 directory sync** — Provision and deprovision users and Groups from Microsoft Entra ID, Okta, Authentik, and other compatible identity providers. Directory Groups can be mapped to AppFlowy workspace roles.
+- **LDAP login** — Authenticate against configured LDAP directories and, when automatic provisioning is enabled, add users to their workspace on first login.
+- **Enterprise identity administration** — Configure LDAP, SCIM, and custom OIDC connections through AppFlowy Admin.
+
+These enterprise-authentication features require the Seed plan or higher. SCIM handles directory provisioning only; users continue to sign in through LDAP, SAML, or OIDC.
+
+#### Required Companion Versions
+
+Use these component versions with the v0.17.3 enterprise identity features:
+
+| Component | Version | Purpose |
+| --- | --- | --- |
+| Admin Frontend | `0.16.5` | Configure LDAP, SCIM, and custom OIDC connections |
+| AppFlowy | `0.17.1` | Desktop LDAP and custom OIDC sign-in |
+| AppFlowy Web | `0.16.5` | Web LDAP and custom OIDC sign-in |
+
+#### ⚠️ Action Required: Expose SCIM Through Nginx
+
+SCIM is served at `/scim/v2/*`. The standard self-host deployment bind-mounts the public AppFlowy Cloud [`nginx/nginx.conf`](https://github.com/AppFlowy-IO/AppFlowy-Cloud/blob/main/nginx/nginx.conf) into the Nginx container, so upgrading only the `appflowy_cloud` image does not update its routes.
+
+In a copied or customized Nginx configuration, add this sibling location alongside the `location /` frontend catch-all:
+
+```nginx
+location /scim {
+    # The bundled Nginx terminates TLS itself. Never redirect a bearer request
+    # after its credential has already crossed plaintext.
+    if ($scheme != https) {
+        return 403;
+    }
+
+    # SCIM filters can contain email addresses and external IDs.
+    access_log off;
+    error_log /dev/null;
+    # No trailing slash or rewrite: preserve /scim/v2/* for AppFlowy Cloud.
+    proxy_pass $appflowy_cloud_backend;
+}
+```
+
+LDAP also needs a trusted client address for per-IP rate limiting. In the existing `location /api`, add this directive, replacing any existing `X-Forwarded-For` directive rather than adding a duplicate:
+
+```nginx
+proxy_set_header X-Forwarded-For $remote_addr;
+```
+
+For rollout:
+
+1. Upgrade `appflowy_cloud` and wait for its migrations and health checks to complete.
+2. Reload or recreate Nginx with the SCIM route.
+3. In Admin Frontend `0.16.5`, create the SCIM connection and copy the bearer token when it is returned. Configure the identity provider to use `https://<host>/scim/v2`. AppFlowy stores only the token hash, and the token must be rotated before its 90-day expiry.
+
+The bundled Nginx listens on `443 ssl`, which is why the block above checks `$scheme`. Replace its development certificate with a valid certificate trusted by the identity provider. If a trusted load balancer terminates TLS before Nginx, enforce HTTPS at that outer edge and configure Nginx's trusted real-client-IP boundary explicitly instead of copying the guard unchanged. Do not redirect SCIM bearer-token requests from HTTP to HTTPS.
+
+No additional Docker Compose service, port, SCIM environment variable, CORS rule, or proprietary header is required. Nginx forwards the standard `Authorization` header by default. If another edge applies browser login or external authentication, exempt `/scim` so it does not consume that header; do not cache SCIM responses or automatically retry non-idempotent `POST` or `PATCH` requests. New installations using the matching public AppFlowy Cloud release include these directives; existing or customized installations must merge them into their local bind-mounted configuration.
+
 ### 🚀 v0.17.2 (Latest)
 
 #### Workspace Import & Export
