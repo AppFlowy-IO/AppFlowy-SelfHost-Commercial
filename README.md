@@ -23,7 +23,7 @@ Use these component versions with the v0.17.3 enterprise identity features:
 | Component | Version | Purpose |
 | --- | --- | --- |
 | Admin Frontend | `0.16.5` | Configure LDAP, SCIM, and custom OIDC connections |
-| AppFlowy Desktop | `0.17.1` | Desktop LDAP and custom OIDC sign-in |
+| AppFlowy | `0.17.1` | Desktop LDAP and custom OIDC sign-in |
 | AppFlowy Web | `0.16.5` | Web LDAP and custom OIDC sign-in |
 
 #### ⚠️ Action Required: Expose SCIM Through Nginx
