@@ -8,8 +8,6 @@
 
 ### 🚀 v0.17.4 (Latest)
 
-This release consolidates AppFlowy Cloud Premium updates from `0.17.50` through `0.17.58`.
-
 #### Highlights
 
 - **Collaboration & sync** — Improved realtime diagnostics, queue performance, replay recovery, and full-state synchronization.
