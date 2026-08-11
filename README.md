@@ -6,7 +6,21 @@
 
 ## Release
 
-### 🚀 v0.17.3 (Upcoming)
+### 🚀 v0.17.4 (Latest)
+
+This release consolidates AppFlowy Cloud Premium updates from `0.17.50` through `0.17.58`.
+
+#### Highlights
+
+- **Collaboration & sync** — Improved realtime diagnostics, queue performance, replay recovery, and full-state synchronization.
+- **Data integrity** — Strengthened snapshots, database row recovery, private folder repair, and transient-write handling.
+- **Administration** — Added client diagnostic log upload and download, collab snapshot previews, and cloud invite and license management.
+- **Publishing & templates** — Unpublished trashed page trees automatically and fixed legacy, large-ID, and nested template publishing.
+- **Additional fixes** — Improved permissions, authentication rate-limit handling, workspace exports, folder-only chat attachments, and self-hosted Ollama Qwen documentation.
+
+**Baseline:** [`359e02ed78e825908e912376f586b4abebe7b4bb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Premium/commit/359e02ed78e825908e912376f586b4abebe7b4bb)
+
+### 🚀 v0.17.3
 
 #### Enterprise Identity
 
@@ -64,7 +78,7 @@ The bundled Nginx listens on `443 ssl`, which is why the block above checks `$sc
 
 No additional Docker Compose service, port, SCIM environment variable, CORS rule, or proprietary header is required. Nginx forwards the standard `Authorization` header by default. If another edge applies browser login or external authentication, exempt `/scim` so it does not consume that header; do not cache SCIM responses or automatically retry non-idempotent `POST` or `PATCH` requests. New installations using the matching public AppFlowy Cloud release include these directives; existing or customized installations must merge them into their local bind-mounted configuration.
 
-### 🚀 v0.17.2 (Latest)
+### 🚀 v0.17.2
 
 #### Workspace Import & Export
 
