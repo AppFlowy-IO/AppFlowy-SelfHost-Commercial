@@ -21,6 +21,7 @@
 - Fixed published database duplication and unpublishing across multi-view databases, relation dependencies, legacy relation identifiers, and incomplete database payloads.
 - Fixed realtime recovery issues involving Redis awareness reconnects, dependent updates, orphaned views, Folder create retries, and database-row template uploads.
 - Fixed space ownership and guest and group visibility edge cases, inline-comment anchoring and cross-device notifications, and renewed-license rebind consistency.
+- Fixed a SQL injection vulnerability in the Quick Note API endpoint.
 
 **Baseline:** [`d07810bafe7cc24925d0d20eda2028919fbfd517`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/d07810bafe7cc24925d0d20eda2028919fbfd517)
 
