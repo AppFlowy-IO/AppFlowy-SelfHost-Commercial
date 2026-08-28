@@ -6,7 +6,25 @@
 
 ## Release
 
-### 🚀 v0.17.4 (Latest)
+### 🚀 v0.18.0 (Latest)
+
+#### New Features
+
+- **Structured space permissions** — Added Public, Private, and Custom spaces with owner, member, and everyone-else access levels, access requests, safe visibility transitions, and controls for invitations, sidebar editing, guests, public links, and exports.
+- **Workspace groups** — Added manual group management and group-based access to spaces and individual pages; SCIM groups were projected into the same permission model.
+- **Admin recovery and diagnostics** — Added restoration of permanently deleted document and database views when their underlying collabs survived, plus secure download of database blobs selected through the database inspector.
+- **Database attribution** — Added read-only Created by and Last edited by fields and a row-by-ID update API that maintained editor attribution.
+
+#### Bug Fixes
+
+- Fixed workspace imports, exports, and CSV completion so recoverable content and row ordering were preserved instead of failing or reporting completion too early.
+- Fixed published database duplication and unpublishing across multi-view databases, relation dependencies, legacy relation identifiers, and incomplete database payloads.
+- Fixed realtime recovery issues involving Redis awareness reconnects, dependent updates, orphaned views, Folder create retries, and database-row template uploads.
+- Fixed space ownership and guest and group visibility edge cases, inline-comment anchoring and cross-device notifications, and renewed-license rebind consistency.
+
+**Baseline:** [`d07810bafe7cc24925d0d20eda2028919fbfd517`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/d07810bafe7cc24925d0d20eda2028919fbfd517)
+
+### 🚀 v0.17.4
 
 #### Highlights
 
