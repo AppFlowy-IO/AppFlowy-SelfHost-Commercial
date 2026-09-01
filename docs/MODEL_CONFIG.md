@@ -17,13 +17,13 @@ Make sure you have:
 
 
 ## 1. Enable AI
-![AI settings and provider list](asset/ai-settings.png)
+![AI settings and provider list](../asset/ai-settings.png)
 
 Open **AI Settings** and turn on **Enable AI Features**. When this setting is off, AI features are disabled for everyone.
 
 ## 2. Add a provider
 
-![Add an AI provider](asset/ai-add-provider.png)
+![Add an AI provider](../asset/ai-add-provider.png)
 
 Open the **Models** tab and select **Add Provider**.
 
@@ -41,10 +41,10 @@ Both the provider and its models must be enabled.
 
 
 ## 3. Add a chat model
-![Models configured for a provider](asset/ai-provider-models.png)
+![Models configured for a provider](../asset/ai-provider-models.png)
 Expand the provider card and select **Add Model**. You can select a discovered model or use **Add Manually**.
 
-![Select a discovered model](asset/ai-select-model.png)
+![Select a discovered model](../asset/ai-select-model.png)
 Enter:
 
 - **Display Name**: the name shown to users.
@@ -53,7 +53,7 @@ Enter:
 - **Enabled**: makes the model available.
 - **Set as Default**: makes it the default chat model.
 
-![Configure a chat model](asset/ai-add-model.png)
+![Configure a chat model](../asset/ai-add-model.png)
 
 Save the model, run its test, and confirm that the test passes. The **Available Models (Client View)** section shows which models AppFlowy clients can use.
 
@@ -83,7 +83,7 @@ To activate an embedding model:
 5. Select **Test & Add Embedding**. AppFlowy calls the provider, measures the returned vector, and registers an immutable storage profile for that provider, model, and dimension configuration.
 6. Confirm that the test passes, reports the expected actual dimension and profile ID, and the model shows **Active**.
 
-![Configure an embedding model](asset/ai-embedding-model.png)
+![Configure an embedding model](../asset/ai-embedding-model.png)
 
 ### Example: BGE-M3 with Ollama
 
@@ -135,7 +135,7 @@ AI Overview can use a different model from normal chat:
 
 Select **Use chat default** if AI Overview should follow the default chat model. Changes normally reach Cloud and Search within about 15 seconds.
 
-![Configure the AI Overview model](asset/ai-overview.png)
+![Configure the AI Overview model](../asset/ai-overview.png)
 
 ## 6. Configure web search
 
@@ -150,7 +150,7 @@ Web search lets AI use current information from the web:
 
 Individual chats and requests must still opt in before AI can use web search.
 
-![Configure web search](asset/ai-web-search.png)
+![Configure web search](../asset/ai-web-search.png)
 
 ## Important behavior
 
