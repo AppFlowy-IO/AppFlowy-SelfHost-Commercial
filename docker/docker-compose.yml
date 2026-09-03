@@ -11,6 +11,11 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/ssl/certificate.crt:/etc/nginx/ssl/certificate.crt
       - ./nginx/ssl/private_key.key:/etc/nginx/ssl/private_key.key
+    networks:
+      default:
+      cloud_proxy:
+        # Cloud accepts sanitized forwarding headers only from this address.
+        ipv4_address: 172.31.255.2
 
   # You do not need this if you have configured to use your own s3 file storage
   minio:
@@ -132,6 +137,9 @@ services:
       - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
       - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
       - APPFLOWY_S3_PRESIGNED_URL_ENDPOINT=${APPFLOWY_S3_PRESIGNED_URL_ENDPOINT}
+      - APPFLOWY_PUBLIC_FORM_REQUIRE_TRUSTED_PROXY=true
+      - APPFLOWY_PUBLIC_FORM_TRUSTED_PROXY_CIDRS=172.31.255.2
+      - APPFLOWY_CORS_ALLOWED_ORIGINS=${APPFLOWY_WEB_URL:?APPFLOWY_WEB_URL is required}
       - APPFLOWY_MAILER_SMTP_HOST=${APPFLOWY_MAILER_SMTP_HOST}
       - APPFLOWY_MAILER_SMTP_PORT=${APPFLOWY_MAILER_SMTP_PORT}
       - APPFLOWY_MAILER_SMTP_USERNAME=${APPFLOWY_MAILER_SMTP_USERNAME}
@@ -158,7 +166,7 @@ services:
       # and rely on the whitelist + invitations to gate who can sign up.
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:${APPFLOWY_CLOUD_VERSION:-latest}
+    image: appflowyinc/appflowy_cloud_premium:${APPFLOWY_CLOUD_VERSION:-latest}
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -167,6 +175,13 @@ services:
     depends_on:
       gotrue:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - appflowy_cloud_default
+      cloud_proxy:
+        aliases:
+          - appflowy_cloud_proxy
 
   admin_frontend:
     restart: on-failure
@@ -216,7 +231,7 @@ services:
 
   appflowy_worker:
     restart: on-failure
-    image: appflowyinc/appflowy_worker:${APPFLOWY_WORKER_VERSION:-latest}
+    image: appflowyinc/appflowy_worker_premium:${APPFLOWY_WORKER_VERSION:-latest}
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -225,6 +240,8 @@ services:
       - APPFLOWY_WORKER_DATABASE_URL=${APPFLOWY_WORKER_DATABASE_URL}
       - APPFLOWY_WORKER_DATABASE_NAME=${APPFLOWY_WORKER_DATABASE_NAME}
       - APPFLOWY_WORKER_IMPORT_TICK_INTERVAL=30
+      # Submission materialization is always active; keep orphan cleanup active too.
+      - APPFLOWY_WORKER_FORM_UPLOAD_CLEANUP_ENABLED=true
       - APPFLOWY_S3_USE_MINIO=${APPFLOWY_S3_USE_MINIO}
       - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
@@ -305,6 +322,18 @@ services:
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
       - APPFLOWY_WS_BASE_URL=${APPFLOWY_WEBSOCKET_BASE_URL}
+
+networks:
+  default:
+  # This two-member network is the forwarding-header trust boundary.
+  # If this subnet overlaps locally, change the subnet, Nginx address, and
+  # APPFLOWY_PUBLIC_FORM_TRUSTED_PROXY_CIDRS together.
+  cloud_proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.255.0/29
+
 volumes:
   postgres_data:
   minio_data:
