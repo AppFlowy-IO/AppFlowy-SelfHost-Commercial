@@ -6,7 +6,24 @@
 
 ## Release
 
-### 🚀 v0.18.0 (Latest)
+### 🚀 v0.18.3 (Latest)
+
+#### Improvements
+
+- **Permission caching** — Isolated access-detail group projections from realtime authorization and added a rollout-gated per-object Folder inventory, reducing broad cache invalidation without weakening access checks.
+- **Restore capacity** — Added auto-sized memory and disk staging profiles that bounded restore memory, row, object, and temporary-storage use to the Cloud container's configured limits.
+- **Search summaries** — Separated long AI-summary requests from ordinary interactive search timeouts so provider timeouts could return a structured response instead of an empty HTTP timeout.
+
+#### Bug Fixes
+
+- Fixed CSV imports so inferred field types were preserved, a later Rich Text column could become the title, and typed-only CSVs received a populated title without changing the source columns.
+- Fixed commercial seat enforcement so creating or joining another workspace did not double-count an existing person, while genuine distinct-user increases still respected the license limit after legacy overages or downgrades.
+- Fixed collaboration recovery by containing exact pending-gap resend loops, guaranteeing manifest repair after quarantine, repairing drained Folder projection wedges on Worker cold start, and backing off failed database-blob reconciliation.
+- Fixed legacy row-document access so pages created before provenance tracking safely inherited their parent database permission on first open without a migration.
+
+**Baseline:** [`7cc1303f1254e1001de7d85e9c46132f64bd1b65`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/7cc1303f1254e1001de7d85e9c46132f64bd1b65)
+
+### 🚀 v0.18.0
 
 #### New Features
 
