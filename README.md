@@ -9,7 +9,7 @@
 With Docker and the Docker Compose plugin installed, first copy the environment template from the repository root:
 
 ```bash
-cp docker/deploy.env .env
+cp deploy.env .env
 ```
 
 Edit `.env` to set your domain, HTTPS/WebSocket schemes, credentials, and optional email or AI settings. Replace the example passwords and JWT secret before exposing the deployment publicly. Compose [loads the root `.env` automatically](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), and Git ignores this file.

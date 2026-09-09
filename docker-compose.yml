@@ -1,5 +1,5 @@
 # Essential services for AppFlowy Cloud
-# From the repository root, run `cp docker/deploy.env .env` and edit .env first.
+# From the repository root, run `cp deploy.env .env` and edit .env first.
 # Then run `docker compose up -d`.
 # The template keeps database, storage, and public URLs consistent across services.
 
@@ -170,7 +170,7 @@ services:
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
     image: appflowyinc/appflowy_cloud_premium:${APPFLOWY_CLOUD_VERSION:-latest}
-    # Leave unset to use the host architecture; see docker/deploy.env for Apple Silicon.
+    # Leave unset to use the host architecture; see deploy.env for Apple Silicon.
     platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
@@ -237,7 +237,7 @@ services:
   appflowy_worker:
     restart: on-failure
     image: appflowyinc/appflowy_worker_premium:${APPFLOWY_WORKER_VERSION:-latest}
-    # Leave unset to use the host architecture; see docker/deploy.env for Apple Silicon.
+    # Leave unset to use the host architecture; see deploy.env for Apple Silicon.
     platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
     environment:
       - RUST_LOG=${RUST_LOG:-info}
