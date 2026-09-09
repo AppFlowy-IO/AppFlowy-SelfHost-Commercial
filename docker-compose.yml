@@ -161,7 +161,6 @@ services:
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
     image: appflowyinc/appflowy_cloud:${APPFLOWY_CLOUD_VERSION:-latest}
-    platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -220,7 +219,6 @@ services:
   appflowy_worker:
     restart: on-failure
     image: appflowyinc/appflowy_worker:${APPFLOWY_WORKER_VERSION:-latest}
-    platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
