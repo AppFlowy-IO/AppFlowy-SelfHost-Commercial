@@ -192,9 +192,9 @@ services:
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
       - DEFAULT_AI_MODEL=gpt-4.1-mini # Make sure the model is available in your OpenAI account
       - DEFAULT_AI_COMPLETION_MODEL=gpt-4.1-mini # Make sure the model is available in your OpenAI account
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
       - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
       - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
@@ -257,9 +257,9 @@ services:
       - APPFLOWY_SEARCH_DATABASE_URL=${APPFLOWY_DATABASE_URL}
       - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI}
       - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY}
-      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
-      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
       # S3 / MinIO — required for /api/admin/search/.../rebuild to read collab
       # blobs offloaded by appflowy_cloud. Without these the service falls back
       # to MinIO defaults at localhost:9000 and the rebuild API returns

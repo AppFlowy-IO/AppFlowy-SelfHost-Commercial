@@ -24,6 +24,13 @@ Then start the services from the repository root:
 docker compose up -d
 ```
 
+If you change `APPFLOWY_PREMIUM_PLATFORM` after downloading images, [pull Cloud and Worker again](https://docs.docker.com/reference/cli/docker/compose/pull/) so their cached images match the new platform. For example, when switching to AMD64:
+
+```bash
+APPFLOWY_PREMIUM_PLATFORM=linux/amd64 docker compose pull appflowy_cloud appflowy_worker
+APPFLOWY_PREMIUM_PLATFORM=linux/amd64 docker compose up -d
+```
+
 With the default localhost settings, open [AppFlowy Web](http://localhost) or the [Admin console](http://localhost/console). The template creates the admin account `admin@example.com` with password `password`.
 
 If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing containers, networks, and data volumes.
