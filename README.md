@@ -40,7 +40,7 @@ If upgrading an installation previously started from `docker/`, move its existin
 
 #### New Features
 
-- **Native integrations** — Added built-in OAuth for Google Drive, Google Calendar, Slack, Notion, and GitHub, with encrypted credentials and provider-app configuration through Admin APIs or a file.
+- **Database forms** — Added form views with public sharing, anonymous submissions, and file uploads, with responses automatically saved as database rows.
 - **Legacy database upgrades** — Added an upgrade API that organized eligible legacy database views under a tab container while preserving database and view identities and existing content.
 
 #### Improvements
