@@ -6,7 +6,32 @@
 
 ## Release
 
-### 🚀 v0.18.3 (Latest)
+### 🚀 v0.18.5 (Latest)
+
+#### New Features
+
+- **Native integrations** — Added built-in OAuth for Google Drive, Google Calendar, Slack, Notion, and GitHub, with encrypted credentials and provider-app configuration through Admin APIs or a file.
+- **Legacy database upgrades** — Added an upgrade API that organized eligible legacy database views under a tab container while preserving database and view identities and existing content.
+
+#### Improvements
+
+- **Search** — Preserved document headings, table context, and database field names in semantic indexing, bounded retained indexing memory, and improved queue backlog draining.
+- **Automatic row repair** — Enabled paced, resumable repair of verified missing database-row parent records so members regained access to affected row documents.
+- **Web compatibility** — Added an independent minimum Web client version through `APPFLOWY_MIN_WEB_CLIENT_VERSION`, defaulting to `0.17.1`, and exposed it alongside the server version.
+
+#### Bug Fixes
+
+- Fixed page-permission precedence and inconsistent sharing details, and prevented access increases through self-revocation.
+- Fixed account deletion and member removal involving owned private spaces, and authentication responses with missing identity sign-in timestamps.
+- Fixed recoverable Folder stalls, stale mutation replay, and missing or misordered sidebar updates.
+
+#### ⚠️ Action Required
+
+- **Service rollout** — Upgrade Cloud, Worker, and Search together, allowing Cloud's migrations to finish before starting the updated Worker and Search. Custom `APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS` settings must allow at least three connections.
+
+**Baseline:** [`e01e7f2a96c6f7acc3b19d0c3a2687fb18cdaadb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/e01e7f2a96c6f7acc3b19d0c3a2687fb18cdaadb)
+
+### 🚀 v0.18.3
 
 #### Improvements
 
