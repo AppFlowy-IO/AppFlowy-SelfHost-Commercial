@@ -1,0 +1,347 @@
+# Essential services for AppFlowy Cloud
+# From the repository root, run `cp docker/deploy.env .env` and edit .env first.
+# Then run `docker compose up -d`.
+# The template keeps database, storage, and public URLs consistent across services.
+
+services:
+  nginx:
+    restart: on-failure
+    image: nginx
+    ports:
+      - ${NGINX_PORT:-80}:80   # Disable this if you are using TLS
+      - ${NGINX_TLS_PORT:-443}:443
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/ssl/certificate.crt:/etc/nginx/ssl/certificate.crt
+      - ./docker/nginx/ssl/private_key.key:/etc/nginx/ssl/private_key.key
+    networks:
+      default:
+      cloud_proxy:
+        # Cloud accepts sanitized forwarding headers only from this address.
+        ipv4_address: 172.31.255.2
+
+  # You do not need this if you have configured to use your own s3 file storage
+  minio:
+    restart: on-failure
+    image: minio/minio
+    environment:
+      - MINIO_BROWSER_REDIRECT_URL=${APPFLOWY_BASE_URL:-http://localhost}/minio
+      - MINIO_ROOT_USER=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - minio_data:/data
+
+  postgres:
+    restart: on-failure
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - PGPORT=${POSTGRES_PORT:-5432}
+    command: [ "postgres", "-c", "port=${POSTGRES_PORT:-5432}" ]
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}", "-d", "${POSTGRES_DB:-postgres}", "-p", "${POSTGRES_PORT:-5432}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    restart: on-failure
+    image: redis
+
+  gotrue:
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: "curl --fail http://127.0.0.1:9999/health || exit 1"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    image: appflowyinc/gotrue:${GOTRUE_VERSION:-latest}
+    environment:
+      # There are a lot of options to configure GoTrue. You can reference the example config:
+      # https://github.com/supabase/auth/blob/master/example.env
+      # The initial GoTrue Admin user to create, if not already exists.
+      - GOTRUE_ADMIN_EMAIL=${GOTRUE_ADMIN_EMAIL:-admin@example.com}
+      # The initial GoTrue Admin user password to create, if not already exists.
+      # If the user already exists, the update will be skipped.
+      - GOTRUE_ADMIN_PASSWORD=${GOTRUE_ADMIN_PASSWORD:-password}
+      - GOTRUE_DISABLE_SIGNUP=${GOTRUE_DISABLE_SIGNUP:-false}
+      - GOTRUE_SITE_URL=appflowy-flutter://                           # redirected to AppFlowy application
+      - GOTRUE_URI_ALLOW_LIST=** # adjust restrict if necessary
+      - GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET:-hello456}                        # authentication secret
+      - GOTRUE_JWT_EXP=${GOTRUE_JWT_EXP:-604800}
+      # Without this environment variable, the createuser command will create an admin
+      # with the `admin` role as opposed to `supabase_admin`
+      - GOTRUE_JWT_ADMIN_GROUP_NAME=supabase_admin
+      - GOTRUE_DB_DRIVER=postgres
+      - API_EXTERNAL_URL=${API_EXTERNAL_URL:-http://localhost/gotrue}
+      - DATABASE_URL=${GOTRUE_DATABASE_URL:-postgres://postgres:password@postgres:5432/postgres?search_path=auth}
+      - PORT=9999
+      - GOTRUE_SMTP_HOST=${GOTRUE_SMTP_HOST:-smtp.gmail.com}                          # e.g. smtp.gmail.com
+      - GOTRUE_SMTP_PORT=${GOTRUE_SMTP_PORT:-465}                          # e.g. 465
+      - GOTRUE_SMTP_USER=${GOTRUE_SMTP_USER:-email_sender@some_company.com}                          # email sender, e.g. noreply@appflowy.io
+      - GOTRUE_SMTP_PASS=${GOTRUE_SMTP_PASS:-email_sender_password}                          # email password
+      - GOTRUE_MAILER_URLPATHS_CONFIRMATION=/gotrue/verify
+      - GOTRUE_MAILER_URLPATHS_INVITE=/gotrue/verify
+      - GOTRUE_MAILER_URLPATHS_RECOVERY=/gotrue/verify
+      - GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE=/gotrue/verify
+      - GOTRUE_MAILER_TEMPLATES_MAGIC_LINK=${GOTRUE_MAILER_TEMPLATES_MAGIC_LINK:-}
+      - GOTRUE_SMTP_ADMIN_EMAIL=${GOTRUE_SMTP_ADMIN_EMAIL:-comp_admin@some_company.com}                # email with admin privileges e.g. internal@appflowy.io
+      - GOTRUE_SMTP_MAX_FREQUENCY=${GOTRUE_SMTP_MAX_FREQUENCY:-1ns}       # set to 1ns for running tests
+      - GOTRUE_RATE_LIMIT_EMAIL_SENT=${GOTRUE_RATE_LIMIT_EMAIL_SENT:-100} # number of email sendable per minute
+      - GOTRUE_MAILER_AUTOCONFIRM=${GOTRUE_MAILER_AUTOCONFIRM:-true}     # set false after configuring SMTP or OAuth2
+      # Google OAuth config
+      - GOTRUE_EXTERNAL_GOOGLE_ENABLED=${GOTRUE_EXTERNAL_GOOGLE_ENABLED:-false}
+      - GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=${GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID:-}
+      - GOTRUE_EXTERNAL_GOOGLE_SECRET=${GOTRUE_EXTERNAL_GOOGLE_SECRET:-}
+      - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI:-http://localhost/gotrue/callback}
+      # GITHUB OAuth config
+      - GOTRUE_EXTERNAL_GITHUB_ENABLED=${GOTRUE_EXTERNAL_GITHUB_ENABLED:-false}
+      - GOTRUE_EXTERNAL_GITHUB_CLIENT_ID=${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
+      - GOTRUE_EXTERNAL_GITHUB_SECRET=${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
+      - GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI=${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-http://localhost/gotrue/callback}
+      # Discord OAuth config
+      - GOTRUE_EXTERNAL_DISCORD_ENABLED=${GOTRUE_EXTERNAL_DISCORD_ENABLED:-false}
+      - GOTRUE_EXTERNAL_DISCORD_CLIENT_ID=${GOTRUE_EXTERNAL_DISCORD_CLIENT_ID:-}
+      - GOTRUE_EXTERNAL_DISCORD_SECRET=${GOTRUE_EXTERNAL_DISCORD_SECRET:-}
+      - GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI=${GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI:-http://localhost/gotrue/callback}
+      # SAML 2.0 OAuth config
+      - GOTRUE_SAML_ENABLED=${GOTRUE_SAML_ENABLED:-false}
+      - GOTRUE_SAML_PRIVATE_KEY=${GOTRUE_SAML_PRIVATE_KEY:-}
+
+  appflowy_cloud:
+    restart: on-failure
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - APPFLOWY_ENVIRONMENT=production
+      - APPFLOWY_DATABASE_URL=${APPFLOWY_DATABASE_URL:-postgres://postgres:password@postgres:5432/postgres}
+      - APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI:-redis://redis:6379}
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET:-hello456}
+      - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
+      - APPFLOWY_S3_CREATE_BUCKET=${APPFLOWY_S3_CREATE_BUCKET:-true}
+      - APPFLOWY_S3_USE_MINIO=${APPFLOWY_S3_USE_MINIO:-true}
+      - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL:-http://minio:9000}
+      - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
+      - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET:-appflowy}
+      - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION:-us-east-1}
+      - APPFLOWY_S3_PRESIGNED_URL_ENDPOINT=${APPFLOWY_S3_PRESIGNED_URL_ENDPOINT-http://localhost/minio-api}
+      - APPFLOWY_PUBLIC_FORM_REQUIRE_TRUSTED_PROXY=true
+      - APPFLOWY_PUBLIC_FORM_TRUSTED_PROXY_CIDRS=172.31.255.2
+      - APPFLOWY_CORS_ALLOWED_ORIGINS=${APPFLOWY_WEB_URL:-http://localhost}
+      - APPFLOWY_MAILER_SMTP_HOST=${APPFLOWY_MAILER_SMTP_HOST:-smtp.gmail.com}
+      - APPFLOWY_MAILER_SMTP_PORT=${APPFLOWY_MAILER_SMTP_PORT:-465}
+      - APPFLOWY_MAILER_SMTP_USERNAME=${APPFLOWY_MAILER_SMTP_USERNAME:-email_sender@some_company.com}
+      - APPFLOWY_MAILER_SMTP_EMAIL=${APPFLOWY_MAILER_SMTP_EMAIL:-email_sender@some_company.com}
+      - APPFLOWY_MAILER_SMTP_PASSWORD=${APPFLOWY_MAILER_SMTP_PASSWORD:-email_sender_password}
+      - APPFLOWY_MAILER_SMTP_TLS_KIND=${APPFLOWY_MAILER_SMTP_TLS_KIND:-wrapper}
+      - APPFLOWY_ACCESS_CONTROL=${APPFLOWY_ACCESS_CONTROL:-true}
+      - APPFLOWY_DATABASE_MAX_CONNECTIONS=${APPFLOWY_DATABASE_MAX_CONNECTIONS:-40}
+      - AI_SERVER_HOST=${AI_SERVER_HOST:-ai}
+      - AI_SERVER_PORT=${AI_SERVER_PORT:-5001}
+      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
+      - APPFLOWY_WEB_URL=${APPFLOWY_WEB_URL:-http://localhost}
+      - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://localhost}
+      - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY:-}
+      - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE:-https://api.assemblyai.com/v2}
+      - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE:-https://streaming.assemblyai.com/v3}
+      - APPFLOWY_SEARCH_SERVICE_URL=${APPFLOWY_SEARCH_SERVICE_URL:-http://appflowy_search:4002}
+      - APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS=${APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS:-10}
+      - AI_ENABLED=${AI_ENABLED:-true}
+      # SIGNUP_WHITELIST_ENABLED=true requires GOTRUE_DISABLE_SIGNUP=false on
+      # the gotrue service. The whitelist is enforced by GoTrue's
+      # BeforeUserCreated PG hook, which never runs when signup is globally
+      # disabled — leaving the whitelist a no-op. Set GOTRUE_DISABLE_SIGNUP=false
+      # and rely on the whitelist + invitations to gate who can sign up.
+      - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
+      - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
+    image: appflowyinc/appflowy_cloud_premium:${APPFLOWY_CLOUD_VERSION:-latest}
+    # Leave unset to use the host architecture; see docker/deploy.env for Apple Silicon.
+    platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
+    healthcheck:
+      test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      gotrue:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - appflowy_cloud_default
+      cloud_proxy:
+        aliases:
+          - appflowy_cloud_proxy
+
+  admin_frontend:
+    restart: on-failure
+    image: appflowyinc/admin_frontend:${APPFLOWY_ADMIN_FRONTEND_VERSION:-latest}
+    environment:
+      - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
+      - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://localhost}
+
+    depends_on:
+      gotrue:
+        condition: service_healthy
+      appflowy_cloud:
+        condition: service_healthy
+
+  ai:
+    restart: on-failure
+    image: appflowyinc/appflowy_ai:${APPFLOWY_AI_VERSION:-latest}
+    environment:
+      - AI_SERVER_PORT=${AI_SERVER_PORT:-5001}
+      - OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
+      - DEFAULT_AI_MODEL=gpt-4.1-mini # Make sure the model is available in your OpenAI account
+      - DEFAULT_AI_COMPLETION_MODEL=gpt-4.1-mini # Make sure the model is available in your OpenAI account
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
+      - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
+      - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET:-appflowy}
+      - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION:-us-east-1}
+      - AI_DATABASE_URL=${APPFLOWY_DATABASE_URL:-postgres://postgres:password@postgres:5432/postgres}
+      - AI_REDIS_URL=${APPFLOWY_REDIS_URI:-redis://redis:6379}
+      - AI_USE_MINIO=${APPFLOWY_S3_USE_MINIO:-true}
+      - AI_MINIO_URL=${APPFLOWY_S3_MINIO_URL:-http://minio:9000}
+      - AI_APPFLOWY_HOST=${APPFLOWY_BASE_URL:-http://localhost}
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET:-hello456}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      appflowy_cloud:
+        condition: service_healthy
+
+  appflowy_worker:
+    restart: on-failure
+    image: appflowyinc/appflowy_worker_premium:${APPFLOWY_WORKER_VERSION:-latest}
+    # Leave unset to use the host architecture; see docker/deploy.env for Apple Silicon.
+    platform: ${APPFLOWY_PREMIUM_PLATFORM:-}
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - APPFLOWY_ENVIRONMENT=production
+      - APPFLOWY_WORKER_REDIS_URL=${APPFLOWY_WORKER_REDIS_URL:-redis://redis:6379}
+      - APPFLOWY_WORKER_ENVIRONMENT=production
+      - APPFLOWY_WORKER_DATABASE_URL=${APPFLOWY_WORKER_DATABASE_URL:-postgres://postgres:password@postgres:5432/postgres}
+      - APPFLOWY_WORKER_DATABASE_NAME=${APPFLOWY_WORKER_DATABASE_NAME:-postgres}
+      - APPFLOWY_WORKER_IMPORT_TICK_INTERVAL=30
+      # Submission materialization is always active; keep orphan cleanup active too.
+      - APPFLOWY_WORKER_FORM_UPLOAD_CLEANUP_ENABLED=true
+      - APPFLOWY_S3_USE_MINIO=${APPFLOWY_S3_USE_MINIO:-true}
+      - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL:-http://minio:9000}
+      - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
+      - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET:-appflowy}
+      - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION:-us-east-1}
+      - APPFLOWY_MAILER_SMTP_HOST=${APPFLOWY_MAILER_SMTP_HOST:-smtp.gmail.com}
+      - APPFLOWY_MAILER_SMTP_PORT=${APPFLOWY_MAILER_SMTP_PORT:-465}
+      - APPFLOWY_MAILER_SMTP_USERNAME=${APPFLOWY_MAILER_SMTP_USERNAME:-email_sender@some_company.com}
+      - APPFLOWY_MAILER_SMTP_EMAIL=${APPFLOWY_MAILER_SMTP_EMAIL:-email_sender@some_company.com}
+      - APPFLOWY_MAILER_SMTP_PASSWORD=${APPFLOWY_MAILER_SMTP_PASSWORD:-email_sender_password}
+      - APPFLOWY_MAILER_SMTP_TLS_KIND=${APPFLOWY_MAILER_SMTP_TLS_KIND:-wrapper}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      appflowy_cloud:
+        condition: service_healthy
+
+  appflowy_search:
+    restart: on-failure
+    image: appflowyinc/appflowy_search:${APPFLOWY_SEARCH_VERSION:-latest}
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
+      - APPFLOWY_SEARCH_PORT=${APPFLOWY_SEARCH_PORT:-4002}
+      - APPFLOWY_SEARCH_DATABASE_URL=${APPFLOWY_DATABASE_URL:-postgres://postgres:password@postgres:5432/postgres}
+      - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI:-redis://redis:6379}
+      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
+      # S3 / MinIO — required for /api/admin/search/.../rebuild to read collab
+      # blobs offloaded by appflowy_cloud. Without these the service falls back
+      # to MinIO defaults at localhost:9000 and the rebuild API returns
+      # "collab store is not configured; cannot rebuild documents".
+      - APPFLOWY_S3_USE_MINIO=${APPFLOWY_S3_USE_MINIO:-true}
+      - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL:-http://minio:9000}
+      - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
+      - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET:-appflowy}
+      - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION:-us-east-1}
+      - APPFLOWY_BACKGROUND_INDEXER_ENABLED=true
+      - APPFLOWY_INDEXER_DATABASE_ENABLED=${APPFLOWY_INDEXER_DATABASE_ENABLED:-false}
+      - APPFLOWY_KEYWORD_SEARCH_ENABLED=${APPFLOWY_KEYWORD_SEARCH_ENABLED:-true}
+      - APPFLOWY_KEYWORD_WORKER_ENABLED=true
+      - APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES=${APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES:-2147483648}
+      - APPFLOWY_KEYWORD_INDEX_DIR=${APPFLOWY_KEYWORD_INDEX_DIR:-/var/lib/appflowy/keyword_index}
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET:-hello456}
+    volumes:
+      - keyword_index_data:/var/lib/appflowy/keyword_index
+    healthcheck:
+      # The runtime image does not ship curl or wget. Bash's /dev/tcp support
+      # keeps this an HTTP-level check without adding an image dependency.
+      test:
+        - CMD
+        - bash
+        - -ec
+        - |
+          exec 3<>/dev/tcp/127.0.0.1/$${APPFLOWY_SEARCH_PORT:-4002}
+          printf 'GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          read -r _ status _ <&3
+          [ "$$status" = 200 ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  appflowy_web:
+    restart: on-failure
+    image: appflowyinc/appflowy_web:${APPFLOWY_WEB_VERSION:-latest}
+    depends_on:
+      appflowy_cloud:
+        condition: service_healthy
+    environment:
+      - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://localhost}
+      - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL:-http://localhost}/gotrue
+      - APPFLOWY_WS_BASE_URL=${APPFLOWY_WEBSOCKET_BASE_URL:-ws://localhost/ws/v2}
+
+networks:
+  default:
+  # This two-member network is the forwarding-header trust boundary.
+  # If this subnet overlaps locally, change the subnet, Nginx address, and
+  # APPFLOWY_PUBLIC_FORM_TRUSTED_PROXY_CIDRS together.
+  cloud_proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.255.0/29
+
+volumes:
+  postgres_data:
+  minio_data:
+  keyword_index_data:
