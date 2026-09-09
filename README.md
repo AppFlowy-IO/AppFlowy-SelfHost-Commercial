@@ -14,13 +14,7 @@ cp deploy.env .env
 
 Edit `.env` to set your domain, HTTPS/WebSocket schemes, credentials, and optional email or AI settings. Replace the example passwords and JWT secret before exposing the deployment publicly. Compose [loads the root `.env` automatically](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), and Git ignores this file.
 
-Compose uses the host architecture by default. The premium Cloud and Worker images currently support `linux/amd64` only, which runs natively on x86-64 Linux (Intel or AMD). On Apple Silicon with Docker Desktop, set this in `.env`:
-
-```dotenv
-APPFLOWY_PREMIUM_PLATFORM=linux/amd64
-```
-
-This override applies to Cloud and Worker. [Docker Desktop runs them under emulation](https://docs.docker.com/build/building/multi-platform/#qemu), while the other services use the host architecture. ARM Linux hosts need AMD64 emulation configured before using the same override; native ARM Linux support requires ARM64 builds of the premium images.
+Compose uses the public `appflowyinc/appflowy_cloud` and `appflowyinc/appflowy_worker` images. Both provide AMD64 and ARM64 builds. Leave `APPFLOWY_PREMIUM_PLATFORM` empty in `.env` to use the host architecture, or set it to a platform such as `linux/amd64` to override Cloud and Worker.
 
 Nginx configuration and certificates remain in [`docker/nginx`](docker/nginx). For HTTPS, replace the bundled development certificate and key in `docker/nginx/ssl/` with your deployment's certificates.
 
