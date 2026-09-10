@@ -4,33 +4,32 @@
 
 ---
 
-## Docker Compose
-
-With Docker and the Docker Compose plugin installed, first copy the environment template from the repository root:
-
-```bash
-cp deploy.env .env
-```
-
-Edit `.env` to set your domain, HTTPS/WebSocket schemes, credentials, and optional email or AI settings. Replace the example passwords and JWT secret before exposing the deployment publicly. Compose [loads the root `.env` automatically](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), and Git ignores this file.
-
-Compose uses the public `appflowyinc/appflowy_cloud` and `appflowyinc/appflowy_worker` images. Both provide AMD64 and ARM64 builds, and Docker selects the image architecture for your host automatically.
-
-Nginx configuration and certificates remain in [`docker/nginx`](docker/nginx). For HTTPS, replace the bundled development certificate and key in `docker/nginx/ssl/` with your deployment's certificates.
-
-Then start the services from the repository root:
-
-```bash
-docker compose up -d
-```
-
-With the default localhost settings, open [AppFlowy Web](http://localhost) or the [Admin console](http://localhost/console). The template creates the admin account `admin@example.com` with password `password`.
-
-If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing containers, networks, and data volumes.
+For installation and upgrades, see the [Docker Compose guide](docs/docker-compose.md).
 
 ## Release
 
-### 🚀 v0.18.5 (Latest)
+### 🚀 v0.18.6 (Latest)
+
+#### New Features
+
+- **Saved publishing preferences** — Added an API to manage comment and duplication settings while pages were unpublished, preserving each page's choices across republishing and public URL reuse.
+
+#### Improvements
+
+- **Publishing diagnostics** — Added failure-stage, page, and asset details to server logs to help operators diagnose publishing errors.
+
+#### Bug Fixes
+
+- Fixed publishing failures caused by missing document child blocks or file metadata; missing files no longer blocked the rest of a page from publishing.
+- Fixed database publishing failures from repeated file references and preserved references to existing public files during republishing.
+
+#### ⚠️ Action Required
+
+- **Publishing settings clients** — If deploying clients that use the new publishing settings API, upgrade Cloud and let its database migrations finish first.
+
+**Baseline:** [`0314742175473683ab18d5b86147108d0a007fad`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/0314742175473683ab18d5b86147108d0a007fad)
+
+### 🚀 v0.18.5
 
 #### New Features
 
