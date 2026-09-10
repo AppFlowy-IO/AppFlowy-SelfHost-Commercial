@@ -1,12 +1,54 @@
-# AppFlowy-SelfHost-Commercial
+# AppFlowy Self-Hosted Commercial
 
-> The commercial fork is distributed solely under the [AppFlowy Self-Hosted Commercial License](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/main/SELF_HOST_LICENSE_AGREEMENT.md)
+This repository provides the Docker Compose configuration and deployment files needed to configure and run the **AppFlowy Self-Hosted server** on your own infrastructure.
+
+To get started, follow our comprehensive [Step-by-Step Self-Hosting Deployment Guide](https://appflowy.com/docs).
+
+We also provide a series of [self-hosting video tutorials on YouTube](https://www.youtube.com/playlist?list=PLqKX5matmbL6CYkAzzF0T_ecoV6JXe_Xv) covering deployment, configuration, and administration.
+
+Check out our [release notes](##Release-Notes) for the latest updates, improvements, and fixes.
+
+## Deployment Options
+
+AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
+
+It supports two deployment models:
+
+* **[AppFlowy Managed Cloud (SaaS)](https://appflowy.com/app):** AppFlowy instances hosted on AWS and fully deployed, operated, upgraded, and maintained by the AppFlowy team.
+* **AppFlowy Self-Hosted:** AppFlowy services deployed on your own infrastructure, giving your organization control over its data, authentication, storage, backups, and deployment environment. It is designed for teams and enterprises that require data sovereignty, private infrastructure, or greater control over their deployment.
+
+Both deployment models are powered by the same commercial AppFlowy Cloud codebase.
+
+## AppFlowy Self-Hosted Free Tier
+
+AppFlowy Self-Hosted includes a **Free Tier** for experienced IT professionals, developers, and self-hosting enthusiasts who want to evaluate and deploy AppFlowy on their own infrastructure.
+
+You can start with the Free Tier and upgrade the same deployment to a paid self-hosted plan as your requirements grow.
+
+The Free Tier includes:
+
+- One User Seat (per instance)
+- AppFlowy Web App access (via your hosted domain, e.g., https://appflowy.com)
+- Up to 3 Guest Editors who can be added to selected pages to collaborate in real-time with granular permissions (Can View / Comment / Edit)
+- Version history
+- Publish Pages functionality
+- Unlimited Workspaces
+
+For detailed pricing, plan limits, and feature comparisons, see:
+
+* [Self-Hosted Plans and Pricing](https://appflowy.com/docs/Self-hosted-Plans-and-Pricing)
+* The **Admin Panel** of your self-hosted deployment
+* The official [AppFlowy Pricing page](https://appflowy.com/pricing)
+
+## Commercial License
+
+This repository is distributed under the [AppFlowy Self-Hosted Commercial License](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/main/SELF_HOST_LICENSE_AGREEMENT.md). Please review the license terms before deploying or redistributing the software.
+
+Commercial self-hosting helps fund the continued development, maintenance, and security of AppFlowy and its open-source projects.
 
 ---
 
-For installation and upgrades, see the [Docker Compose guide](docs/docker-compose.md).
-
-## Release
+## Release Notes
 
 ### 🚀 v0.18.6 (Latest)
 
