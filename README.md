@@ -6,7 +6,7 @@ To get started, follow our comprehensive [Step-by-Step Self-Hosting Deployment G
 
 We also provide a series of [self-hosting video tutorials on YouTube](https://www.youtube.com/playlist?list=PLqKX5matmbL6CYkAzzF0T_ecoV6JXe_Xv) covering deployment, configuration, and administration.
 
-Check out our [release notes](##Release-Notes) for the latest updates, improvements, and fixes.
+Check out our [release notes](#Release-Notes) for the latest updates, improvements, and fixes.
 
 ## Deployment Options
 
