@@ -166,7 +166,7 @@ Use these component versions with the v0.17.3 enterprise identity features:
 
 #### ⚠️ Action Required: Expose SCIM Through Nginx
 
-SCIM is served at `/scim/v2/*`. The standard self-host deployment bind-mounts the public AppFlowy Cloud [`nginx/nginx.conf`](https://github.com/AppFlowy-IO/AppFlowy-Cloud/blob/main/nginx/nginx.conf) into the Nginx container, so upgrading only the `appflowy_cloud` image does not update its routes.
+SCIM is served at `/scim/v2/*`. The standard self-host deployment bind-mounts this repository's [`docker/nginx/nginx.conf`](docker/nginx/nginx.conf) into the Nginx container, so upgrading only the `appflowy_cloud` image does not update its routes.
 
 In a copied or customized Nginx configuration, add this sibling location alongside the `location /` frontend catch-all:
 
@@ -200,7 +200,7 @@ For rollout:
 
 The bundled Nginx listens on `443 ssl`, which is why the block above checks `$scheme`. Replace its development certificate with a valid certificate trusted by the identity provider. If a trusted load balancer terminates TLS before Nginx, enforce HTTPS at that outer edge and configure Nginx's trusted real-client-IP boundary explicitly instead of copying the guard unchanged. Do not redirect SCIM bearer-token requests from HTTP to HTTPS.
 
-No additional Docker Compose service, port, SCIM environment variable, CORS rule, or proprietary header is required. Nginx forwards the standard `Authorization` header by default. If another edge applies browser login or external authentication, exempt `/scim` so it does not consume that header; do not cache SCIM responses or automatically retry non-idempotent `POST` or `PATCH` requests. New installations using the matching public AppFlowy Cloud release include these directives; existing or customized installations must merge them into their local bind-mounted configuration.
+No additional Docker Compose service, port, SCIM environment variable, CORS rule, or proprietary header is required. Nginx forwards the standard `Authorization` header by default. If another edge applies browser login or external authentication, exempt `/scim` so it does not consume that header; do not cache SCIM responses or automatically retry non-idempotent `POST` or `PATCH` requests. For new and existing installations, ensure these directives are present in the local bind-mounted configuration.
 
 ### 🚀 v0.17.2
 
@@ -413,7 +413,7 @@ This release requires upgrading the following services to `0.15.0`:
 A new dedicated search service (`appflowy_search`) is now available, enabling both keyword and semantic (vector) search across your documents. It runs as a standalone service on port 4002.
 
 **Setup:**
-- Pull the latest `docker-compose.yml` from the [AppFlowy Cloud repo](https://github.com/AppFlowy-IO/AppFlowy-Cloud/blob/main/docker-compose.yml), as it has been updated to include this service
+- Pull the latest [`docker-compose.yml`](docker-compose.yml) from this repository, as it has been updated to include this service
 - `APPFLOWY_SEARCH_SERVICE_URL` defaults to `http://appflowy_search:4002` and works out of the box. You only need to set it if you have a custom deployment configuration
 
 **AppFlowy AI**
@@ -443,7 +443,7 @@ location /ai/ {
 }
 ```
 
-> **Note:** If you are using the default Nginx configuration provided by AppFlowy Cloud, this change is already included — no action needed.
+> **Note:** If you are using this repository's default [`docker/nginx/nginx.conf`](docker/nginx/nginx.conf), this change is already included — no action needed.
 
 ### 🚀 v0.10.1
 
