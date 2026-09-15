@@ -1,3 +1,14 @@
+{{- $scimConfig := .Values.ingress.scim | default (dict) -}}
+{{- $scimEnabled := $scimConfig.enabled | default false -}}
+{{- if and $scimEnabled (not .Values.ingress.enabled) -}}
+{{- fail "ingress.enabled must be true when ingress.scim.enabled is true" -}}
+{{- end -}}
+{{- if and $scimEnabled (not (index .Values "appflowy-cloud" "enabled")) -}}
+{{- fail "appflowy-cloud.enabled must be true when ingress.scim.enabled is true" -}}
+{{- end -}}
+{{- if and $scimEnabled (not .Values.ingress.tls.enabled) -}}
+{{- fail "ingress.tls.enabled must be true when ingress.scim.enabled is true" -}}
+{{- end -}}
 {{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -46,6 +57,16 @@ spec:
                 name: {{ include "appflowy.cloud.fullname" . }}
                 port:
                   number: {{ index .Values "appflowy-cloud" "service" "port" }}
+          {{- if $scimEnabled }}
+          # SCIM provisioning endpoint
+          - path: /scim
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "appflowy.cloud.fullname" . }}
+                port:
+                  number: {{ index .Values "appflowy-cloud" "service" "port" }}
+          {{- end }}
           # WebSocket endpoint
           - path: /ws
             pathType: Prefix
