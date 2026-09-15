@@ -1,8 +1,8 @@
 # Audit Logging
 
-AppFlowy Self-Hosted can record supported space, permission, workspace membership, and directory changes. Use **Audit Log** in the Admin console to enable recording, search a workspace's events, inspect recorded changes, and export results.
+AppFlowy Self-Hosted can record supported space, permission, workspace membership, and directory changes. Use **Audit Log** in the Admin console to enable recording, search events across the deployment or within a workspace, inspect recorded changes, and export results.
 
-Audit logging is disabled by default. Enabling it applies to the whole deployment; the workspace selector controls which events you view.
+Audit logging is disabled by default. Enabling it applies to the whole deployment. Once enabled, the page shows the latest 50 recorded events across all workspaces. Every search filter is optional.
 
 ## Before you begin
 
@@ -12,7 +12,7 @@ Audit logging is disabled by default. Enabling it applies to the whole deploymen
 
 System administrators can review any workspace through this page without joining it. Being a workspace owner or space owner alone does not grant access to the Admin console.
 
-The screenshots below were captured from a running development Admin console and self-hosted server. The **Audit demonstration** workspace contains real group and space changes made through the server APIs using a generated test account. Your workspace names, identifiers, timestamps, and available sidebar entries will differ.
+The screenshots below show a running development Admin console connected to a self-hosted server. The example events were generated through AppFlowy Web in **My Workspace**: creating an **Audit demonstration** space, changing it from public to private, creating an **Audit reviewers** group with a member, and renaming it to **Audit review team**. Your workspace names, identifiers, timestamps, and available sidebar entries will differ.
 
 ## Step 1: Enable audit logging
 
@@ -22,7 +22,7 @@ The screenshots below were captured from a running development Admin console and
    ![Audit Log page with the Enable audit logging prompt](../asset/audit_enable.png)
 
 3. Click **Enable audit logging**. The console saves the deployment-wide `audit_enabled` setting and checks the server's effective status.
-4. When **Recording enabled** appears, the workspace selector and event browser become available.
+4. The event browser opens with **All workspaces**, **Any time**, **All events**, **All actors**, and **All** results selected. The **Disable recording** button appears at the top right.
 
 Enabling recording does not require a restart. The server handling the setting change refreshes its in-memory flag immediately. Other Cloud replicas and the standalone MCP service can take up to about 60 seconds to pick up the change. The page periodically refreshes status; reload it if another administrator recently changed the setting.
 
@@ -30,56 +30,72 @@ Enabling recording does not require a restart. The server handling the setting c
 
 If the page says **Audit logging is unavailable in this build**, its enable button is disabled. An `audit_enabled=true` database setting or `APPFLOWY_AUDIT_ENABLE=true` environment variable cannot activate the feature on a non-self-hosted server.
 
-## Step 2: Choose a workspace
+## Step 2: Browse recent events
 
-1. Open the **Workspace** selector.
-2. Search by workspace name or the owner's email address.
-3. Select the workspace. Its identifier is shown beneath the name so that workspaces with the same name can be distinguished.
+No workspace or time range is required. With the default filters, the page shows the newest retained events across all workspaces, with up to 50 events per page. Use **Next** and **Previous** to browse older and newer pages of the same search.
 
-![Searching for the Audit demonstration workspace](../asset/audit_workspace.png)
-
-The first results cover the last seven days. Events appear newest first, with up to 50 events per page.
-
-![Audit events for a workspace, including group creation, renaming, and space permission changes](../asset/audit_events.png)
+![Recent space and group changes across all workspaces, with optional filters and a Workspace column](../asset/audit_events.png)
 
 | Column | Meaning |
 | --- | --- |
-| **Time** | When the event occurred, displayed in your browser's local timezone. |
+| **Time** | Recent events use relative times, such as **5 minutes ago**; older events show a local date and time. Hover over the time or open the details to see the full local timestamp. |
 | **Actor** | The recorded email or name, when available; otherwise the actor's UUID or **System**. |
-| **Event** | A readable label and the exact event type. Click the label to inspect details. |
+| **Workspace** | The workspace UUID. This column appears when viewing **All workspaces**. |
+| **Event** | A readable label and the exact event type. Click the label or its row to inspect details. |
 | **Target** | The recorded resource name or identifier, with its resource type. |
 | **Result** | **Success**, **Failure**, or **Partial**, as recorded by the event producer. |
 
 Some permission-change producers record actor and target identifiers without names. A UUID in these columns is expected and does not mean the event is incomplete or the user was deleted.
 
+To narrow the view to one workspace:
+
+1. Open the **Workspace** selector.
+2. Search by workspace name, workspace UUID, or the owner's email address.
+3. Select the workspace. Its identifier is shown beneath the name so that workspaces with the same name can be distinguished.
+
+![Selecting My Workspace, with All workspaces available to remove the workspace filter](../asset/audit_workspace.png)
+
+Selecting a workspace immediately loads its first page using the other applied filters. Select **All workspaces** to remove only the workspace restriction.
+
 ## Step 3: Filter the events
 
-Set the filters, then click **Search**.
+All filters are optional and selections apply immediately. Each filter change returns to the first page. Use the toolbar to narrow the results, or leave its defaults to browse the latest 50 events without a workspace or time restriction.
 
 | Filter | How to use it |
 | --- | --- |
-| **From** | Start date and time, inclusive. Defaults to seven days ago. Clear it to include all retained earlier events. |
-| **To (optional)** | End date and time, inclusive. Leave it empty to include the latest events. |
-| **Result** | Choose all results, success, failure, or partial. |
-| **Event type** | Enter an exact event type, such as `space.permission.changed`. Suggested types are available, and other exact types can be entered. Wildcards and free-text searches are not supported. |
-| **Actor ID** | Enter the actor's UUID, or leave it empty for all actors. Copy the full UUID from an event's details; this field does not search by email. |
+| **Workspace** | Defaults to **All workspaces**. Search by workspace name, UUID, or owner email, then select one to restrict the results. |
+| **Date range** | Defaults to **Any time**. Choose **Last hour**, **Last 24 hours**, **Last 7 days**, **Last 30 days**, or **Custom range**. |
+| **Event type** | Open the picker and search its suggestions by label or event type. Select an exact type, such as `space.permission.changed`, or enter another exact type and choose **Use "…"**. Select **All events** to remove the filter. Wildcards and free-text event-content searches are not supported. |
+| **Actor** | Open **All actors**, enter at least two characters of an email address, and select a matching user. You can also paste a full actor UUID and choose **Use this user ID**. Select **All actors** to remove the filter. |
+| **Result** | Click **All**, **Success**, **Failure**, or **Partial**. |
 
-Dates are entered in your local timezone and converted to UTC for the request. **From** cannot be later than **To**.
+Choose **Custom range** to reveal **From** and **To**. Both boundaries are optional and inclusive: leave **From** empty to include all retained earlier events, or leave **To** empty to include the latest events.
 
-![Filtering the audit log to space.permission.changed](../asset/audit_filtered.png)
+Open either date field to choose a day from the calendar, or enter a date as `YYYY-MM-DD` and a time as `HH:mm`. **Today** selects the current date; **Clear** removes that boundary, and **Done** closes the picker. Valid date changes apply immediately. An incomplete date or a **From** value later than **To** displays an error and leaves the last valid range applied. Dates use your local timezone and are converted to UTC for the request.
 
-- **Reset filters** restores the last-seven-days search and clears the event, actor, and result filters.
+Relative ranges are measured from the current time when results are requested. **Refresh** advances that window. Use **Custom range** when you need fixed start and end times.
+
+![Date and time picker with a calendar and Clear, Today, and Done controls](../asset/audit_date_picker.png)
+
+![Searchable event type picker showing readable labels and exact event types](../asset/audit_event_picker.png)
+
+![Filtering the audit log to the Audit demonstration space permission change](../asset/audit_filtered.png)
+
+- **Clear filters** restores **All workspaces**, **Any time**, **All events**, **All actors**, and **All** results, and returns to the first page. It appears when a filter is active.
 - **Refresh** reloads the currently applied search and checks audit status.
-- **Previous** and **Next** move through the same search results.
-- **No events match this search** means the query succeeded but found no matching events. Try a wider date range or fewer filters, and confirm a supported action occurred while recording was enabled.
+- **Previous** and **Next** move through the same search results in pages of 50.
+- **No events match these filters** means the query succeeded but found no matching events. Try a wider date range or fewer filters, or use **Clear filters** in the empty result area.
+- **No events recorded yet** means there are no retained events in the unfiltered view. Perform a supported action while recording is enabled, then click **Refresh**.
 
-Editing a filter does not change the applied search until you click **Search**. Pagination and export continue to use the applied filters.
+Filters and the current page are saved in the page URL, so you can reload, bookmark, or share a filtered view with another system administrator. The link restores the selected filters; a relative range still refers to the current time. Incomplete custom-date edits are not saved in the URL.
+
+If a periodic status check or **Refresh** cannot check audit availability, the page displays the error and a **Retry** button. After a successful initial status check, a transient status-refresh failure preserves the active filters, current page, and any custom-date draft edits.
 
 ## Step 4: Inspect a change
 
-Click an event label to open the detail panel.
+Click an event row or its event label to open the detail panel.
 
-![Event detail panel showing the recorded before and after space permissions](../asset/audit_event_details.png)
+![Event detail panel showing the Audit demonstration space changing from public to private](../asset/audit_event_details.png)
 
 The panel contains:
 
@@ -92,11 +108,11 @@ Scroll within the panel to see the remaining fields. **Not recorded** means the 
 
 ## Step 5: Export the results
 
-1. Choose a workspace and apply the filters you need.
+1. Leave **All workspaces** selected or choose a workspace, then apply any other filters you need.
 2. Click **Export CSV** beside **Refresh**.
-3. Save the downloaded `audit-logs-<workspace-id>.csv` file.
+3. Save the downloaded file: `audit-logs.csv` for all workspaces, or `audit-logs-<workspace-id>.csv` for one workspace.
 
-Export includes **all events matching the applied filters**, across every results page. Narrow the date range for large workspaces: the server currently builds the matching export in memory.
+Export includes **all events matching the current filters**, across every results page. With no filters, this includes all retained events across the deployment. Relative date ranges are evaluated again when you export; use a custom range for a fixed interval. Narrow the workspace or date range for large exports: the server currently builds the matching export in memory.
 
 The CSV contains event and actor metadata, target identifiers, results, available request metadata, and `event_details`. The separate **Before** and **After** snapshots are currently available in the detail panel and JSON API, but are not separate CSV columns. CSV timestamps are UTC.
 
@@ -104,7 +120,7 @@ A successful export also creates a `security.audit_log.exported` event asynchron
 
 ## Disable recording
 
-1. Click **Disable recording** beside the **Recording enabled** badge.
+1. Click **Disable recording** at the top right of the Audit Log page.
 2. Review the confirmation and click **Disable recording** again, or choose **Cancel** to leave it enabled.
 
 ![Confirmation before disabling deployment-wide audit recording](../asset/audit_disable.png)
@@ -173,7 +189,7 @@ Covered permission mutations and their audit records commit in the same database
 
 Directory provisioning and effective access reconciliation can appear as separate events because they happen in separate operations. Changing a parent space's policy can affect inherited access without producing one event for every descendant page.
 
-This is **not a complete log of every read or denied request**. Ordinary page/space reads, downloads, realtime access, and general permission denials do not have comprehensive audit coverage. Authentication events without a workspace association do not appear in this workspace browser. There is currently no separate filter for a space or target resource.
+This is **not a complete log of every read or denied request**. Ordinary page/space reads, downloads, realtime access, and general permission denials do not have comprehensive audit coverage. Recorded events without a workspace association, such as some authentication events and all-workspace exports, are included in **All workspaces** and use the all-zero workspace UUID. They are excluded when a specific workspace is selected. There is currently no separate filter for a space or target resource.
 
 ## Troubleshooting
 
@@ -181,10 +197,11 @@ This is **not a complete log of every read or denied request**. Ordinary page/sp
 | --- | --- |
 | **Audit Log** is missing from the sidebar | Upgrade the Admin Frontend to a version containing this page and sign in as a system administrator. |
 | **Audit logging is unavailable in this build** | Deploy a self-hosted Cloud build. Configuration cannot enable auditing on managed builds. |
-| **Could not check audit availability** | Check the Cloud connection and server version. The page requires the admin audit status endpoint; a `404` commonly means the server is older than the console. |
+| **Could not check audit availability** | Check the Cloud connection and server version, then click **Retry**. A transient refresh failure keeps the active filters, page, and custom-date draft edits. The page requires the admin audit status endpoint; a `404` commonly means the server is older than the console. |
 | The setting changed, but status has not changed yet | Allow other server replicas time to refresh, then reload the page. Check that the console connects to the intended deployment. |
 | Environment enablement has no effect | A database override takes priority. Also confirm the variable was passed to the running container. |
 | No matching events | Check workspace, time range, event type, and actor UUID. Confirm auditing was enabled when a supported action occurred. Events may also have expired. |
+| Actor search finds no user or fails | Paste the actor UUID from an event's details and choose **Use this user ID**, or select **All actors**. The email picker searches current users; the audit filter uses the recorded actor UUID. |
 | Actor/target names or request context are missing | The producer may only record identifiers or may not capture that request context. Inspect the stored snapshots and event details. |
 | Query or export fails | Use **Retry**, check recording is still enabled, and check your administrator session. A server error is displayed separately from an empty result. |
 
@@ -197,9 +214,13 @@ The Admin console uses these authenticated endpoints:
 | `GET` | `/api/admin/audit-logs/status` | Effective `supported` and `enabled` flags. |
 | `POST` | `/api/admin/system-config` | Save `{"key":"audit_enabled","value":"true"}` or `"false"`. |
 | `DELETE` | `/api/admin/system-config/audit_enabled` | Remove the override and restore the environment/default behavior. |
-| `GET` | `/api/admin/audit-logs/{workspace_id}` | Paginated JSON events. |
-| `POST` | `/api/admin/audit-logs/{workspace_id}/export` | CSV export using query-string filters. |
+| `GET` | `/api/admin/audit-logs` | Paginated JSON events across all workspaces, or one workspace with the optional `workspace_id` query parameter. |
+| `POST` | `/api/admin/audit-logs/export` | CSV export using the same optional query-string filters. |
 
-Listing and export accept `start_date` and `end_date` as RFC 3339 timestamps, an exact `event_type`, `actor_id` as a UUID, and `event_status` as `success`, `failure`, or `partial`. Listing also accepts `limit` (default 50, capped at 500) and a nonnegative `offset`.
+Listing and export accept optional `workspace_id` and `actor_id` UUIDs, `start_date` and `end_date` as RFC 3339 timestamps, an exact `event_type`, and `event_status` as `success`, `failure`, or `partial`. Omitted filters impose no restriction. Listing also accepts `limit` (default 50, capped at 500) and a nonnegative `offset`; the Admin console uses 50. Events are ordered by timestamp descending, then event ID descending to break ties. The JSON page contains `logs`, `total_count`, and `has_more`.
+
+For example, `GET /api/admin/audit-logs?limit=50&offset=0` returns the latest 50 events across all workspaces. Use `offset=50` for the next page, or add `workspace_id=<uuid>` to restrict the query. Export uses the same filters and includes all matching rows without pagination.
+
+The earlier `GET /api/admin/audit-logs/{workspace_id}` and `POST /api/admin/audit-logs/{workspace_id}/export` routes remain available. On these routes, the path determines the workspace; a query-string `workspace_id` cannot change it.
 
 These routes require a system administrator. The separate `/api/workspaces/{workspace_id}/audit-logs` and `/export` routes require an active workspace **Owner** membership and keep that requirement even if the optional workspace authorizer is disabled. Both API families reject listing and export while auditing is disabled.
