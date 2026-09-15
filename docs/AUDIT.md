@@ -1,6 +1,6 @@
 # Audit Logging
 
-AppFlowy Self-Hosted can record supported space, permission, workspace membership, and directory changes. Use **Audit Log** in the Admin console to enable recording, search events across the deployment or within a workspace, inspect recorded changes, and export results.
+AppFlowy Self-Hosted can record the [supported actions listed below](#what-is-recorded), including authentication, workspace and space changes, permissions, directory sync, form sharing, administration, and MCP tool activity. Use **Audit Log** in the Admin console to enable recording, search events across the deployment or within a workspace, inspect recorded changes, and export results.
 
 Audit logging is disabled by default. Enabling it applies to the whole deployment. Once enabled, the page shows the latest 50 recorded events across all workspaces. Every search filter is optional.
 
@@ -24,7 +24,7 @@ The screenshots below show a running development Admin console connected to a se
 3. Click **Enable audit logging**. The console saves the deployment-wide `audit_enabled` setting and checks the server's effective status.
 4. The event browser opens with **All workspaces**, **Any time**, **All events**, **All actors**, and **All** results selected. The **Disable recording** button appears at the top right.
 
-Enabling recording does not require a restart. The server handling the setting change refreshes its in-memory flag immediately. Other Cloud replicas and the standalone MCP service can take up to about 60 seconds to pick up the change. The page periodically refreshes status; reload it if another administrator recently changed the setting.
+Enabling recording does not require a restart. The server handling the setting change refreshes its in-memory flag before returning the response. Other Cloud replicas refresh their audit flag on a 60-second timer, using a configuration cache with a 60-second lifetime. The standalone MCP service checks its cached setting when recording tool activity. Propagation depends on cache expiry and refresh timing, and can take longer if a refresh fails. The page checks effective status every 30 seconds; **Refresh** checks it immediately.
 
 **Events from periods when auditing was disabled are not reconstructed.** Enabling auditing again makes retained historical events available, alongside newly recorded events.
 
@@ -116,7 +116,7 @@ Export includes **all events matching the current filters**, across every result
 
 The CSV contains event and actor metadata, target identifiers, results, available request metadata, and `event_details`. The separate **Before** and **After** snapshots are currently available in the detail panel and JSON API, but are not separate CSV columns. CSV timestamps are UTC.
 
-A successful export also creates a `security.audit_log.exported` event asynchronously. That new event appears on a later refresh; it is not included in the file that just finished exporting.
+A successful export also attempts to record a `security.audit_log.exported` event asynchronously. This audit write is best-effort: its failure does not fail the export. If recorded, the new event is available on a later refresh when it matches the active filters; it is not included in the file that just finished exporting.
 
 ## Disable recording
 
@@ -125,7 +125,7 @@ A successful export also creates a `security.audit_log.exported` event asynchron
 
 ![Confirmation before disabling deployment-wide audit recording](../asset/audit_disable.png)
 
-Disabling recording affects every workspace. New events stop being recorded, and the query and export UI is hidden until auditing is enabled again. Existing events are not deleted by this action, but normal retention continues to apply.
+Disabling recording affects every workspace. New events stop being accepted as each service observes the setting, and the query and export UI is hidden until auditing is enabled again. In-flight writes and MCP events already queued can still finish. Existing events are not deleted by this action, but normal retention continues to apply.
 
 ## Configuration and retention
 
@@ -170,26 +170,57 @@ This example applies when your deployment uses the bundled `docker-compose.yml` 
 
 For Kubernetes or another deployment system, set the same variables on the Cloud container and roll out the updated workload. Environment and retention changes require a process restart; console enable/disable changes do not.
 
-Retention maintenance runs daily and manages monthly PostgreSQL partitions. A partition is dropped only when it is entirely older than the cutoff; old rows in the default partition are swept separately. **Thirty days is not an exact per-event deletion deadline**: records in a retained monthly partition can remain longer. Maintenance continues while recording is disabled. Export records before they expire if you need a longer-lived archive.
+Retention maintenance runs at server startup and then daily, and manages monthly PostgreSQL partitions. A partition is dropped only when it is entirely older than the cutoff; old rows in the default partition are swept separately. **Thirty days is not an exact per-event deletion deadline**: records in a retained monthly partition can remain longer. Maintenance continues while recording is disabled. Export records before they expire if you need a longer-lived archive.
 
 If you deploy the standalone MCP service, its binary must also include self-host support. It follows the same database-backed enablement setting; configure an environment fallback on that service too if you rely on one. MCP activity uses a bounded, best-effort queue, so it does not have the same transaction guarantee as covered permission mutations.
 
 ## What is recorded
 
-| Area | Examples |
+The current implementation records these **62 event types** through the supported paths described here. Use the exact value in the **Event type** filter or API. The picker's suggestions contain common types only; use **Use "…"** to select a type that is not suggested.
+
+| Area | Event types |
 | --- | --- |
-| Spaces | Creation, visibility/security policy changes, direct membership changes, leaving a space, and group grants. |
-| Workspace groups | Creation, renaming, deletion, and membership changes. |
-| Permissions | Workspace role changes, supported page/guest grants and revocations, and group grants to page subtrees. |
-| Access requests | Creation, approval, and rejection, with resulting grants where applicable. |
-| Directory sync | Supported SCIM user/group lifecycle events, connection setting changes, and effective membership/role reconciliation. See [SCIM Provisioning](SCIM.md). |
-| Audit export | A record of the CSV export request and its filters/count. |
+| Authentication | `user.signin`, `user.signin.failed`, `user.signout`, `user.password.changed` |
+| Workspace lifecycle | `workspace.created`, `workspace.deleted`, `workspace.owner.transferred` |
+| Workspace membership | `workspace.member.invited`, `workspace.member.joined`, `workspace.member.removed`, `workspace.member.role.changed` |
+| Spaces | `space.created`, `space.permission.changed`, `space.member.added`, `space.member.changed`, `space.member.removed`, `space.member.left` |
+| Workspace groups | `workspace.group.created`, `workspace.group.renamed`, `workspace.group.deleted`, `workspace.group.member.added`, `workspace.group.member.removed` |
+| Group access to spaces | `space.group.granted`, `space.group.changed`, `space.group.revoked` |
+| Direct page/guest permissions | `permission.granted`, `permission.modified`, `permission.revoked` |
+| Group access to page subtrees | `permission.group.granted`, `permission.group.modified`, `permission.group.revoked` |
+| External page sharing | `document.shared.external` |
+| Access requests | `access_request.created`, `access_request.approved`, `access_request.rejected` |
+| Admin guest-invite decisions | `guest_invite.approved`, `guest_invite.rejected` |
+| Form sharing | `form.share.created`, `form.share.updated`, `form.share.revoked`, `form.share.reset`, `workspace.form_sharing.policy.changed` |
+| Directory users | `directory.user.provisioned`, `directory.user.reactivated`, `directory.user.deprovisioned`, `directory.user.ldap_login` |
+| Directory groups | `directory.group.created`, `directory.group.changed`, `directory.group.deleted`, `directory.group.membership.reconciled` |
+| Directory configuration | `directory.connection.settings.changed` |
+| Admin user management | `admin.user.role.updated`, `admin.user.password.reset`, `admin.user.spam.marked`, `admin.user.spam.unmarked` |
+| Spam-signal management | `admin.spam_signal.deleted`, `admin.spam_signal.purged` |
+| Publishing protection | `publish.blocked_spam_signal` |
+| Security and audit access | `security.suspicious_activity.detected`, `security.audit_log.access_denied`, `security.audit_log.exported` |
+| MCP tool activity | `mcp.tool.call` |
 
-Covered permission mutations and their audit records commit in the same database transaction when auditing is enabled. If the audit insert fails, the covered mutation rolls back. Some older producers and MCP tool activity remain best-effort.
+### How to interpret the events
 
-Directory provisioning and effective access reconciliation can appear as separate events because they happen in separate operations. Changing a parent space's policy can affect inherited access without producing one event for every descendant page.
+- **Workspace creation:** `workspace.created` is recorded during new-user setup when the initial workspace is provisioned. Creating an additional workspace does not currently emit this event.
+- **Authentication:** `user.signin` and `user.signin.failed` describe outcomes of the Cloud token-verification endpoint. A verification failure also emits `security.suspicious_activity.detected`. These events do not cover every login attempt rejected by GoTrue or an external identity provider before reaching Cloud. `user.signout` records a sign-out request, including when the upstream logout call fails.
+- **Permissions and sharing:** direct grants and revocations describe actual access changes. Pending, skipped, or unchanged recipients do not produce grant-change events. `document.shared.external` accompanies grants or changes through the direct-share flow. The group permission events apply to page subtrees.
+- **Directory sync:** SCIM user/group lifecycle and effective membership/role reconciliation can appear as separate events because they happen in separate operations. `directory.connection.settings.changed` covers default-role, group-role mapping, and enablement changes. See [SCIM Provisioning](SCIM.md).
+- **MCP:** `mcp.tool.call` records the tool name, calling user, workspace, client, and success/failure metadata. It is a tool-call record; it does not create a dedicated page/view lifecycle event or store the full tool input/output.
+- **Results:** the status is assigned by the event producer. For example, `publish.blocked_spam_signal` records a blocked publish attempt but currently uses the default **Success** status. Search by event type when looking for this action. **Partial** is accepted by the query API and UI, but none of the current producers explicitly emits it.
 
-This is **not a complete log of every read or denied request**. Ordinary page/space reads, downloads, realtime access, and general permission denials do not have comprehensive audit coverage. Recorded events without a workspace association, such as some authentication events and all-workspace exports, are included in **All workspaces** and use the all-zero workspace UUID. They are excluded when a specific workspace is selected. There is currently no separate filter for a space or target resource.
+### Transaction and coverage limits
+
+Covered permission mutations and their audit records commit in the same database transaction when auditing is enabled. If the audit insert fails, the covered mutation rolls back. This applies to the supported space/group changes, workspace role updates, direct page/guest permission changes, access requests, form-sharing changes, and covered directory changes. Permission events with equal before/after snapshots are suppressed.
+
+This transaction guarantee does not apply to every event in the catalog. Older authentication, workspace, and admin events can be written independently after the underlying action. Admin guest-invite status changes and grant finalization are separate operations; permission events commit with grant finalization. Audit exports, LDAP login auditing, and MCP tool activity use best-effort delivery. Changing a parent space's policy can affect inherited access without producing one event for every descendant page.
+
+**Ordinary page/view creation, moving to trash, restoration, permanent deletion, and content editing do not currently emit Cloud audit events.** Space creation and permission events do not imply coverage of those page actions. Successful publishing/unpublishing and changes to the audit enablement setting also have no dedicated audit event. MCP can record its supported tool calls separately.
+
+Ordinary page/space reads, downloads, realtime access, and general permission denials do not have comprehensive audit coverage. `security.audit_log.access_denied` specifically records denied workspace audit-log access; it is not a general permission-denial event.
+
+Recorded events without a workspace association, such as authentication events and all-workspace exports, are included in **All workspaces** and use the all-zero workspace UUID. They are excluded when a specific workspace is selected. There is currently no separate filter for a space or target resource.
 
 ## Troubleshooting
 
@@ -201,6 +232,8 @@ This is **not a complete log of every read or denied request**. Ordinary page/sp
 | The setting changed, but status has not changed yet | Allow other server replicas time to refresh, then reload the page. Check that the console connects to the intended deployment. |
 | Environment enablement has no effect | A database override takes priority. Also confirm the variable was passed to the running container. |
 | No matching events | Check workspace, time range, event type, and actor UUID. Confirm auditing was enabled when a supported action occurred. Events may also have expired. |
+| Creating or deleting a page produces no event | Ordinary page/view lifecycle actions are not audited. Check the [event catalog and coverage limits](#what-is-recorded); `space.created` and `workspace.created` describe different actions. |
+| An event type is missing from the picker | The suggestions are not the full catalog. Enter the exact event type and choose **Use "…"**. |
 | Actor search finds no user or fails | Paste the actor UUID from an event's details and choose **Use this user ID**, or select **All actors**. The email picker searches current users; the audit filter uses the recorded actor UUID. |
 | Actor/target names or request context are missing | The producer may only record identifiers or may not capture that request context. Inspect the stored snapshots and event details. |
 | Query or export fails | Use **Retry**, check recording is still enabled, and check your administrator session. A server error is displayed separately from an empty result. |
@@ -217,7 +250,7 @@ The Admin console uses these authenticated endpoints:
 | `GET` | `/api/admin/audit-logs` | Paginated JSON events across all workspaces, or one workspace with the optional `workspace_id` query parameter. |
 | `POST` | `/api/admin/audit-logs/export` | CSV export using the same optional query-string filters. |
 
-Listing and export accept optional `workspace_id` and `actor_id` UUIDs, `start_date` and `end_date` as RFC 3339 timestamps, an exact `event_type`, and `event_status` as `success`, `failure`, or `partial`. Omitted filters impose no restriction. Listing also accepts `limit` (default 50, capped at 500) and a nonnegative `offset`; the Admin console uses 50. Events are ordered by timestamp descending, then event ID descending to break ties. The JSON page contains `logs`, `total_count`, and `has_more`.
+Listing and export accept optional `workspace_id` and `actor_id` UUIDs, `start_date` and `end_date` as RFC 3339 timestamps, an exact `event_type`, and `event_status` as `success`, `failure`, or `partial`. Omitted filters impose no restriction. Listing also accepts `limit` (default 50, clamped to 1–500) and a nonnegative `offset`; the Admin console uses 50. Events are ordered by timestamp descending, then event ID descending to break ties. The JSON response's `data` object contains `logs`, `total_count`, and `has_more`.
 
 For example, `GET /api/admin/audit-logs?limit=50&offset=0` returns the latest 50 events across all workspaces. Use `offset=50` for the next page, or add `workspace_id=<uuid>` to restrict the query. Export uses the same filters and includes all matching rows without pagination.
 

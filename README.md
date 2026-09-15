@@ -52,7 +52,22 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.18.6 (Latest)
+### 🚀 v0.18.8 (Latest)
+
+#### New Features
+
+- **Confluence imports** — Added Confluence HTML ZIP imports into new or existing workspaces, with page hierarchy, attachments, internal links, and editable tables.
+- **Admin audit APIs** — Added audit search and CSV export across workspaces, plus coverage for space, group, sharing, and directory permission changes when auditing was enabled.
+
+
+#### Bug Fixes
+
+- Fixed legacy row-document access for users with read-only permissions and enforced page and space restrictions on Notion import destinations.
+- Fixed stale snapshots and incomplete template copies, preserved pending updates through temporary storage failures, and reduced excessive retries in sync recovery and search indexing.
+
+**Baseline:** [`61160e37c6c790baff826183837b392cbcb7875c`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/61160e37c6c790baff826183837b392cbcb7875c)
+
+### 🚀 v0.18.6
 
 #### New Features
 
