@@ -40,10 +40,48 @@ override file or existing Kubernetes Secrets):
 
 Optional but common:
 
-- `global.scheme` / `global.wsScheme`: set to `http`/`ws` if you run without TLS.
+- `global.scheme` / `global.wsScheme`: set to `http`/`ws` if you run without TLS. If you also set `ingress.tls.enabled=false`, set `ingress.scim.enabled=false` as well, or the chart refuses to render (see [Enterprise identity routes](#enterprise-identity-routes-scim-ldap-oidc-saml)).
 - `global.s3.presignedUrlEndpoint`: set when clients must reach MinIO through an external ingress.
 - `gotrue.config.smtp.*` / `gotrue.config.oauth.*`: set only if you enable SMTP or OAuth providers.
 - `appflowy-ai.secrets.*`: set only if you enable AI providers.
+- `ingress.scim.enabled`: defaults to `true` and adds the `/scim` route for SCIM provisioning; set it to `false` when SCIM is unused or must use a separate edge (see below).
+
+## Enterprise identity routes (SCIM, LDAP, OIDC, SAML)
+
+SCIM provisioning is served by Cloud at `/scim/v2` and authenticated with a per-connection bearer
+token issued in the Admin console. `ingress.scim.enabled` (default `true`) adds a `/scim` `Prefix`
+path to the primary TLS Ingress, routed to the Cloud Service port without rewriting. While it is
+enabled, the chart fails to render at all if `ingress.enabled`, `ingress.tls.enabled`, or
+`appflowy-cloud.enabled` is false, because a bearer credential must never travel over plaintext or
+be redirected; a deployment without TLS must therefore also set `ingress.scim.enabled=false`. Two
+Ingress-Nginx defaults still fall short of the SCIM edge requirements: plaintext requests receive a
+`308` redirect (`ssl-redirect`) instead of a refusal, and access logs record the request URI with
+its query string. Give the IdP only the HTTPS URL, and configure the controller's log format to
+omit query strings. The path inherits the primary Ingress annotations; if those apply browser or
+external authentication, set `ingress.scim.enabled=false` and publish `/scim` through a dedicated
+HTTPS route that keeps the path intact, never redirects plaintext requests, is exempt from
+browser-login or external-auth middleware, forwards `Authorization` untouched, allows at least
+256 KiB request bodies, does not cache or retry `POST`/`PATCH`, and omits query strings from access
+logs (SCIM filters carry email addresses). No SCIM token or SCIM-specific environment variable
+belongs in the Deployment; Cloud stores only the token hash. See [docs/SCIM.md](../../docs/SCIM.md).
+
+LDAP sign-in uses the ordinary `/api` route. Failed attempts are rate-limited per client address,
+taken from `X-Forwarded-For` only when the header holds exactly one address, and independently per
+login value. Ingress-Nginx's defaults satisfy the address requirement: it sets the header to the
+connecting client. Keep the controller's `compute-full-forwarded-for` at its default `false`; a
+comma-separated chain is ignored, every user then shares the controller pod's bucket, and ten
+failures anywhere lock everyone out for five minutes. When a CDN or load balancer sits in front of
+the controller, enable `use-forwarded-headers` together with `proxy-real-ip-cidr` restricted to
+that edge, and make sure the edge itself sends exactly one address in `X-Forwarded-For`.
+`APPFLOWY_LDAP_SECRET_KEY` is optional and the chart does not expose it (add it to the Cloud
+Deployment yourself); without it the LDAP bind passwords are encrypted under the JWT secret, so
+rotating `global.jwt.secret` requires re-entering them. See [docs/LDAP.md](../../docs/LDAP.md).
+
+OIDC, OAuth, and SAML sign-in continue through the existing GoTrue routes (`/gotrue/authorize`,
+`/gotrue/callback`, `/gotrue/sso/saml/acs`). Custom OIDC providers require a publicly resolvable
+HTTPS issuer that stays reachable from the GoTrue pod: each sign-in exchanges the code at the IdP's
+token endpoint, and the discovery document is fetched again whenever GoTrue's one-hour cache expires
+or the pod restarts. See [docs/OIDC.md](../../docs/OIDC.md).
 
 ## Local minikube quick start
 

@@ -542,6 +542,11 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
 
+  scim:
+    # Add /scim to the primary TLS Ingress. Disable this when SCIM is unused or
+    # when the inherited annotations apply browser or external authentication.
+    enabled: true
+
   tls:
     enabled: true
     secretName: "appflowy-tls"
