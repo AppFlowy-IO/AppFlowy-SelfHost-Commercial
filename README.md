@@ -8,6 +8,8 @@ We also provide a series of [self-hosting video tutorials on YouTube](https://ww
 
 Check out our [release notes](#Release-Notes) for the latest updates, improvements, and fixes.
 
+For audit configuration, event review, and CSV export in the Admin console, see the illustrated [Audit Logging guide](docs/AUDIT.md).
+
 ## Deployment Options
 
 AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
