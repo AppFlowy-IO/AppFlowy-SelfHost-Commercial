@@ -52,7 +52,31 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.18.8 (Latest)
+### 🚀 v0.18.9 (Latest)
+
+#### New Features
+
+- **Database history previews and recovery** — Added APIs to preview saved database views and rows without changing live data, and to require a recovery checkpoint before restoring so the previous database state could be recovered.
+- **Formula fields** — Added server support for Formula properties, preserving expressions and display settings for calculation in compatible clients.
+- **Confluence CSV imports** — Added single-space CSV ZIP imports with page hierarchy and attachments, preserved source metadata and comments as document content, and reported omitted or unsupported content.
+
+#### Improvements
+
+- **Timeline views** — Expanded saved settings for dependencies, separate start and end dates, progress, and weekend-aware scheduling, and included embedded Timeline content in PDF exports.
+
+#### Bug Fixes
+
+- Fixed database duplication so self-relations, saved relation filters, and Timeline dependencies referenced the copied rows correctly.
+- Fixed inconsistent initialization of new row documents that could cause content loss when client and server initialized the same document independently.
+
+#### ⚠️ Action Required
+
+- **Service rollout** — Upgrade Cloud and Worker together, and let Cloud's database migrations finish before deploying clients that use the new history preview and recovery APIs.
+- **Row-document sync** — Deploy desktop/mobile clients containing the matching document-initialization fix alongside the server. This prevented new conflicting histories; it did not repair previously damaged documents.
+
+**Baseline:** [`fa6a37bee7bb1e5380e51cdceb909da17022c95e`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/fa6a37bee7bb1e5380e51cdceb909da17022c95e)
+
+### 🚀 v0.18.8
 
 #### New Features
 
