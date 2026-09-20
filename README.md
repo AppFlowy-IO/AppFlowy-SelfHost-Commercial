@@ -10,6 +10,8 @@ Check out our [release notes](#Release-Notes) for the latest updates, improvemen
 
 For audit configuration, event review, and CSV export in the Admin console, see the illustrated [Audit Logging guide](docs/AUDIT.md).
 
+For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
+
 ## Deployment Options
 
 AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
