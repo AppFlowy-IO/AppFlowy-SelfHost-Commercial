@@ -54,7 +54,19 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.18.9 (Latest)
+### 🚀 v0.18.10 (Latest)
+
+#### Bug Fixes
+
+- Fixed integration authorization in AppFlowy Web so connection popups returned results to the browser and avoided unwanted desktop launches.
+
+#### ⚠️ Action Required
+
+- **Web connections** — When using Connections in AppFlowy Web, deploy Cloud alongside a Web build that supports the browser OAuth callback.
+
+**Baseline:** [`ac05c6f4988e8b76c1b003b35076e9564d25841d`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/ac05c6f4988e8b76c1b003b35076e9564d25841d)
+
+### 🚀 v0.18.9
 
 #### New Features
 
