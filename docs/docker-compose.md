@@ -8,6 +8,12 @@ cp deploy.env .env
 
 Edit `.env` to set your domain, HTTPS/WebSocket schemes, credentials, and optional email or AI settings. Replace the example passwords and JWT secret before exposing the deployment publicly. Compose [loads the root `.env` automatically](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), and Git ignores this file.
 
+When upgrading workspace storage accounting, update an existing `GOTRUE_DATABASE_URL` to include
+`&appflowy.storage_policy=self_hosted` after its `?search_path=auth` query and recreate GoTrue with
+`docker compose up -d gotrue`. The current environment template and Helm chart include this setting.
+GoTrue has its own database connections, so updating Cloud alone does not apply the self-host policy
+to user-deletion cascades. Keep the query parameter even when using an external PostgreSQL server.
+
 Compose uses the public `appflowyinc/appflowy_cloud` and `appflowyinc/appflowy_worker` images. Both provide AMD64 and ARM64 builds, and Docker selects the image architecture for your host automatically.
 
 Nginx configuration and certificates remain in [`docker/nginx`](../docker/nginx). For HTTPS, replace the bundled development certificate and key in `docker/nginx/ssl/` with your deployment's certificates.

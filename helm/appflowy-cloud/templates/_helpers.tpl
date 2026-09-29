@@ -145,7 +145,7 @@ postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "appflowy.postgresql
 PostgreSQL connection URL for GoTrue (with auth schema)
 */}}
 {{- define "appflowy.postgresql.gotrueUrl" -}}
-postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "appflowy.postgresql.host" . }}:{{ include "appflowy.postgresql.port" . }}/{{ include "appflowy.postgresql.database" . }}?search_path=auth
+postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@{{ include "appflowy.postgresql.host" . }}:{{ include "appflowy.postgresql.port" . }}/{{ include "appflowy.postgresql.database" . }}?search_path=auth&appflowy.storage_policy=self_hosted
 {{- end }}
 
 {{/*
