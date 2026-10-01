@@ -54,7 +54,38 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.18.10 (Latest)
+### 🚀 v0.19.0 (Latest)
+
+#### New Features
+
+- **PDF and Word imports (Desktop)** — Added imports of PDF and DOCX files into editable pages in workspaces connected to a server, with batch progress and warnings for unsupported content.
+- **Database version history (Desktop, opt-in)** — Added previews and restoration of saved database versions, with a recovery checkpoint before restoring.
+- **Formulas and rollups (Desktop)** — Added formulas that read properties from related rows, rollups of formula results, and counts or percentages matching multiple selected options.
+- **MCP database tools** — Added creation of Timeline and Form views and creation or editing of Formula properties. Formula results remained calculated by clients.
+
+#### Improvements
+
+- **Formula editing (Desktop)** — Opened the editor below the selected cell, added property-reference chips, and improved editing and copying of long formulas.
+- **Timeline views (Desktop)** — Added resizable table columns with saved widths and improved settings layouts.
+- **Import controls** — Added runtime configuration of document and ZIP upload limits through the Admin API. Enforced a shared limit of three ongoing imports per user across workspaces; `MAXIMUM_IMPORT_PENDING_TASK` no longer changed that limit.
+
+#### Bug Fixes
+
+- Fixed database restores so sidebar entries, relations, row metadata, and published-page cleanup followed the restored state, and connected clients recovered from stale updates.
+- Fixed Desktop linked-database recovery, tab refreshes, and spurious missing-database errors when switching workspaces; corrected self-hosted feature availability and cloud upgrade prompts.
+- Fixed interrupted import delivery and cleanup so retries recovered unfinished work without creating duplicate document pages.
+
+#### ⚠️ Action Required
+
+- **Service rollout** — Let Cloud's migrations finish before starting updated Worker, Search, and optional MCP services. Use matching self-hosted builds throughout, resume import traffic only after the updated Worker is running, and update the Desktop companion client separately.
+- **Database history** — To enable the Desktop feature, set `APPFLOWY_DATABASE_HISTORY_ENABLED=true` on Cloud and restart it after rollout. Keep page-history generation and database blob storage enabled, and use Desktop `0.14.6` or newer. The old `APPFLOWY_DATABASE_HISTORY_RESTORE_PERMISSION_FENCE_READY` flag was removed.
+- **Import storage permissions** — Ensure Cloud's S3 credentials can list and abort multipart uploads so interrupted imports can be cleaned up.
+
+**Baseline:** [`3066747196d8e39a1b9fe1b2b9eff3f697be3707`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/3066747196d8e39a1b9fe1b2b9eff3f697be3707)
+
+**Desktop Baseline:** [`781e514d5e6b75e8a9d5b69e8fb685bbaa728ae1`](https://github.com/AppFlowy-IO/AppFlowy-Premium/commit/781e514d5e6b75e8a9d5b69e8fb685bbaa728ae1)
+
+### 🚀 v0.18.10
 
 #### Bug Fixes
 
