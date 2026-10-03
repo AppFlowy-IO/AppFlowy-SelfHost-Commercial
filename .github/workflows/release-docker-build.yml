@@ -1,0 +1,115 @@
+name: Release Docker build
+run-name: Release Docker build (${{ github.event.ref }})
+
+on:
+  create:
+
+permissions: {}
+
+concurrency:
+  group: release-docker-build-${{ github.event.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-build:
+    name: Build and wait for release images
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/public/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Trigger Docker CI with the release version
+        id: dispatch
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          github-token: ${{ secrets.PUBLIC_DOCKER_CI_TOKEN }}
+          # Retrying a dispatch could start a second build of the same version.
+          retries: 0
+          script: |
+            const branch = context.payload.ref;
+            const version = branch.slice('release/public/'.length);
+            // Leave room for the downstream image tags' -arm64v8 suffix.
+            if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version) || version.length > 120) {
+              throw new Error(`Invalid release branch: ${branch}. Expected release/public/0.19.0 or release/public/0.19.0-rc.1.`);
+            }
+
+            const owner = 'AppFlowy-IO';
+            const repo = 'AppFlowy-Docker-CI';
+            const { data } = await github.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
+              owner,
+              repo,
+              workflow_id: 'self_host_cloud_docker.yml',
+              ref: 'main',
+              // Keep the downstream workflow's current build and publishing defaults explicit.
+              inputs: {
+                custom_tag: version,
+                appflowy_cloud_branch: 'main',
+                gotrue_branch: 'main',
+                appflowy_ai_branch: 'main',
+                push_gotrue: false,
+                push_appflowy_cloud: true,
+                push_appflowy_ai: false,
+                push_appflowy_search: true,
+                build_arm64: true,
+                tag_latest: true,
+              },
+              // This API version returns the exact run ID created by the dispatch.
+              headers: { 'X-GitHub-Api-Version': '2026-03-10' },
+              request: { timeout: 30000 },
+            });
+
+            const runId = data?.workflow_run_id;
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              throw new Error('The dispatch did not return a workflow run ID. Check Docker CI before retrying to avoid a duplicate build.');
+            }
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+            core.setOutput('run-id', String(runId));
+            core.info(`Building ${version}: ${runUrl}`);
+            await core.summary
+              .addHeading('Release Docker build')
+              .addRaw(`Branch: ${branch}\n\nVersion: ${version}\n\n`)
+              .addLink('View Docker CI build', runUrl)
+              .addRaw('\n\n')
+              .write();
+
+      - name: Wait for Docker CI to succeed
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          DOCKER_BUILD_RUN_ID: ${{ steps.dispatch.outputs.run-id }}
+        with:
+          github-token: ${{ secrets.PUBLIC_DOCKER_CI_TOKEN }}
+          retries: 3
+          script: |
+            const owner = 'AppFlowy-IO';
+            const repo = 'AppFlowy-Docker-CI';
+            const runId = Number(process.env.DOCKER_BUILD_RUN_ID);
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              throw new Error('Missing or invalid Docker CI run ID.');
+            }
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${runId}`;
+            const deadline = Date.now() + 230 * 60 * 1000;
+
+            while (Date.now() < deadline) {
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                owner,
+                repo,
+                run_id: runId,
+                headers: { 'X-GitHub-Api-Version': '2026-03-10' },
+                request: { timeout: 30000 },
+              });
+              core.info(`Docker CI run ${runId}: ${run.status}${run.conclusion ? ` (${run.conclusion})` : ''}`);
+
+              if (run.status === 'completed') {
+                await core.summary
+                  .addLink('Docker CI build', runUrl)
+                  .addRaw(`\n\nResult: ${run.conclusion}\n`)
+                  .write();
+                if (run.conclusion !== 'success') {
+                  core.setFailed(`Docker CI finished with ${run.conclusion}. See ${runUrl}`);
+                }
+                return;
+              }
+
+              await new Promise(resolve => setTimeout(resolve, 30000));
+            }
+
+            core.setFailed(`Timed out waiting for Docker CI after 230 minutes. See ${runUrl}`);
