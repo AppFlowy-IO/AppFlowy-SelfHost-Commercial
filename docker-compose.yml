@@ -1,6 +1,8 @@
 # Essential services for AppFlowy Cloud
 # From the repository root, run `cp deploy.env .env` and edit .env first.
 # Then run `docker compose up -d`.
+# Backup is disabled by default; set APPFLOWY_BACKUP_PROFILE=backup in .env to enable it.
+# See docs/docker-compose.md#backup for setup.
 
 services:
   nginx:
@@ -296,6 +298,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # The environment template selects the supporting settings automatically.
+  appflowy_backup:
+    profiles: [backup]
+    image: appflowyinc/appflowy_backup:latest
+    restart: unless-stopped
 
   appflowy_web:
     restart: on-failure

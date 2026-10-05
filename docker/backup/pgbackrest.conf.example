@@ -1,0 +1,33 @@
+# Private operator file: copy to backup-ops/pgbackrest/pgbackrest.conf.
+# Use a dedicated private repository, and preserve all retained backup dependencies.
+[global]
+repo1-type=s3
+repo1-path=/appflowy-postgres
+repo1-s3-bucket=appflowy-native-postgres-backups
+repo1-s3-endpoint=s3.us-east-1.amazonaws.com
+repo1-s3-region=us-east-1
+repo1-s3-uri-style=host
+repo1-s3-key=replace-me
+repo1-s3-key-secret=replace-me
+repo1-storage-verify-tls=y
+# Place a provider CA certificate under backup-ops/pgbackrest if needed.
+# repo1-storage-ca-file=/etc/pgbackrest/private-ca.pem
+expire-auto=n
+repo1-retention-full=9999999
+repo1-retention-archive=9999999
+repo1-retention-archive-type=full
+repo1-symlink=n
+start-fast=n
+process-max=2
+buffer-size=1MiB
+repo1-storage-upload-chunk-size=16MiB
+archive-async=n
+compress-type=zst
+log-level-console=warn
+
+# Match the existing PostgreSQL major, user and port; do not change source PGDATA.
+[appflowy]
+pg1-path=/var/lib/postgresql/data
+pg1-socket-path=/var/run/postgresql
+pg1-port=5432
+pg1-user=postgres
