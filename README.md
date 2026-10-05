@@ -12,7 +12,7 @@ For audit configuration, event review, and CSV export in the Admin console, see 
 
 For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
 
-For the optional server backup service, disabled by default, see [Backup setup](docs/docker-compose.md#backup).
+For the optional server backup service, disabled by default, see the [Backup guide](docs/BACKUP.md) and the [detailed Compose setup](docs/docker-compose.md#backup).
 The self-hoster completes the deployment setup; once Backup reports ready, Admin users can use
 **Tools → Backup** without additional configuration.
 
