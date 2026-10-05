@@ -120,12 +120,17 @@ services:
       - GOTRUE_SAML_PRIVATE_KEY=${GOTRUE_SAML_PRIVATE_KEY}
 
   appflowy_cloud:
+    # Restore writes only the selected bucket, Redis database and search directory here.
+    env_file:
+      - path: ./docker/backup/source-appflowy_cloud.env
+      - path: ./backup-ops/runtime/selection-appflowy_cloud.env
+        required: false
+        format: raw
     restart: on-failure
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
       - APPFLOWY_DATABASE_URL=${APPFLOWY_DATABASE_URL}
-      - APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI}
       - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL}
       - APPFLOWY_S3_CREATE_BUCKET=${APPFLOWY_S3_CREATE_BUCKET}
@@ -133,7 +138,6 @@ services:
       - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
       - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
-      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
       - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
       - APPFLOWY_S3_PRESIGNED_URL_ENDPOINT=${APPFLOWY_S3_PRESIGNED_URL_ENDPOINT}
       - APPFLOWY_MAILER_SMTP_HOST=${APPFLOWY_MAILER_SMTP_HOST}
@@ -186,6 +190,12 @@ services:
         condition: service_healthy
 
   ai:
+    # Restore writes only the selected bucket, Redis database and search directory here.
+    env_file:
+      - path: ./docker/backup/source-ai.env
+      - path: ./backup-ops/runtime/selection-ai.env
+        required: false
+        format: raw
     restart: on-failure
     image: appflowyinc/appflowy_ai:${APPFLOWY_AI_VERSION:-latest}
     environment:
@@ -198,10 +208,8 @@ services:
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
       - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
-      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
       - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
       - AI_DATABASE_URL=${APPFLOWY_DATABASE_URL}
-      - AI_REDIS_URL=${APPFLOWY_REDIS_URI}
       - AI_USE_MINIO=${APPFLOWY_S3_USE_MINIO}
       - AI_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
       - AI_APPFLOWY_HOST=${APPFLOWY_BASE_URL}
@@ -219,12 +227,17 @@ services:
         condition: service_healthy
 
   appflowy_worker:
+    # Restore writes only the selected bucket, Redis database and search directory here.
+    env_file:
+      - path: ./docker/backup/source-appflowy_worker.env
+      - path: ./backup-ops/runtime/selection-appflowy_worker.env
+        required: false
+        format: raw
     restart: on-failure
     image: appflowyinc/appflowy_worker:${APPFLOWY_WORKER_VERSION:-latest}
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
-      - APPFLOWY_WORKER_REDIS_URL=${APPFLOWY_WORKER_REDIS_URL:-redis://redis:6379}
       - APPFLOWY_WORKER_ENVIRONMENT=production
       - APPFLOWY_WORKER_DATABASE_URL=${APPFLOWY_WORKER_DATABASE_URL}
       - APPFLOWY_WORKER_DATABASE_NAME=${APPFLOWY_WORKER_DATABASE_NAME}
@@ -233,7 +246,6 @@ services:
       - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
       - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
-      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
       - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
       - APPFLOWY_MAILER_SMTP_HOST=${APPFLOWY_MAILER_SMTP_HOST}
       - APPFLOWY_MAILER_SMTP_PORT=${APPFLOWY_MAILER_SMTP_PORT}
@@ -248,6 +260,12 @@ services:
         condition: service_healthy
 
   appflowy_search:
+    # Restore writes only the selected bucket, Redis database and search directory here.
+    env_file:
+      - path: ./docker/backup/source-appflowy_search.env
+      - path: ./backup-ops/runtime/selection-appflowy_search.env
+        required: false
+        format: raw
     restart: on-failure
     image: appflowyinc/appflowy_search:${APPFLOWY_SEARCH_VERSION:-latest}
     environment:
@@ -255,7 +273,6 @@ services:
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
       - APPFLOWY_SEARCH_PORT=${APPFLOWY_SEARCH_PORT:-4002}
       - APPFLOWY_SEARCH_DATABASE_URL=${APPFLOWY_DATABASE_URL}
-      - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI}
       - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY}
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
@@ -268,14 +285,12 @@ services:
       - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
       - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
       - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
-      - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
       - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
       - APPFLOWY_BACKGROUND_INDEXER_ENABLED=true
       - APPFLOWY_INDEXER_DATABASE_ENABLED=${APPFLOWY_INDEXER_DATABASE_ENABLED:-false}
       - APPFLOWY_KEYWORD_SEARCH_ENABLED=${APPFLOWY_KEYWORD_SEARCH_ENABLED:-true}
       - APPFLOWY_KEYWORD_WORKER_ENABLED=true
       - APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES=${APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES:-2147483648}
-      - APPFLOWY_KEYWORD_INDEX_DIR=${APPFLOWY_KEYWORD_INDEX_DIR:-/var/lib/appflowy/keyword_index}
       - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
     volumes:
       - keyword_index_data:/var/lib/appflowy/keyword_index
@@ -301,8 +316,14 @@ services:
 
   # The environment template selects the supporting settings automatically.
   appflowy_backup:
+    # Restore writes only the selected bucket, Redis database and search directory here.
+    env_file:
+      - path: ./docker/backup/source-appflowy_backup.env
+      - path: ./backup-ops/runtime/selection-appflowy_backup.env
+        required: false
+        format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:latest
+    image: appflowyinc/appflowy_backup:${APPFLOWY_BACKUP_VERSION:-latest}
     restart: unless-stopped
 
   appflowy_web:

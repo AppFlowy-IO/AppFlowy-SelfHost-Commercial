@@ -1,123 +1,89 @@
 # Server Backup
 
-AppFlowy Backup is an optional service for protecting a self-hosted AppFlowy server. It coordinates PostgreSQL recovery points, application objects, and portable diagnostic exports. The Admin console sends backup requests to this service; it does not run inside the browser and it does not change the way users edit documents.
+`appflowy-backup` is an optional service that creates recovery backups of your AppFlowy server. Administrators use **Tools → Backup** to create backups, schedule them, download portable exports, and restore the server.
 
-Backup is disabled in the default deployment. When it is enabled and healthy, administrators can use **Tools → Backup** without another application setting.
-
-## What it does
-
-- Creates full, differential, or incremental recovery backups.
-- Keeps the database and application object storage at a consistent recovery point.
-- Stores backup artifacts in the private object-storage location configured for the deployment.
-- Produces a portable export for troubleshooting or moving data to another installation.
-- Shows progress, warnings, expiry, size, and download actions in the Admin console.
-
-A backup is only useful if its PostgreSQL repository and artifact storage are retained. Treat both as production data and protect them with the same access controls as the live installation.
-
-## Before you begin
-
-- Run matching releases of AppFlowy Cloud, Worker, Search, MCP, PostgreSQL, and the Backup image. Pin the Backup image to the same release instead of using `latest` in production.
-- Allocate private object storage for backup artifacts. The bucket must be reachable by both AppFlowy Cloud and Backup.
-- Allocate a PostgreSQL backup repository for pgBackRest and enough local disk for temporary capture work.
-- Make sure the host can pass the Docker socket to the Backup container. Backup coordinates the other Compose services during recovery and validation.
-- Keep the existing Compose project name. Backup uses it to find the running Cloud, Worker, Search, MCP, and database containers.
-
-The detailed storage, pgBackRest, certificate, and Docker-socket setup is in [Docker Compose backup setup](docker-compose.md#backup). For the stock localhost deployment, the administrator sign-in is `admin@example.com` with password `password`; change this before exposing the server.
+Users can continue editing while a backup is created. A restore briefly pauses the application during the final switch.
 
 ## Enable Backup
 
-1. From the self-host deployment directory, create the private operator files:
+Use Docker Compose **2.30 or newer** and matching releases of Cloud, Worker, Search, and Backup.
 
-   ```bash
-   mkdir -p backup-ops/pgbackrest/conf.d backup-ops/certificates
-   cp docker/backup/runner.env.example backup-ops/runner.env
-   cp docker/backup/pgbackrest.conf.example backup-ops/pgbackrest/pgbackrest.conf
-   chmod 600 backup-ops/runner.env backup-ops/pgbackrest/pgbackrest.conf
-   ```
-
-2. Edit `backup-ops/runner.env` with the private artifact bucket, endpoint, credentials, and retention settings. Edit `backup-ops/pgbackrest/pgbackrest.conf` with the PostgreSQL repository settings. Do not commit either file.
-
-3. Set the Docker socket group ID and enable the profile in the root `.env`:
+1. In your deployment's root `.env`, set:
 
    ```dotenv
-   APPFLOWY_BACKUP_DOCKER_GID=123
    APPFLOWY_BACKUP_PROFILE=backup
    ```
 
-   On Linux, get the group ID with `stat -c '%g' /var/run/docker.sock`. On macOS, use the group ID reported by Docker Desktop for the mounted socket.
-
-4. Check the merged Compose file without printing secrets, then start the deployment:
+2. Start the deployment as usual:
 
    ```bash
-   docker compose --env-file .env config --quiet
-   docker compose --env-file .env up -d
+   docker compose up -d
    ```
 
-5. Wait for the `appflowy_backup` container to report ready. If the service is not ready, the Backup controls remain unavailable and the Admin page explains that the deployment needs attention.
-
-To disable the service later, stop it while the backup profile is still selected, then follow the shutdown instructions in the [Compose guide](docker-compose.md#backup). Do not simply remove the profile while PostgreSQL archiving is still configured.
-
-## Create a recovery backup
-
-1. Sign in to the Admin console with an administrator account.
-2. Open **Tools → Backup**. The page shows the runner state, scheduled jobs, and previous backup or export jobs.
+3. Sign in to the Admin console and open **Tools → Backup**. The controls become available when Backup is ready.
 
    ![Admin Tools → Backup page](../asset/backup-admin-overview.png)
 
-3. Select **Create recovery backup**.
-4. Give the backup a name and choose a backup type:
+The supplied Compose configuration handles startup. Backup reuses your PostgreSQL, Redis, and object-storage connection settings, creates a private backup bucket, and prepares the files needed for restore. You do not need a separate configuration file or pgBackRest setup.
 
-   | Type | Use it when |
-   | --- | --- |
-   | **Full** | You need an independent recovery point or are starting a new chain. |
-   | **Differential** | You want changes since the latest full backup. |
-   | **Incremental** | You want the smallest backup and can retain its parent chain. |
+By default, a deployment using the `appflowy` object bucket stores backups in `appflowy-backups`. When using external S3, the configured credentials must be allowed to create that private bucket, or you can create it beforehand. See [storage and deployment details](docker-compose.md#backup) for optional settings.
 
-5. Submit the job. You can close the dialog or leave the page; progress is saved on the server. The job changes from **Queued** to **Running**, then **Completed** or **Completed with warnings**.
-6. Open **View report** on a completed job to inspect warnings and affected objects. Download is available only after the artifact has been finalized.
+## Create a recovery backup
 
-## Export a portable report
+1. Select **Create recovery backup**.
+2. Enter a name that helps you recognize it later.
+3. Choose whether to include the **search index** and **collaboration embeddings**. Both are excluded by default to save space; they are derived search data, not your page or database content. An unconfigured local search index is skipped.
+4. Create the backup. New backups are full recovery points, so they do not depend on an earlier backup.
+5. Wait for **Completed** or open **View report** if the job finishes with warnings.
 
-Use the row’s **More** menu to create an export for support or diagnostics. An export is a portable copy of the selected recovery point; it is different from a recovery backup and should be treated as a diagnostic artifact.
+You can close the dialog or leave the page while the job runs. Progress is saved on the server. Use **Create task** under **Scheduled backups** to run backups automatically and choose how long to retain them.
 
-When the export finishes, download the single report ZIP. It contains the readable PDF summary, the full Markdown diagnostics, and structured JSON. Keep the ZIP private when it contains account or email mapping data.
+## Download an export or report
+
+These are two different downloads:
+
+| Download | What it contains |
+| --- | --- |
+| **Export ZIP** | A portable copy of a recovery backup. Use the backup row's **More → Create export**, select the privacy options, then download the completed export. |
+| **Report ZIP** | A readable PDF summary, detailed Markdown diagnostics, and structured JSON for investigating a job. Open **View report** to download it after a completed or failed job. |
+
+For an export, you can keep the original content, replace user details, or replace both user details and content. Review the chosen option before sharing the export. When user details are replaced, the separate email-mapping CSV links original emails to replacement emails; keep that CSV private.
 
 ![Completed backup report and ZIP download](../asset/backup-report-download.png)
 
-## Restore safely
+Recovery backups stay in the server's private backup storage. Their manifest is not a downloadable copy of the server; create an export when you need a portable ZIP.
 
-A server restore replaces the current installation with the selected recovery point. Before starting one:
+## Restore the server
 
-1. Test the backup on a separate self-host deployment first.
-2. Close connected AppFlowy clients and stop automated jobs that write to the server.
-3. Confirm that the backup includes the PostgreSQL repository, object storage, and any optional search data needed by your deployment.
-4. Open the completed recovery backup in **Tools → Backup**, choose **Restore server**, and follow the confirmation prompt.
-5. Wait for the job to finish. The server can disconnect during the final switch; sign in again with an account from the restored backup and verify workspaces, pages, databases, files, and permissions.
+A restore replaces the server's workspaces, pages, databases, files, and accounts with the selected recovery point. Changes made after that backup will no longer appear on the restored server.
 
-A restore may replace the administrator session. The Admin console keeps the last recorded progress so you can return after signing in again.
+1. Close connected AppFlowy clients before restoring, so old offline edits do not sync back afterward.
+2. On a completed recovery backup, open **More → Restore server**. To restore a downloaded export on a target installation, start with **Restore from ZIP**.
+3. Read the confirmation, type `RESTORE`, and confirm that current data will be replaced.
+4. Wait for the job to finish. The server may disconnect during the final switch. Sign in again using an account from the restored backup.
+5. Verify your workspaces, page hierarchy, databases, files, and permissions before reconnecting other clients.
+
+Created export rows do not offer **Restore server**. Use the explicit ZIP import flow on the target installation when restoring a portable export.
 
 ![Restore progress after the server session is replaced](../asset/backup-restore-session.png)
 
-## Read job status
-
-- **Queued**: accepted and waiting for the Backup runner.
-- **Running**: capture, validation, upload, or restore is in progress.
-- **Completed**: the requested operation finished successfully.
-- **Completed with warnings**: the operation finished, but the report lists items that need review.
-- **Failed**: no usable artifact was published. Open the report and check the Backup container logs before retrying.
-- **Cancelled**: the operation stopped before publishing a usable result.
-
-Do not use a running or failed job as a restore source. If the page says the runner is unavailable, repair the deployment first; creating jobs while the runner is offline cannot produce a valid backup.
+Keep the automatically generated `backup-ops/runtime/` directory and the deployment's data volumes. They preserve the restored selection when you later run `docker compose up -d`.
 
 ## Common problems
 
-| Symptom | What to check |
+| Symptom | What to do |
 | --- | --- |
-| Backup controls are disabled | `appflowy_backup` is not running or has not passed readiness checks. Check `docker compose ps` and the container logs. |
-| PostgreSQL archiving or stanza errors | Verify the pgBackRest repository, stanza name, credentials, and that the Backup image uses the same PostgreSQL major version as the database. |
-| Artifact upload or download fails | Check bucket endpoint, region, credentials, certificate files, and network access from both Cloud and Backup. |
-| Job stays queued | Confirm the Backup container can access the Docker socket and that `APPFLOWY_BACKUP_COMPOSE_PROJECT` matches the existing Compose project. |
-| Restore cannot start | Use a completed recovery backup, keep the source artifact available, and ensure the target has enough temporary disk. |
-| Download is missing | Downloads appear only after the backup or export artifact is finalized. Refresh the page after the job reaches a terminal state. |
+| Backup controls are unavailable | Check that `APPFLOWY_BACKUP_PROFILE=backup` is set and `appflowy_backup` is running. Read the readiness message and container logs. |
+| Backup cannot create its bucket | Allow the existing storage credentials to create a private backup bucket, or create that bucket beforehand. |
+| A job finishes with warnings or fails | Open **View report**. The report explains the affected items; include its ZIP when requesting support. |
+| There is no export download | Wait for the export to complete. A recovery backup itself does not have a portable download. |
+| Restore cannot start | Use a completed, unexpired source and check that the host has enough free space. |
 
-For operator-level diagnostics, see the full [Docker Compose backup setup](docker-compose.md#backup) and the Backup report generated by the Admin console.
+To inspect the service:
+
+```bash
+docker compose ps appflowy_backup
+docker compose logs --tail=100 appflowy_backup
+```
+
+To pause Backup, run `docker compose stop appflowy_backup`. Existing application data stays available. Keep `APPFLOWY_BACKUP_PROFILE=backup` and the generated files so downloads and restored settings remain configured. See the [Compose guide](docker-compose.md#backup) for operator details.

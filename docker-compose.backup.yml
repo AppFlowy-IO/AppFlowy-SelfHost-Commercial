@@ -1,61 +1,35 @@
-# Supporting native Backup configuration; selected automatically by deploy.env.
-# Set APPFLOWY_BACKUP_PROFILE=backup in the root .env after completing storage setup.
-# Review the private backup-ops files and retain the installation's existing project name.
-services:
-  postgres:
-    # The Backup image includes matching PG16, pgvector and pgBackRest binaries.
-    # Run its inherited PostgreSQL entrypoint instead of the backup supervisor.
-    image: appflowyinc/appflowy_backup:latest
-    user: root
-    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
-    command:
-      - postgres
-      - -c
-      - port=${POSTGRES_PORT:-5432}
-      - -c
-      - archive_mode=on
-      - -c
-      - archive_command=pgbackrest --config=/etc/pgbackrest/pgbackrest.conf --stanza=appflowy archive-push %p
-    volumes:
-      - ./backup-ops/pgbackrest:/etc/pgbackrest:ro
-      - postgres_backup_socket:/var/run/postgresql
+# Selected automatically when APPFLOWY_BACKUP_PROFILE=backup in the root .env.
+# Backup reuses the installation's database and object-storage connection settings.
+x-backup-artifact-environment: &backup-artifact-environment
+  APPFLOWY_BACKUP_BUCKET: ${APPFLOWY_BACKUP_BUCKET:-${APPFLOWY_S3_BUCKET}-backups}
 
+services:
   appflowy_cloud:
-    # The same private artifact settings are needed for authenticated downloads.
-    env_file:
-      - ./backup-ops/runner.env
-    volumes:
-      - ./backup-ops/certificates:/etc/appflowy-backup:ro
+    environment:
+      <<: *backup-artifact-environment
+    healthcheck:
+      test: "curl --fail http://127.0.0.1:8000/api/ready || exit 1"
 
   appflowy_backup:
+    # Bootstrap prepares private state and socket access; application processes then drop to postgres.
+    user: root
+    command: [bootstrap]
     stop_grace_period: 1500s
-    group_add:
-      - "${APPFLOWY_BACKUP_DOCKER_GID:?Set the host Docker socket group ID}"
-    env_file:
-      - ./backup-ops/runner.env
     environment:
-      APPFLOWY_BACKUP_DATABASE_URL: ${APPFLOWY_DATABASE_URL}
-      APPFLOWY_BACKUP_REDIS_URL: ${APPFLOWY_REDIS_URI}
-      APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
-      APPFLOWY_BACKUP_COORDINATOR_SOCKET: /var/run/appflowy-backup/coordinator.sock
-      APPFLOWY_BACKUP_COORDINATOR_STATE: /var/lib/appflowy-backup/maintenance.json
-      APPFLOWY_BACKUP_SERVICE_SOCKET: /var/run/appflowy-backup/service.sock
-      APPFLOWY_BACKUP_SEARCH_INDEX_DIR: /var/lib/appflowy/keyword_index
+      <<: *backup-artifact-environment
+      RUST_LOG: ${RUST_LOG:-info}
+      APPFLOWY_DATABASE_URL: ${APPFLOWY_DATABASE_URL}
       APPFLOWY_S3_USE_MINIO: ${APPFLOWY_S3_USE_MINIO}
       APPFLOWY_S3_MINIO_URL: ${APPFLOWY_S3_MINIO_URL}
       APPFLOWY_S3_ACCESS_KEY: ${APPFLOWY_S3_ACCESS_KEY}
       APPFLOWY_S3_SECRET_KEY: ${APPFLOWY_S3_SECRET_KEY}
-      APPFLOWY_S3_BUCKET: ${APPFLOWY_S3_BUCKET}
       APPFLOWY_S3_REGION: ${APPFLOWY_S3_REGION}
-      APPFLOWY_BACKUP_COMPOSE_PROJECT: "${COMPOSE_PROJECT_NAME:?Set the existing Compose project name}"
-      APPFLOWY_BACKUP_COMPOSE_WRITERS: '${APPFLOWY_BACKUP_COMPOSE_WRITERS:-["appflowy_cloud","gotrue","appflowy_worker","appflowy_search","ai"]}'
     volumes:
-      - postgres_data:/var/lib/postgresql/data:ro
-      - postgres_backup_socket:/var/run/postgresql:ro
-      - ./backup-ops/pgbackrest:/etc/pgbackrest:ro
-      - ./backup-ops/certificates:/etc/appflowy-backup:ro
       - backup_work:/var/lib/appflowy-backup
       - backup_coordinator_socket:/var/run/appflowy-backup
+      - .:/appflowy-deployment:ro
+      # Created automatically; keeps restored selections across ordinary Compose recreations.
+      - ./backup-ops/runtime:/appflowy-deployment/backup-ops/runtime
       # LMDB capture needs its reader lockfile, so this mount remains writable.
       - keyword_index_data:/var/lib/appflowy/keyword_index
       - /var/run/docker.sock:/var/run/docker.sock
@@ -68,6 +42,5 @@ services:
         condition: service_started
 
 volumes:
-  postgres_backup_socket:
   backup_work:
   backup_coordinator_socket:
