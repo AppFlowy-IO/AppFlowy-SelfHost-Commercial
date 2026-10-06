@@ -40,6 +40,8 @@ Compose and Swarm do not explicitly configure Redis AOF or a named Redis data vo
 
 Each run uploads an image lock and separate sanitized evidence for Compose, Swarm, and Helm. Review the application checks, browser results, recovery results, running-image evidence, and diagnostic logs in those artifacts. `core-acceptance.json` records the completed functional and recovery checks; `fixture-cleanup.json` records the verified fixture removal. The final registration journey produces `registration-results.json` and `registration.log`; available results and logs are collected even if it fails. Final `acceptance.json` is written only after registration passes. Resolved environment files, generated account credentials, and Kubernetes secrets stay in the runner's temporary directory and are not uploaded.
 
+Completed test evidence is saved before collecting optional service diagnostics. Each diagnostic command has a 30-second timeout; failures produce warnings and sanitized details in `diagnostic-failures.json` while collection continues. Single-node Swarm logs come directly from this stack's local task containers, including retained containers from service replacement. A diagnostic failure does not change the result of an application assertion or bypass a failed test step.
+
 Python and Playwright are CI/test dependencies installed by the workflow. They are **not installation requirements** for AppFlowy: the [Swarm setup guide](docker-swarm.md) uses Docker commands directly.
 
 ## Scope of the result

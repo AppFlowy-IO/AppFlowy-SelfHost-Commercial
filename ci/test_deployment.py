@@ -1,12 +1,14 @@
 """Safety and rendering contracts for the runtime harness (never start services)."""
 import base64
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -220,6 +222,129 @@ class RuntimeSafetyTests(unittest.TestCase):
                           + ' postgres://user:another-password@postgres/db', private)
         for secret in (password, jwt, 'opaque-token', 'X-Amz-Signature', 'another-password'):
             self.assertNotIn(secret, result)
+
+    def test_diagnostics_preserve_results_before_a_log_timeout_and_continue(self):
+        instance = self.deployment()
+        instance.runtime.mkdir()
+        secret = 'private-diagnostic-password-123456'
+        (instance.runtime / 'credentials.json').write_text(json.dumps({'password': secret}))
+        for name in ('api.results.json', 'registration-results.json', 'browser.log', 'registration.log'):
+            (instance.runtime / name).write_text(json.dumps({'passed': True, 'detail': secret}))
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(args)
+            self.assertEqual(kwargs['timeout'], 30)
+            for name in ('api.results.json', 'registration-results.json', 'browser.log', 'registration.log'):
+                evidence = (instance.artifacts / name).read_text()
+                self.assertIn('[redacted]', evidence)
+                self.assertNotIn(secret, evidence)
+            if len(calls) == 1:
+                raise subprocess.TimeoutExpired(args, kwargs['timeout'],
+                    output=('partial stdout ' + secret).encode(),
+                    stderr=('partial stderr ' + base64.b64encode(secret.encode()).decode()).encode())
+            return subprocess.CompletedProcess(args, 0, 'later service log', '')
+
+        warning = io.StringIO()
+        with patch.object(instance, 'guard'), patch('deployment.subprocess.run', side_effect=run), \
+             patch('sys.stdout', warning):
+            instance.diagnostics()
+        self.assertEqual(len(calls), len(CORE))
+        first = (instance.artifacts / (sorted(CORE)[0] + '.log')).read_text()
+        self.assertIn('partial stdout [redacted]', first)
+        self.assertIn('partial stderr [redacted]', first)
+        self.assertEqual((instance.artifacts / (sorted(CORE)[-1] + '.log')).read_text(), 'later service log')
+        failures = json.loads((instance.artifacts / 'diagnostic-failures.json').read_text())
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]['reason'], 'timeout')
+        self.assertEqual(failures[0]['timeout_seconds'], 30)
+        self.assertIn('::warning::Diagnostic', warning.getvalue())
+        self.assertNotIn(secret, warning.getvalue())
+
+    def test_diagnostic_nonzero_and_missing_commands_record_sanitized_failures(self):
+        instance = self.deployment()
+        private_write(instance.runtime / 'credentials.json', json.dumps({'password': 'secret-diagnostic-password'}))
+        with patch('deployment.subprocess.run', side_effect=[
+                subprocess.CompletedProcess(('missing',), 23, 'partial stdout ', 'secret-diagnostic-password'),
+                FileNotFoundError('missing secret-diagnostic-password')]), patch('sys.stdout', io.StringIO()):
+            failed = instance.diagnostic_command('first', 'missing')
+            missing = instance.diagnostic_command('second', 'missing')
+        self.assertEqual(failed.returncode, 23)
+        self.assertIn('partial stdout [redacted]', failed.stdout)
+        self.assertIsNone(missing.returncode)
+        self.assertIn('[redacted]', missing.stdout)
+        failures_text = (instance.artifacts / 'diagnostic-failures.json').read_text()
+        self.assertNotIn('secret-diagnostic-password', failures_text)
+        failures = json.loads(failures_text)
+        self.assertEqual([item['reason'] for item in failures], ['nonzero exit', 'command unavailable'])
+        self.assertEqual(failures[0]['returncode'], 23)
+
+    def test_swarm_diagnostics_use_exact_service_labels_and_local_retained_tasks(self):
+        instance = self.deployment('swarm')
+        identifiers = ['a' * 12, 'b' * 12]
+        calls = []
+
+        def run(args, **kwargs):
+            calls.append(args)
+            self.assertEqual(kwargs['timeout'], 30)
+            self.assertNotEqual(args[:3], ('docker', 'service', 'logs'))
+            output = '\n'.join(identifiers) if args[:3] == ('docker', 'ps', '-aq') else 'diagnostic output'
+            return subprocess.CompletedProcess(args, 0, output, 'CLI warning on stderr')
+
+        with patch.object(instance, 'guard'), patch('deployment.subprocess.run', side_effect=run):
+            instance.diagnostics()
+        inventories = [args for args in calls if args[:3] == ('docker', 'ps', '-aq')]
+        self.assertEqual(inventories, [
+            ('docker', 'ps', '-aq', '--filter', 'label=com.docker.swarm.service.name=appflowy-ci_' + name)
+            for name in sorted(CORE)])
+        logs = [args for args in calls if args[:2] == ('docker', 'logs')]
+        self.assertEqual(logs, [('docker', 'logs', '--tail=160', identifier)
+                               for _ in sorted(CORE) for identifier in identifiers])
+        for name in CORE:
+            output = (instance.artifacts / (name + '.log')).read_text()
+            for identifier in identifiers:
+                self.assertIn('Container ' + identifier, output)
+        self.assertEqual(json.loads((instance.artifacts / 'diagnostic-failures.json').read_text()), [])
+
+    def test_helm_diagnostics_keep_collecting_after_errors_and_parse_only_inventory_stdout(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        self.lock.write_text(json.dumps(self.payload))
+        instance = self.deployment('helm')
+        calls = []
+        pod = {'metadata': {'name': 'appflowy-ci-cloud-pod'},
+               'spec': {'containers': [{'name': 'appflowy-cloud'}], 'initContainers': [{'name': 'init'}]}}
+
+        def run(args, **kwargs):
+            calls.append(args)
+            self.assertEqual(kwargs['timeout'], 30)
+            if args[-1] == 'wide':
+                raise FileNotFoundError('kubectl temporarily unavailable')
+            output = json.dumps({'items': [pod]}) if args[-1] == 'json' else 'collected output'
+            return subprocess.CompletedProcess(args, 0, output, 'CLI warning on stderr')
+
+        with patch.object(instance, 'guard'), patch('deployment.subprocess.run', side_effect=run), \
+             patch('sys.stdout', io.StringIO()):
+            instance.diagnostics()
+        self.assertIn(('kubectl', '--context', 'kind-appflowy-ci', '-n', 'appflowy-ci', 'get', 'pods',
+                       '-l', 'app.kubernetes.io/instance=appflowy-ci', '-o', 'json'), calls)
+        for container in ('appflowy-cloud', 'init'):
+            self.assertIn('collected output',
+                (instance.artifacts / ('appflowy-ci-cloud-pod-' + container + '.log')).read_text())
+        failures = json.loads((instance.artifacts / 'diagnostic-failures.json').read_text())
+        self.assertEqual([item['name'] for item in failures], ['pods'])
+
+    def test_diagnostic_timeout_is_enforced_on_a_real_child_and_keeps_partial_output(self):
+        instance = self.deployment()
+        started = time.monotonic()
+        with patch('sys.stdout', io.StringIO()):
+            result = instance.diagnostic_command('short child', sys.executable, '-u', '-c',
+                'import time; print("before timeout", flush=True); time.sleep(10)', timeout=0.5)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertIsNone(result.returncode)
+        self.assertIn('before timeout', result.stdout)
+        failure = json.loads((instance.artifacts / 'diagnostic-failures.json').read_text())[0]
+        self.assertEqual(failure['reason'], 'timeout')
+        self.assertEqual(failure['timeout_seconds'], 0.5)
 
     def test_registration_requires_fresh_success_and_preserves_sanitized_failure_evidence(self):
         for outcome in ('success', 'exit_failure', 'timeout', 'false_result', 'missing_result'):

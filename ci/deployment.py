@@ -106,6 +106,7 @@ class Deployment:
                         SWARM_BROWSER_CHANNEL='chromium')
         self.compose = ['docker', 'compose', '--env-file', str(runtime / 'test.env'),
                         '-p', NAME, '-f', str(runtime / 'compose.yml')]
+        self.diagnostic_failures = []
 
     def run(self, *args, timeout=600, check=True, env=None, combined=False):
         result = subprocess.run(args, capture_output=True, text=True, env=env or self.env, timeout=timeout)
@@ -120,6 +121,35 @@ class Deployment:
     def evidence(self, name, value):
         text = value if isinstance(value, str) else json.dumps(value, indent=2) + '\n'
         (self.artifacts / name).write_text(sanitize(text, self.runtime))
+
+    def diagnostic_failure(self, name, args, **failure):
+        self.diagnostic_failures.append({'name': name, 'command': list(args), **failure})
+        self.evidence('diagnostic-failures.json', self.diagnostic_failures)
+        warning = f'::warning::Diagnostic {name}: {failure["reason"]}; collection continues'
+        print(sanitize(warning, self.runtime), flush=True)
+
+    def diagnostic_command(self, name, *args, timeout=30, combined=True):
+        """Collect optional diagnostics without hiding the acceptance results."""
+        failure = None
+        try:
+            result = subprocess.run(args, capture_output=True, text=True, env=self.env, timeout=timeout)
+            stdout, stderr, returncode = result.stdout, result.stderr, result.returncode
+            if returncode:
+                failure = {'reason': 'nonzero exit', 'returncode': returncode}
+        except subprocess.TimeoutExpired as exc:
+            # TimeoutExpired can contain bytes even when text=True was requested.
+            stdout, stderr = (part.decode('utf-8', errors='replace') if isinstance(part, bytes) else part or ''
+                              for part in (exc.stdout, exc.stderr))
+            returncode = None
+            failure = {'reason': 'timeout', 'timeout_seconds': timeout}
+        except OSError as exc:
+            stdout, stderr, returncode = '', str(exc), None
+            failure = {'reason': 'command unavailable', 'error': str(exc)}
+        if failure:
+            self.diagnostic_failure(name, args, output=stdout + stderr, **failure)
+        output = stdout + stderr if combined else stdout
+        return subprocess.CompletedProcess(args, returncode, sanitize(output, self.runtime),
+                                           sanitize(stderr, self.runtime))
 
     def guard(self):
         if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted':
@@ -606,29 +636,59 @@ class Deployment:
 
     def diagnostics(self):
         self.guard()
+        # Preserve completed test evidence before optional CLI diagnostics.
+        for path in self.runtime.glob('*.results.json'):
+            self.evidence(path.name, path.read_text())
+        for name in ('ui-results.json', 'browser.log', 'registration-results.json', 'registration.log'):
+            path = self.runtime / name
+            if path.exists():
+                self.evidence(name, path.read_text())
+        self.diagnostic_failures = []
+        self.evidence('diagnostic-failures.json', self.diagnostic_failures)
         if self.mode == 'helm':
+            kubectl = ['kubectl', '--context', 'kind-' + NAME, '-n', NAMESPACE]
             for label, args in [('pods', ('get', 'pods', '-o', 'wide')),
                                 ('events', ('get', 'events', '--sort-by=.metadata.creationTimestamp')),
                                 ('volumes', ('get', 'pvc'))]:
-                self.evidence(label + '.txt', self.kubectl(*args, check=False))
+                self.evidence(label + '.txt', self.diagnostic_command(label, *kubectl, *args).stdout)
+            inventory = self.diagnostic_command('pod inventory', *kubectl, 'get', 'pods',
+                '-l', 'app.kubernetes.io/instance=' + NAME, '-o', 'json', combined=False)
             try:
-                pods = self.helm_pods()
-            except Exception:
+                pods = json.loads(inventory.stdout)['items'] if inventory.returncode == 0 else []
+            except (ValueError, KeyError, TypeError):
+                self.diagnostic_failure('pod inventory', inventory.args, reason='invalid pod inventory',
+                                        output=inventory.stdout + inventory.stderr)
                 pods = []
             for pod in pods:
                 name = pod['metadata']['name']
                 for container in pod['spec'].get('containers', []) + pod['spec'].get('initContainers', []):
                     self.evidence(name + '-' + container['name'] + '.log',
-                                  self.kubectl('logs', name, '-c', container['name'], '--tail=160', check=False))
+                                  self.diagnostic_command(name + '/' + container['name'], *kubectl,
+                                                          'logs', name, '-c', container['name'], '--tail=160').stdout)
         else:
             for name in sorted(CORE):
                 if self.mode == 'swarm':
-                    log = self.run('docker', 'service', 'logs', '--tail=160', NAME + '_' + name, check=False, combined=True)
+                    # This suite runs on one node. Local task logs avoid the
+                    # manager's log aggregator and include retained old tasks.
+                    containers = self.diagnostic_command(name + ' containers', 'docker', 'ps', '-aq',
+                        '--filter', 'label=com.docker.swarm.service.name=' + NAME + '_' + name, combined=False)
+                    parts = [containers.stdout + containers.stderr] if containers.returncode != 0 else []
+                    for container in containers.stdout.split() if containers.returncode == 0 else []:
+                        if not re.fullmatch(r'[a-f0-9]{12,64}', container):
+                            self.diagnostic_failure(name + ' containers', containers.args,
+                                                    reason='invalid container inventory')
+                            continue
+                        output = self.diagnostic_command(name + '/' + container, 'docker', 'logs',
+                                                         '--tail=160', container).stdout
+                        parts.append('Container ' + container + '\n' + output)
+                    log = '\n'.join(parts)
                 else:
-                    log = self.run(*self.compose, 'logs', '--no-color', '--tail=160', name, check=False, combined=True)
+                    log = self.diagnostic_command(name, *self.compose, 'logs', '--no-color',
+                                                  '--tail=160', name).stdout
                 self.evidence(name + '.log', log)
             if self.mode == 'swarm':
-                self.evidence('stack-tasks.txt', self.run('docker', 'stack', 'ps', NAME, '--no-trunc', check=False))
+                self.evidence('stack-tasks.txt', self.diagnostic_command(
+                    'stack tasks', 'docker', 'stack', 'ps', NAME, '--no-trunc').stdout)
                 # Select only network fields: full service/container inspection
                 # would include private environment variables and credentials.
                 commands = {
@@ -648,13 +708,7 @@ class Deployment:
                         '--output', '/dev/null', '--write-out', 'HTTP=%{http_code} remote=%{remote_ip}\n',
                         'http://localhost/api/health')
                 self.evidence('swarm-network.json', {
-                    name: self.run(*args, check=False, combined=True) for name, args in commands.items()})
-        for path in self.runtime.glob('*.results.json'):
-            self.evidence(path.name, path.read_text())
-        for name in ('ui-results.json', 'browser.log', 'registration-results.json', 'registration.log'):
-            path = self.runtime / name
-            if path.exists():
-                self.evidence(name, path.read_text())
+                    name: self.diagnostic_command(name, *args).stdout for name, args in commands.items()})
 
     def cleanup(self):
         self.guard()
