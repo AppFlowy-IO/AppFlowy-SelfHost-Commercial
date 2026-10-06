@@ -217,6 +217,34 @@ class RuntimeSafetyTests(unittest.TestCase):
         for secret in (password, jwt, 'opaque-token', 'X-Amz-Signature', 'another-password'):
             self.assertNotIn(secret, result)
 
+    def test_swarm_preserves_file_permission_bits_from_compose_json(self):
+        # Compose's FileMode.MarshalJSON emits an octal string. Earlier
+        # versions emitted numeric bits; stack requires those numeric bits.
+        cases = [('modern_octal_strings', '0400', '0444', 0o400, 0o444),
+                 ('legacy_integer_bits', 256, 292, 0o400, 0o444),
+                 ('decimal_integer_bits', 400, 420, 0o620, 0o644),
+                 ('equivalent_octal_strings', '0620', '0644', 400, 420)]
+        for label, secret_mode, config_mode, expected_secret, expected_config in cases:
+            with self.subTest(format=label):
+                instance = self.deployment('swarm')
+                original_run = instance.run
+                def run(*args, **kwargs):
+                    output = original_run(*args, **kwargs)
+                    if args[:2] == ('docker', 'compose') and '--format' in args:
+                        rendered = json.loads(output)
+                        nginx = rendered['services']['nginx']
+                        nginx['secrets'][0]['mode'] = secret_mode
+                        nginx['configs'][0]['mode'] = config_mode
+                        return json.dumps(rendered)
+                    return output
+                with patch.object(instance, 'run', side_effect=run):
+                    instance.render()
+                nginx = yaml.safe_load((instance.runtime / 'stack.yml').read_text())['services']['nginx']
+                self.assertIs(type(nginx['secrets'][0]['mode']), int)
+                self.assertIs(type(nginx['configs'][0]['mode']), int)
+                self.assertEqual(nginx['secrets'][0]['mode'], expected_secret)
+                self.assertEqual(nginx['configs'][0]['mode'], expected_config)
+
     def test_real_source_render_preserves_storage_and_shell_escaping(self):
         # Docker Compose parsing is read-only; no Docker daemon or images needed.
         source = yaml.safe_load((ROOT / 'docker-compose.yml').read_text())

@@ -214,6 +214,13 @@ class Deployment:
                 service['healthcheck']['start_period'] = '180s'
             if self.mode == 'swarm':
                 service['deploy']['replicas'] = int(name in STAGES[0])
+                # Compose serializes file modes as octal strings ("0400");
+                # stack's legacy schema requires numeric permission bits.
+                # Older Compose versions already return integers: retain them.
+                for kind in ('configs', 'secrets'):
+                    for reference in service.get(kind, []):
+                        if isinstance(reference, dict) and isinstance(reference.get('mode'), str):
+                            reference['mode'] = int(reference['mode'], 8)
                 for port in service.get('ports', []):
                     if 'published' in port:
                         port['published'] = int(port['published'])
