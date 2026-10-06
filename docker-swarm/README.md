@@ -104,6 +104,18 @@ Cloud replacement signals the waiting browser test after recovery. It checks rec
 
 To reuse an existing AppFlowy Web checkout's installed Playwright, set `APPFLOWY_WEB_DIR` to that directory. `SWARM_BROWSER_CHANNEL=chrome` uses an installed Google Chrome instead of the default Chromium. These browser dependencies are unrelated to deployment requirements.
 
+### Browser registration test
+
+With the test deployment running and the same Playwright dependencies installed:
+
+```bash
+node docker-swarm/tests/registration_smoke.mjs
+```
+
+The test checks five outcomes: sign-up through Web's form in a clean browser, workspace access, document creation and editing, password sign-in to the same account in another fresh browser context, and readback of the same document's saved title and content. It does not provision the user through an API or inject login tokens. Sign-up and automatic email confirmation must be enabled, as they are in the isolated test profile; SMTP delivery is outside this test. An available license seat is required. The standalone test does not remove existing users to make room.
+
+Results are saved as `registration-results.json` in the private test directory, with generated credentials in `registration-user.json`. Keep that directory private. Deployment CI runs this journey in its final step for Compose, Swarm, and Helm, after all recovery and image checks. CI first verifies and removes only its own disposable ordinary-user fixture, releasing the default license's occupied seat without changing the license. That cleanup cannot run through the local harness. CI uploads only sanitized evidence; see [deployment CI](../docs/deployment-ci.md) for the ownership checks and result files.
+
 ### Stop the automated test stack
 
 ```bash

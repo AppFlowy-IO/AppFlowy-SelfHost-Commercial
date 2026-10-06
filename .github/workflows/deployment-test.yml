@@ -96,6 +96,12 @@ jobs:
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
           --images ci-artifacts/image-lock.json
+      - name: Register through AppFlowy Web and sign in from a fresh browser
+        run: >-
+          python ci/deployment.py register --mode "$DEPLOYMENT_MODE"
+          --runtime "$RUNNER_TEMP/appflowy-deployment"
+          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --images ci-artifacts/image-lock.json
       - name: Collect sanitized diagnostics
         if: always()
         run: >-

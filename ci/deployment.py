@@ -15,7 +15,9 @@ import secrets
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
+import uuid
 
 import yaml
 
@@ -64,7 +66,7 @@ def private_write(path, value):
 
 
 def sanitize(text, private):
-    for file in ('credentials.json', 'ordinary-user.json'):
+    for file in ('credentials.json', 'ordinary-user.json', 'registration-user.json'):
         path = private / file
         if path.exists():
             values = json.loads(path.read_text()).values()
@@ -466,8 +468,112 @@ class Deployment:
                         child.wait()
         self.evidence('browser.log', log_path.read_text())
 
+    def registration(self):
+        result_path = self.runtime / 'registration-results.json'
+        result_path.unlink(missing_ok=True)
+        (self.artifacts / result_path.name).unlink(missing_ok=True)
+        log_path = self.runtime / 'registration.log'
+        private_write(log_path, '')
+        try:
+            with log_path.open('w') as log:
+                completed = subprocess.run(
+                    ['node', str(ROOT / 'docker-swarm/tests/registration_smoke.mjs')],
+                    env=self.env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
+            if completed.returncode:
+                raise RuntimeError('Browser registration assertions failed; see registration.log')
+            if not result_path.exists() or json.loads(result_path.read_text()).get('passed') is not True:
+                raise RuntimeError('Browser registration did not produce a passing result')
+        finally:
+            for path in (result_path, log_path):
+                if path.exists():
+                    self.evidence(path.name, path.read_text())
+
+    def fixture_request(self, method, path, token=None, credentials=None):
+        headers = {'Content-Type': 'application/json', 'x-platform': 'web'}
+        if token:
+            headers['Authorization'] = 'Bearer ' + token
+        request = urllib.request.Request(self.base_url + path, method=method, headers=headers,
+                                         data=json.dumps(credentials).encode() if credentials else None)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                result = json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            raise RuntimeError(f'Fixture cleanup request failed: {method} {path}: HTTP {error.code}') from None
+        except Exception as error:
+            raise RuntimeError(f'Fixture cleanup request failed: {method} {path}: {type(error).__name__}') from None
+        if path.startswith('/api/'):
+            if not isinstance(result, dict) or result.get('code') != 0 or 'data' not in result:
+                raise RuntimeError(f'Fixture cleanup application request failed: {method} {path}')
+            return result['data']
+        return result
+
+    def cleanup_fixture(self):
+        # This destructive fixture cleanup is deliberately CI-only. The local
+        # harness and standalone registration script must retain existing users.
+        self.guard()
+        record = {'passed': False, 'mode': self.mode}
+        try:
+            private = {}
+            for name in ('credentials.json', 'ordinary-user.json', 'ordinary-user-ownership.json'):
+                path = self.runtime / name
+                if path.stat().st_mode & 0o077:
+                    raise RuntimeError('Fixture cleanup requires private credential and ownership files')
+                private[name] = json.loads(path.read_text())
+            admin = private['credentials.json']
+            ordinary = private['ordinary-user.json']
+            ownership = private['ordinary-user-ownership.json']
+            if not re.fullmatch(r'ci-[0-9a-f]{12}@example\.com', admin['admin_email']):
+                raise RuntimeError('Fixture cleanup requires this CI run\'s generated administrator')
+            expected_email = admin['admin_email'].replace('@', '+user@', 1)
+            if ordinary.get('email') != expected_email or ownership.get('email') != expected_email:
+                raise RuntimeError('Fixture cleanup user does not match the generated test account')
+            user_id = str(uuid.UUID(ownership['user_id']))
+            workspace_ids = {json.loads((self.runtime / name).read_text())['workspace_id']
+                             for name in ('api-state.json', 'recovery-api-state.json', 'ui-target.json')}
+            if len(workspace_ids) != 1:
+                raise RuntimeError('Fixture cleanup workspace records disagree')
+            workspace_id = str(uuid.UUID(next(iter(workspace_ids))))
+            record.update({'user_id': user_id, 'workspace_id': workspace_id})
+            ordinary_login = self.fixture_request('POST', '/gotrue/token?grant_type=password',
+                                                  credentials=ordinary)
+            if (ordinary_login['user']['id'] != user_id
+                    or ordinary_login['user']['email'] != expected_email):
+                raise RuntimeError('Fixture cleanup login does not match the created test user')
+            admin_login = self.fixture_request('POST', '/gotrue/token?grant_type=password', credentials={
+                'email': admin['admin_email'], 'password': admin['admin_password']})
+            if (admin_login['user']['id'] == user_id
+                    or admin_login['user']['email'] != admin['admin_email']):
+                raise RuntimeError('Fixture cleanup administrator identity differs')
+            admin_token = admin_login['access_token']
+            workspaces = self.fixture_request('GET', '/api/workspace', token=ordinary_login['access_token'])
+            owned = self.fixture_request('GET', f'/api/admin/users/{user_id}/owned-workspaces', token=admin_token)
+            if (not isinstance(workspaces, list) or len(workspaces) != 1
+                    or workspaces[0].get('workspace_id') != workspace_id
+                    or not isinstance(owned, list) or len(owned) != 1
+                    or owned[0].get('workspace_id') != workspace_id
+                    or type(owned[0].get('member_count')) is not int or owned[0]['member_count'] != 1):
+                raise RuntimeError('Fixture cleanup refuses unrelated workspaces or memberships')
+            before = self.fixture_request('GET', '/api/admin/license/usage', token=admin_token)
+            if (type(before.get('seats_taken')) is not int or before['seats_taken'] != 1
+                    or type(before.get('total_seats')) is not int or before['total_seats'] < 1):
+                raise RuntimeError('Fixture cleanup expected exactly one occupied test seat')
+            record['seats_before'] = {key: before[key] for key in ('seats_taken', 'total_seats')}
+            deleted = self.fixture_request('DELETE', f'/api/admin/users/{user_id}?soft_delete=false', token=admin_token)
+            if deleted is not True:
+                raise RuntimeError('Fixture cleanup did not confirm deletion of the test user')
+            after = self.fixture_request('GET', '/api/admin/license/usage', token=admin_token)
+            record['seats_after'] = {key: after.get(key) for key in ('seats_taken', 'total_seats')}
+            if (type(after.get('seats_taken')) is not int or after['seats_taken'] != 0
+                    or after.get('total_seats') != before['total_seats']):
+                raise RuntimeError('Fixture cleanup did not release the test seat with the license unchanged')
+            record['passed'] = True
+        finally:
+            self.evidence('fixture-cleanup.json', record)
+
     def test(self):
         self.guard()
+        for name in ('core-acceptance.json', 'acceptance.json'):
+            (self.artifacts / name).unlink(missing_ok=True)
         self.smoke('create')
         self.browser()
         for service in ('postgres', 'minio', 'redis', 'appflowy_search', 'appflowy_worker'):
@@ -480,11 +586,24 @@ class Deployment:
                           '--state', str(self.runtime / 'recovery-api-state.json'), '--timeout', '300', timeout=900)
         print(sanitize(output, self.runtime), end='', flush=True)
         self.check_images('recovered-images.json')
-        self.evidence('acceptance.json', {'passed': True, 'mode': self.mode,
+        self.evidence('core-acceptance.json', {'passed': True, 'mode': self.mode,
                       'coverage': ['auth', 'document', 'database row create/edit', 'attachment bytes', 'worker import',
                                    'keyword search', 'browser realtime', 'WebSocket reconnect', 'durable application state'],
                       'excluded': ['external AI providers', 'semantic search', 'SMTP', 'TLS', 'upgrades',
                                    'Redis queue persistence', 'multi-node networking', 'node loss', 'HA']})
+
+    def register(self):
+        self.guard()
+        (self.artifacts / 'acceptance.json').unlink(missing_ok=True)
+        path = self.artifacts / 'core-acceptance.json'
+        if not path.exists():
+            raise RuntimeError('Browser registration requires completed core acceptance first')
+        core = json.loads(path.read_text())
+        if core.get('passed') is not True or core.get('mode') != self.mode:
+            raise RuntimeError('Browser registration requires passing core acceptance for this deployment')
+        self.cleanup_fixture()
+        self.registration()
+        self.evidence('acceptance.json', {**core, 'coverage': core['coverage'] + ['browser registration']})
 
     def diagnostics(self):
         self.guard()
@@ -533,7 +652,7 @@ class Deployment:
                     name: self.run(*args, check=False, combined=True) for name, args in commands.items()})
         for path in self.runtime.glob('*.results.json'):
             self.evidence(path.name, path.read_text())
-        for name in ('ui-results.json', 'browser.log'):
+        for name in ('ui-results.json', 'browser.log', 'registration-results.json', 'registration.log'):
             path = self.runtime / name
             if path.exists():
                 self.evidence(name, path.read_text())
@@ -557,7 +676,7 @@ class Deployment:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['render', 'up', 'test', 'diagnostics', 'cleanup'])
+    parser.add_argument('action', choices=['render', 'up', 'test', 'register', 'diagnostics', 'cleanup'])
     parser.add_argument('--mode', choices=['compose', 'swarm', 'helm'], required=True)
     parser.add_argument('--runtime', type=Path, required=True)
     parser.add_argument('--artifacts', type=Path, required=True)

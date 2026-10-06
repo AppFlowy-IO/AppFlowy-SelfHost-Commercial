@@ -26,6 +26,9 @@ All three runtime jobs must verify:
 - Attachment upload/download with byte equality, completed Worker HTML import, and keyword search.
 - Two browser clients exchanging document edits, reconnecting after Cloud replacement, and retaining content after reload and in a fresh browser context.
 - Replacement of storage/application services, followed by readback of the same documents, rows, attachments, imports, and search results. New imports and search indexing must also work after recovery.
+- Five checks in the final **Register through AppFlowy Web and sign in from a fresh browser** step: sign-up through Web's form, workspace access, document creation and editing, password sign-in to the same account in a fresh browser context, and readback of that same document's saved title and content. This journey uses neither an API-created user nor injected login tokens.
+
+The default license allows one occupied seat. After every recovery and image check passes, the final step removes only this disposable CI run's verified ordinary-user fixture through the supported Admin API. It checks the recorded creation UUID, generated email, sole workspace ownership, and single membership before deletion, then requires occupied seats to drop from one to zero with the license limit unchanged. The new browser user therefore exercises normal registration within the existing license. Cleanup is restricted to GitHub-hosted CI; it does not delete accounts in the retained local test deployment.
 
 Tests fail on timeouts and failed assertions. Registry download failures also fail the run; the workflow does not silently skip a deployment or a required application check.
 
@@ -35,7 +38,7 @@ CI starts with `deploy.env`, generates temporary credentials, disables external 
 
 Compose and Swarm do not explicitly configure Redis AOF or a named Redis data volume. Helm retains its existing chart-specific Redis configuration. CI checks application recovery after service replacement, but does not require a Redis marker to survive or claim that Redis-backed queues and pending work are durable.
 
-Each run uploads an image lock and separate sanitized evidence for Compose, Swarm, and Helm. Review the application checks, browser results, recovery results, running-image evidence, and diagnostic logs in those artifacts. Resolved environment files, rendered credentials, and Kubernetes secrets stay in the runner's temporary directory and are not uploaded.
+Each run uploads an image lock and separate sanitized evidence for Compose, Swarm, and Helm. Review the application checks, browser results, recovery results, running-image evidence, and diagnostic logs in those artifacts. `core-acceptance.json` records the completed functional and recovery checks; `fixture-cleanup.json` records the verified fixture removal. The final registration journey produces `registration-results.json` and `registration.log`; available results and logs are collected even if it fails. Final `acceptance.json` is written only after registration passes. Resolved environment files, generated account credentials, and Kubernetes secrets stay in the runner's temporary directory and are not uploaded.
 
 Python and Playwright are CI/test dependencies installed by the workflow. They are **not installation requirements** for AppFlowy: the [Swarm setup guide](docker-swarm.md) uses Docker commands directly.
 

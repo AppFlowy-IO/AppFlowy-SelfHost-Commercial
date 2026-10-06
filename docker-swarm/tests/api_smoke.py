@@ -156,8 +156,13 @@ try:
         email_local, email_domain = admin_credentials["email"].rsplit("@", 1)
         ordinary_credentials = {"email": email_local + "+user@" + email_domain,
                                 "password": admin_credentials["password"]}
-        request("POST", "/gotrue/admin/users", payload={**ordinary_credentials, "email_confirm": True},
-                label="create_ordinary_test_user", unwrap=False)
+        sensitive_values.update(ordinary_credentials.values())
+        created = request("POST", "/gotrue/admin/users", payload={**ordinary_credentials, "email_confirm": True},
+                          label="create_ordinary_test_user", unwrap=False)
+        assert created["email"] == ordinary_credentials["email"], "Created ordinary user email differs"
+        created_id = str(uuid.UUID(created["id"]))
+        write_private_json(runtime_dir / "ordinary-user-ownership.json",
+                           {"user_id": created_id, "email": created["email"]})
         write_private_json(ordinary_path, ordinary_credentials)
         record("create_ordinary_test_user", passed=True)
     else:

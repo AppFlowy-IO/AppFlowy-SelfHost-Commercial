@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from unittest.mock import patch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, sanitize
+from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
 from images import CORE, ROOT, clean_environment
 
 
@@ -219,6 +220,178 @@ class RuntimeSafetyTests(unittest.TestCase):
                           + ' postgres://user:another-password@postgres/db', private)
         for secret in (password, jwt, 'opaque-token', 'X-Amz-Signature', 'another-password'):
             self.assertNotIn(secret, result)
+
+    def test_registration_requires_fresh_success_and_preserves_sanitized_failure_evidence(self):
+        for outcome in ('success', 'exit_failure', 'timeout', 'false_result', 'missing_result'):
+            with self.subTest(outcome=outcome):
+                instance = self.deployment()
+                instance.runtime.mkdir(exist_ok=True)
+                secret = 'private-registration-password-' + outcome
+                (instance.runtime / 'registration-user.json').write_text(json.dumps({'password': secret}))
+                result_path = instance.runtime / 'registration-results.json'
+                # A previous success must not satisfy a run that emits no result.
+                result_path.write_text(json.dumps({'passed': True}))
+
+                def run(*args, **kwargs):
+                    kwargs['stdout'].write('registration diagnostic ' + secret)
+                    if outcome != 'missing_result':
+                        result_path.write_text(json.dumps({'passed': outcome == 'success', 'detail': secret}))
+                    if outcome == 'timeout':
+                        raise subprocess.TimeoutExpired(args[0], kwargs['timeout'])
+                    return subprocess.CompletedProcess(args[0], int(outcome == 'exit_failure'))
+
+                with patch('deployment.subprocess.run', side_effect=run):
+                    if outcome == 'success':
+                        instance.registration()
+                    else:
+                        with self.assertRaises((RuntimeError, subprocess.TimeoutExpired)):
+                            instance.registration()
+                log = (instance.artifacts / 'registration.log').read_text()
+                self.assertIn('[redacted]', log)
+                self.assertNotIn(secret, log)
+                if outcome != 'missing_result':
+                    result = (instance.artifacts / 'registration-results.json').read_text()
+                    self.assertNotIn(secret, result)
+                    self.assertEqual(json.loads(result)['passed'], outcome == 'success')
+                else:
+                    self.assertFalse((instance.artifacts / 'registration-results.json').exists())
+
+    def test_acceptance_is_not_written_when_final_registration_fails(self):
+        instance = self.deployment()
+        instance.evidence('core-acceptance.json', {'passed': True, 'mode': instance.mode, 'coverage': []})
+        # A repeated failing attempt must not leave a prior final success.
+        instance.evidence('acceptance.json', {'passed': True})
+        with patch.object(instance, 'guard'), patch.object(instance, 'cleanup_fixture'), \
+             patch.object(instance, 'registration', side_effect=RuntimeError('registration failed')):
+            with self.assertRaisesRegex(RuntimeError, 'registration failed'):
+                instance.register()
+        self.assertFalse((instance.artifacts / 'acceptance.json').exists())
+
+    def test_final_registration_requires_matching_core_success_and_fixture_cleanup(self):
+        for case in ('missing', 'failed', 'wrong_mode', 'cleanup_failed', 'success'):
+            with self.subTest(case=case):
+                instance = self.deployment()
+                core = {'passed': case != 'failed', 'mode': 'swarm' if case == 'wrong_mode' else instance.mode,
+                        'coverage': ['durable application state'], 'excluded': ['SMTP']}
+                if case == 'missing':
+                    (instance.artifacts / 'core-acceptance.json').unlink(missing_ok=True)
+                else:
+                    instance.evidence('core-acceptance.json', core)
+                with patch.object(instance, 'guard'), patch.object(instance, 'cleanup_fixture') as cleanup, \
+                     patch.object(instance, 'registration') as registration:
+                    if case == 'cleanup_failed':
+                        cleanup.side_effect = RuntimeError('cleanup failed')
+                    if case == 'success':
+                        instance.register()
+                        cleanup.assert_called_once()
+                        registration.assert_called_once()
+                        result = json.loads((instance.artifacts / 'acceptance.json').read_text())
+                        self.assertEqual(result['coverage'], ['durable application state', 'browser registration'])
+                        self.assertEqual(result['excluded'], ['SMTP'])
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            instance.register()
+                        registration.assert_not_called()
+                        if case != 'cleanup_failed':
+                            cleanup.assert_not_called()
+                        self.assertFalse((instance.artifacts / 'acceptance.json').exists())
+
+    def cleanup_fixture_case(self):
+        instance = self.deployment()
+        user_id = '11111111-1111-4111-8111-111111111111'
+        workspace_id = '22222222-2222-4222-8222-222222222222'
+        admin_id = '33333333-3333-4333-8333-333333333333'
+        email = 'ci-012345abcdef+user@example.com'
+        files = {
+            'credentials.json': {'admin_email': 'ci-012345abcdef@example.com', 'admin_password': 'test-password'},
+            'ordinary-user.json': {'email': email, 'password': 'test-password'},
+            'ordinary-user-ownership.json': {'user_id': user_id, 'email': email},
+            'api-state.json': {'workspace_id': workspace_id},
+            'recovery-api-state.json': {'workspace_id': workspace_id},
+            'ui-target.json': {'workspace_id': workspace_id},
+        }
+        for name, value in files.items():
+            private_write(instance.runtime / name, json.dumps(value))
+        responses = [
+            {'user': {'id': user_id, 'email': email}, 'access_token': 'ordinary-token'},
+            {'user': {'id': admin_id, 'email': files['credentials.json']['admin_email']}, 'access_token': 'admin-token'},
+            [{'workspace_id': workspace_id}],
+            [{'workspace_id': workspace_id, 'member_count': 1}],
+            {'seats_taken': 1, 'total_seats': 1},
+            True,
+            {'seats_taken': 0, 'total_seats': 1},
+        ]
+        return instance, files, responses
+
+    def test_fixture_cleanup_refuses_local_execution_before_any_api_call(self):
+        instance = self.deployment()
+        with patch.dict(os.environ, {}, clear=True), patch.object(instance, 'fixture_request') as request:
+            with self.assertRaisesRegex(RuntimeError, 'GitHub-hosted'):
+                instance.cleanup_fixture()
+            request.assert_not_called()
+
+    def test_fixture_cleanup_deletes_only_the_verified_created_user(self):
+        instance, files, responses = self.cleanup_fixture_case()
+        with patch.object(instance, 'guard'), patch.object(instance, 'fixture_request', side_effect=responses) as request:
+            instance.cleanup_fixture()
+        deletes = [call for call in request.call_args_list if call.args[0] == 'DELETE']
+        user_id = files['ordinary-user-ownership.json']['user_id']
+        self.assertEqual(len(deletes), 1)
+        self.assertEqual(deletes[0].args, ('DELETE', f'/api/admin/users/{user_id}?soft_delete=false'))
+        self.assertEqual(deletes[0].kwargs, {'token': 'admin-token'})
+        evidence = json.loads((instance.artifacts / 'fixture-cleanup.json').read_text())
+        self.assertTrue(evidence['passed'])
+        self.assertEqual(evidence['seats_before'], {'seats_taken': 1, 'total_seats': 1})
+        self.assertEqual(evidence['seats_after'], {'seats_taken': 0, 'total_seats': 1})
+
+    def test_fixture_cleanup_fails_closed_before_deleting_unowned_data(self):
+        cases = ('missing_ownership', 'wrong_email', 'wrong_login', 'admin_identity',
+                 'disagreeing_fixture', 'extra_membership', 'wrong_owned_workspace',
+                 'extra_owned_workspace', 'other_member', 'other_occupied_seat')
+        for case in cases:
+            with self.subTest(case=case):
+                instance, files, responses = self.cleanup_fixture_case()
+                if case == 'missing_ownership':
+                    (instance.runtime / 'ordinary-user-ownership.json').unlink()
+                elif case == 'wrong_email':
+                    files['ordinary-user.json']['email'] = 'unrelated@example.com'
+                    private_write(instance.runtime / 'ordinary-user.json', json.dumps(files['ordinary-user.json']))
+                elif case == 'wrong_login':
+                    responses[0]['user']['id'] = responses[1]['user']['id']
+                elif case == 'admin_identity':
+                    responses[1]['user']['id'] = responses[0]['user']['id']
+                elif case == 'disagreeing_fixture':
+                    private_write(instance.runtime / 'ui-target.json', json.dumps({'workspace_id': 'different'}))
+                elif case == 'extra_membership':
+                    responses[2].append({'workspace_id': 'unrelated'})
+                elif case == 'wrong_owned_workspace':
+                    responses[3][0]['workspace_id'] = 'unrelated'
+                elif case == 'extra_owned_workspace':
+                    responses[3].append({'workspace_id': 'unrelated', 'member_count': 1})
+                elif case == 'other_member':
+                    responses[3][0]['member_count'] = 2
+                elif case == 'other_occupied_seat':
+                    responses[4]['seats_taken'] = 2
+                with patch.object(instance, 'guard'), patch.object(instance, 'fixture_request', side_effect=responses) as request:
+                    with self.assertRaises((RuntimeError, FileNotFoundError)):
+                        instance.cleanup_fixture()
+                self.assertFalse(any(call.args[0] == 'DELETE' for call in request.call_args_list))
+                self.assertFalse(json.loads((instance.artifacts / 'fixture-cleanup.json').read_text())['passed'])
+
+    def test_fixture_cleanup_requires_confirmed_deletion_and_unchanged_license(self):
+        for case in ('delete_rejected', 'seat_not_released', 'license_changed'):
+            with self.subTest(case=case):
+                instance, files, responses = self.cleanup_fixture_case()
+                if case == 'delete_rejected':
+                    responses[5] = False
+                elif case == 'seat_not_released':
+                    responses[6]['seats_taken'] = 1
+                else:
+                    responses[6]['total_seats'] = 2
+                with patch.object(instance, 'guard'), patch.object(instance, 'fixture_request', side_effect=responses):
+                    with self.assertRaisesRegex(RuntimeError, 'Fixture cleanup'):
+                        instance.cleanup_fixture()
+                self.assertFalse(json.loads((instance.artifacts / 'fixture-cleanup.json').read_text())['passed'])
 
     def test_swarm_preserves_file_permission_bits_from_compose_json(self):
         # Compose's FileMode.MarshalJSON emits an octal string. Earlier
