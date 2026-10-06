@@ -15,10 +15,12 @@ chmod 600 docker-swarm/.local/swarm.env
 Edit `docker-swarm/.local/swarm.env`. Change these existing settings:
 
 ```bash
-FQDN=localhost:18081
+FQDN=127.0.0.1:18081
 NGINX_PORT=18081
 NGINX_TLS_PORT=18444
 ```
+
+Use `127.0.0.1` for this local setup. On some Docker versions, `localhost` resolves to IPv6 `::1`, where Swarm's published ingress port accepts a connection but does not forward it. Explicit IPv4 avoids this [Docker ingress issue](https://github.com/moby/moby/issues/53091).
 
 Set your own `POSTGRES_PASSWORD`, `GOTRUE_ADMIN_EMAIL`, `GOTRUE_ADMIN_PASSWORD`, `GOTRUE_JWT_SECRET`, `AWS_ACCESS_KEY`, and `AWS_SECRET`. Use a URL-safe PostgreSQL password, or URL-encode it in the database URLs. For this local run, leave `GOTRUE_MAILER_AUTOCONFIRM=true` and append:
 
@@ -112,7 +114,7 @@ docker service logs --tail 100 appflowy-swarm_appflowy_cloud
 
 ## 4. Open and test AppFlowy
 
-Open the Admin console at **<http://localhost:18081/console>** using `GOTRUE_ADMIN_EMAIL` and `GOTRUE_ADMIN_PASSWORD`. Create an ordinary user and set its password in user management. Then open **<http://localhost:18081>**, choose **Sign in with password**, and use that ordinary account. The system administrator account is for the Admin console.
+Open the Admin console at **<http://127.0.0.1:18081/console>** using `GOTRUE_ADMIN_EMAIL` and `GOTRUE_ADMIN_PASSWORD`. Create an ordinary user and set its password in user management. Then open **<http://127.0.0.1:18081>**, choose **Sign in with password**, and use that ordinary account. The system administrator account is for the Admin console.
 
 Create a document, add text, and upload a small attachment. Replace Cloud, then wait for it to become healthy and refresh the page to check that your document and attachment remain available:
 

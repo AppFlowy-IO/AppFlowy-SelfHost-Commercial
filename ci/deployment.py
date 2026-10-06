@@ -23,7 +23,6 @@ from images import CORE, ROOT, clean_environment, repository
 
 NAME = 'appflowy-ci'
 NAMESPACE = NAME
-BASE = 'http://localhost'
 STAGES = [['postgres', 'redis', 'minio'], ['gotrue'], ['appflowy_cloud'],
           ['appflowy_search', 'appflowy_worker', 'appflowy_web', 'admin_frontend', 'nginx']]
 HELM_KEYS = {'appflowy_cloud': 'appflowy-cloud', 'appflowy_worker': 'appflowy-worker',
@@ -96,7 +95,12 @@ class Deployment:
                 raise RuntimeError('Helm requires a separate image lock for its chart Redis image')
             self.helm_images['redis'] = redis
         self.artifacts.mkdir(parents=True, exist_ok=True)
-        self.env = dict(os.environ, SWARM_TEST_DIR=str(runtime), SWARM_TEST_BASE_URL=BASE,
+        # Some Docker releases accept IPv6 connections to published Swarm
+        # ports without forwarding them. Use IPv4 through the same public port.
+        # https://github.com/moby/moby/issues/53091
+        self.hostname = '127.0.0.1' if mode == 'swarm' else 'localhost'
+        self.base_url = 'http://' + self.hostname
+        self.env = dict(os.environ, SWARM_TEST_DIR=str(runtime), SWARM_TEST_BASE_URL=self.base_url,
                         SWARM_BROWSER_CHANNEL='chromium')
         self.compose = ['docker', 'compose', '--env-file', str(runtime / 'test.env'),
                         '-p', NAME, '-f', str(runtime / 'compose.yml')]
@@ -164,9 +168,9 @@ class Deployment:
                        's3_access_key': 'ci' + secrets.token_hex(8), 's3_secret_key': secrets.token_hex(24)}
         private_write(self.runtime / 'credentials.json', json.dumps(credentials))
         values = {
-            'FQDN': 'localhost', 'SCHEME': 'http', 'WS_SCHEME': 'ws',
-            'APPFLOWY_BASE_URL': BASE, 'APPFLOWY_WEB_URL': BASE,
-            'APPFLOWY_WEBSOCKET_BASE_URL': 'ws://localhost/ws/v2',
+            'FQDN': self.hostname, 'SCHEME': 'http', 'WS_SCHEME': 'ws',
+            'APPFLOWY_BASE_URL': self.base_url, 'APPFLOWY_WEB_URL': self.base_url,
+            'APPFLOWY_WEBSOCKET_BASE_URL': 'ws://' + self.hostname + '/ws/v2',
             'NGINX_PORT': '80', 'NGINX_TLS_PORT': '443',
             'POSTGRES_PASSWORD': credentials['postgres_password'],
             'GOTRUE_ADMIN_EMAIL': credentials['admin_email'], 'GOTRUE_ADMIN_PASSWORD': credentials['admin_password'],
@@ -177,7 +181,7 @@ class Deployment:
             'AZURE_OPENAI_API_KEY': '', 'AZURE_OPENAI_ENDPOINT': '', 'AZURE_OPENAI_API_VERSION': '',
             'APPFLOWY_KEYWORD_SEARCH_ENABLED': 'true', 'APPFLOWY_INDEXER_DATABASE_ENABLED': 'false',
             'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
-            'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': BASE + '/minio-api',
+            'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': self.base_url + '/minio-api',
             'APPFLOWY_MAILER_SMTP_TLS_KIND': 'none',
         }
         for prefix in ('GOTRUE_SMTP', 'APPFLOWY_MAILER_SMTP'):
@@ -236,14 +240,14 @@ class Deployment:
             rendered['version'] = '3.8'
         private_write(self.runtime / ('stack.yml' if self.mode == 'swarm' else 'compose.yml'),
                       yaml.safe_dump(rendered, sort_keys=False))
-        private_write(self.runtime / 'metadata.json', json.dumps({'base_url': BASE, 'stack_name': NAME,
+        private_write(self.runtime / 'metadata.json', json.dumps({'base_url': self.base_url, 'stack_name': NAME,
                       'mode': self.mode, 'images': {key: value['image'] for key, value in
                        (self.helm_images if self.mode == 'helm' else self.images).items()}}))
         if self.mode == 'helm':
             overrides = {'fullnameOverride': NAME, 'global': {'domain': 'localhost', 'scheme': 'http',
                          'wsScheme': 'ws', 'jwt': {'secret': credentials['jwt_secret']},
                          'postgresql': {'password': credentials['postgres_password']},
-                         's3': {'presignedUrlEndpoint': BASE + '/minio-api'}},
+                         's3': {'presignedUrlEndpoint': self.base_url + '/minio-api'}},
                          'postgresql': {'auth': {'postgresPassword': credentials['postgres_password']}},
                          'minio': {'auth': {'rootUser': credentials['s3_access_key'], 'rootPassword': credentials['s3_secret_key']}},
                          'gotrue': {'config': {'adminEmail': credentials['admin_email'], 'adminPassword': credentials['admin_password']}}}
@@ -289,16 +293,19 @@ class Deployment:
     def wait_http(self):
         for path in ('/api/health', '/gotrue/health', '/', '/console'):
             deadline = time.monotonic() + 180
+            last_error = 'no response'
             while time.monotonic() < deadline:
                 try:
-                    with urllib.request.urlopen(BASE + path, timeout=10) as response:
+                    with urllib.request.urlopen(self.base_url + path, timeout=10) as response:
                         if response.status == 200:
                             break
-                except Exception:
-                    pass
+                        last_error = 'HTTP ' + str(response.status)
+                except Exception as error:
+                    last_error = type(error).__name__ + ': ' + str(error)
                 time.sleep(3)
             else:
-                raise RuntimeError('Public route failed: ' + path)
+                raise RuntimeError('Public route failed: ' + self.base_url + path + '; '
+                                   + sanitize(last_error, self.runtime))
         print('Public API, authentication, Web and Admin routes are ready', flush=True)
 
     def up(self):
@@ -319,7 +326,7 @@ class Deployment:
                 state = json.loads(self.run('docker', 'info', '--format', '{{json .Swarm}}'))
                 if state['LocalNodeState'] != 'inactive':
                     raise RuntimeError('Refusing to use an existing Swarm')
-                self.run('docker', 'swarm', 'init', '--advertise-addr', '127.0.0.1')
+                self.run('docker', 'swarm', 'init')
                 private_write(self.runtime / 'created-swarm', 'true')
                 node_id = self.run('docker', 'info', '--format', '{{.Swarm.NodeID}}').strip()
                 self.run('docker', 'node', 'update', '--label-add', 'appflowy.data=true', node_id)
@@ -504,6 +511,26 @@ class Deployment:
                 self.evidence(name + '.log', log)
             if self.mode == 'swarm':
                 self.evidence('stack-tasks.txt', self.run('docker', 'stack', 'ps', NAME, '--no-trunc', check=False))
+                # Select only network fields: full service/container inspection
+                # would include private environment variables and credentials.
+                commands = {
+                    'engine': ('docker', 'version', '--format', '{{json .Server}}'),
+                    'node_address': ('docker', 'info', '--format', '{{.Swarm.NodeAddr}}'),
+                    'published_endpoint': ('docker', 'service', 'inspect', NAME + '_nginx',
+                                           '--format', '{{json .Endpoint}}'),
+                    'ingress_subnet': ('docker', 'network', 'inspect', 'ingress',
+                                       '--format', '{{json .IPAM.Config}}'),
+                    'host_addresses': ('ip', '-brief', 'address'),
+                    'host_routes': ('ip', 'route'),
+                    'host_listeners': ('ss', '-lnt'),
+                }
+                for family in ('4', '6'):
+                    commands['localhost_ipv' + family] = (
+                        'curl', '-' + family, '--max-time', '5', '--silent', '--show-error',
+                        '--output', '/dev/null', '--write-out', 'HTTP=%{http_code} remote=%{remote_ip}\n',
+                        'http://localhost/api/health')
+                self.evidence('swarm-network.json', {
+                    name: self.run(*args, check=False, combined=True) for name, args in commands.items()})
         for path in self.runtime.glob('*.results.json'):
             self.evidence(path.name, path.read_text())
         for name in ('ui-results.json', 'browser.log'):

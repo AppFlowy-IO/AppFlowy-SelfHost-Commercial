@@ -14,6 +14,8 @@ Each job starts a fresh installation on its own disposable GitHub-hosted Linux r
 | Swarm | `docker-swarm/docker-stack.yml` on a single-node Swarm, with staged startup. |
 | Helm | `helm/appflowy-cloud` in a real kind Kubernetes cluster, through the chart's Ingress resources and an ingress controller. |
 
+Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whose published ingress ports hang on IPv6 `localhost`. Requests still pass through Swarm's published ingress port and Nginx. Compose and Helm use `http://localhost`.
+
 The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to all three jobs. It checks the actual running images against the image lock. Before applying those pins, it also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated file has drifted from the root Compose file.
 
 All three runtime jobs must verify:

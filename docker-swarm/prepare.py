@@ -20,8 +20,8 @@ PREVIOUS = json.loads((OUT / 'metadata.json').read_text()) if (OUT / 'metadata.j
 STACK = os.environ.get('SWARM_STACK_NAME', PREVIOUS.get('stack_name', 'af-swarm-local'))
 HTTP_PORT = int(os.environ.get('SWARM_HTTP_PORT', urlparse(PREVIOUS.get('base_url', '')).port or 18080))
 TLS_PORT = int(os.environ.get('SWARM_TLS_PORT', urlparse(PREVIOUS.get('optional_tls_url', '')).port or 18443))
-BASE_URL = f'http://localhost:{HTTP_PORT}'
-WS_URL = f'ws://localhost:{HTTP_PORT}/ws/v2'
+BASE_URL = f'http://127.0.0.1:{HTTP_PORT}'
+WS_URL = f'ws://127.0.0.1:{HTTP_PORT}/ws/v2'
 
 
 def pin_local_images(services: dict, process_env: dict) -> dict:
@@ -93,7 +93,7 @@ def main() -> None:
     credentials_file.chmod(0o600)
 
     overrides = {
-        'FQDN': f'localhost:{HTTP_PORT}',
+        'FQDN': f'127.0.0.1:{HTTP_PORT}',
         'SCHEME': 'http', 'WS_SCHEME': 'ws',
         'APPFLOWY_BASE_URL': BASE_URL,
         'APPFLOWY_WEBSOCKET_BASE_URL': WS_URL,
@@ -278,7 +278,7 @@ def main() -> None:
     metadata = {
         'stack_name': STACK, 'repository': str(REPO),
         'base_url': BASE_URL, 'websocket_url': WS_URL,
-        'optional_tls_url': f'https://localhost:{TLS_PORT}',
+        'optional_tls_url': f'https://127.0.0.1:{TLS_PORT}',
         'stack_file': str(stack_file), 'credentials_file': str(credentials_file),
         'compose_sha256': hashlib.sha256((REPO / 'docker-compose.yml').read_bytes()).hexdigest(),
         'swarm_source_sha256': hashlib.sha256((REPO / 'docker-swarm/docker-stack.yml').read_bytes()).hexdigest(),

@@ -81,6 +81,9 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.assertEqual(overrides['redis'], {'image': {'digest': digest, 'pullPolicy': 'IfNotPresent'}})
         self.assertEqual(instance.helm_images['redis'], redis)
         self.assertNotEqual(instance.helm_images['redis']['image'], instance.images['redis']['image'])
+        self.assertEqual(instance.base_url, 'http://localhost')
+        self.assertEqual(overrides['global']['domain'], 'localhost')
+        self.assertEqual(overrides['global']['s3']['presignedUrlEndpoint'], 'http://localhost/minio-api')
 
     def test_helm_pins_cannot_hide_a_changed_source_repository_or_tag(self):
         self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
@@ -258,6 +261,25 @@ class RuntimeSafetyTests(unittest.TestCase):
                 file = instance.runtime / ('compose.yml' if mode == 'compose' else 'stack.yml')
                 rendered = yaml.safe_load(file.read_text())
                 self.assertEqual(set(rendered['services']), CORE)
+                hostname = '127.0.0.1' if mode == 'swarm' else 'localhost'
+                base_url = 'http://' + hostname
+                self.assertEqual(instance.env['SWARM_TEST_BASE_URL'], base_url)
+                metadata = json.loads((instance.runtime / 'metadata.json').read_text())
+                self.assertEqual(metadata['base_url'], base_url)
+                cloud = rendered['services']['appflowy_cloud']['environment']
+                self.assertEqual(cloud['APPFLOWY_BASE_URL'], base_url)
+                self.assertEqual(cloud['APPFLOWY_WEB_URL'], base_url)
+                self.assertEqual(cloud['APPFLOWY_S3_PRESIGNED_URL_ENDPOINT'], base_url + '/minio-api')
+                web = rendered['services']['appflowy_web']['environment']
+                self.assertEqual(web['APPFLOWY_BASE_URL'], base_url)
+                self.assertEqual(web['APPFLOWY_GOTRUE_BASE_URL'], base_url + '/gotrue')
+                self.assertEqual(web['APPFLOWY_WS_BASE_URL'], 'ws://' + hostname + '/ws/v2')
+                self.assertEqual(rendered['services']['gotrue']['environment']['API_EXTERNAL_URL'],
+                                 base_url + '/gotrue')
+                ports = rendered['services']['nginx']['ports']
+                self.assertEqual({(int(port['published']), port['target']) for port in ports},
+                                 {(80, 80), (443, 443)})
+                self.assertTrue(all(port.get('mode', 'ingress') == 'ingress' for port in ports))
                 redis = rendered['services']['redis']
                 expected_redis = normalized_source['services']['redis']
                 for key in ('command', 'volumes', 'healthcheck'):
@@ -275,6 +297,20 @@ class RuntimeSafetyTests(unittest.TestCase):
                     self.assertFalse(redis['deploy'].get('placement'))
                 else:
                     instance.run(*instance.compose, 'config', '--quiet')
+
+    def test_swarm_public_readiness_uses_ipv4_and_reports_last_error(self):
+        instance = self.deployment('swarm')
+        with patch('deployment.urllib.request.urlopen') as request:
+            request.return_value.__enter__.return_value.status = 200
+            instance.wait_http()
+            self.assertEqual([call.args[0] for call in request.call_args_list],
+                             ['http://127.0.0.1' + path for path in
+                              ('/api/health', '/gotrue/health', '/', '/console')])
+        with patch('deployment.urllib.request.urlopen', side_effect=TimeoutError('timed out')), \
+             patch('deployment.time.monotonic', side_effect=[0, 0, 181]), \
+             patch('deployment.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError, r'http://127\.0\.0\.1/api/health; TimeoutError: timed out'):
+                instance.wait_http()
 
 
 if __name__ == '__main__':

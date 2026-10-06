@@ -68,7 +68,7 @@ python3 docker-swarm/local.py verify
 
 `up` pulls images, initializes Swarm if needed, and starts the test stack in stages. `up --no-pull` reuses cached image digests. Rerunning it stops the test application and restarts it in order with retained volumes. The harness requires a local Docker endpoint and single-node manager; ownership checks prevent it from changing unrelated services.
 
-The test URL defaults to **<http://localhost:18080>**, with development TLS on `18443`. The ordinary user's login is in `.local/ordinary-user.json`; administrative credentials are in `.local/credentials.json`. The default stack is `af-swarm-local`, or the previously recorded stack name. Existing metadata retains the original `af-swarm-local-20261006` experiment's settings.
+The test URL defaults to **<http://127.0.0.1:18080>**, with development TLS on `18443`. Explicit IPv4 avoids Docker's IPv6 ingress issue described in the setup guide. Retained runs use the URL recorded in `.local/metadata.json`. The ordinary user's login is in `.local/ordinary-user.json`; administrative credentials are in `.local/credentials.json`. The default stack is `af-swarm-local`, or the previously recorded stack name. Existing metadata retains the original `af-swarm-local-20261006` experiment's settings.
 
 Optional overrides are `SWARM_TEST_DIR`, `SWARM_STACK_NAME` (must start with `af-swarm-`), `SWARM_HTTP_PORT`, and `SWARM_TLS_PORT`. Use the same values in every terminal for a test run.
 
