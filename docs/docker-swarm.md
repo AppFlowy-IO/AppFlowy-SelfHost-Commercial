@@ -22,7 +22,7 @@ NGINX_TLS_PORT=18444
 
 Use `127.0.0.1` for this local setup. On some Docker versions, `localhost` resolves to IPv6 `::1`, where Swarm's published ingress port accepts a connection but does not forward it. Explicit IPv4 avoids this [Docker ingress issue](https://github.com/moby/moby/issues/53091).
 
-Set your own `POSTGRES_PASSWORD`, `GOTRUE_ADMIN_EMAIL`, `GOTRUE_ADMIN_PASSWORD`, `GOTRUE_JWT_SECRET`, `AWS_ACCESS_KEY`, and `AWS_SECRET`. Use a URL-safe PostgreSQL password, or URL-encode it in the database URLs. For this local run, leave `GOTRUE_MAILER_AUTOCONFIRM=true` and append:
+Set your own `POSTGRES_PASSWORD`, `GOTRUE_ADMIN_EMAIL`, `GOTRUE_ADMIN_PASSWORD`, `GOTRUE_JWT_SECRET`, `AWS_ACCESS_KEY`, and `AWS_SECRET`. Use a URL-safe PostgreSQL password, or URL-encode it in the database URLs. For this local run, keep the template defaults `GOTRUE_DISABLE_SIGNUP=false` and `GOTRUE_MAILER_AUTOCONFIRM=true` so you can register through the Web app without email confirmation. Append:
 
 ```bash
 AI_ENABLED=false
@@ -114,9 +114,16 @@ docker service logs --tail 100 appflowy-swarm_appflowy_cloud
 
 ## 4. Open and test AppFlowy
 
-Open the Admin console at **<http://127.0.0.1:18081/console>** using `GOTRUE_ADMIN_EMAIL` and `GOTRUE_ADMIN_PASSWORD`. Create an ordinary user and set its password in user management. Then open **<http://127.0.0.1:18081>**, choose **Sign in with password**, and use that ordinary account. The system administrator account is for the Admin console.
+Make sure your license has at least one available user seat, then test registration through the public Web app:
 
-Create a document, add text, and upload a small attachment. Replace Cloud, then wait for it to become healthy and refresh the page to check that your document and attachment remain available:
+1. Open **<http://127.0.0.1:18081>** and choose **Create account**.
+2. Enter a new user's email address, password, and password confirmation, then submit the form. Confirm that the new user enters a workspace.
+3. Create a document, give it a title, add text, and upload a small attachment.
+4. Sign out, or open a fresh private browser window. Choose **Sign in with password** and use the new account's email and password. Confirm that the same workspace, document title, text, and attachment are available.
+
+The system administrator account is for the Admin console at **<http://127.0.0.1:18081/console>**. Use `GOTRUE_ADMIN_EMAIL` and `GOTRUE_ADMIN_PASSWORD` there to manage the installation.
+
+Replace Cloud, then wait for it to become healthy and refresh the page to check that your document and attachment remain available:
 
 ```bash
 docker service update --force appflowy-swarm_appflowy_cloud
