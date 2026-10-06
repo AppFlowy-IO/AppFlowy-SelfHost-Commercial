@@ -1,6 +1,6 @@
 # AppFlowy Cloud Helm Chart
 
-This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker and AI) with the infrastructure they need, so you can deploy to Kubernetes with a single command. The defaults are production-oriented (HTTPS + TLS). For local minikube use, apply `values-test.yaml`.
+This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker, search and AI) with PostgreSQL, Redis and MinIO. Configure credentials and TLS before a public deployment. The repository's deployment CI installs the chart in a disposable kind cluster using [ci/helm-values.yaml](../../ci/helm-values.yaml), then exercises the same application tests as Compose and Swarm.
 
 ## What is deployed
 
@@ -9,6 +9,7 @@ This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker an
 - Admin console
 - GoTrue (auth server)
 - AppFlowy Worker (background jobs)
+- AppFlowy Search with a persistent keyword index
 - AppFlowy AI 
 - PostgreSQL (pgvector), Redis, and MinIO
 - Optional kube-prometheus-stack (Prometheus Operator + Grafana) and ServiceMonitors when you enable monitoring
@@ -44,7 +45,13 @@ Optional but common:
 - `global.s3.presignedUrlEndpoint`: set when clients must reach MinIO through an external ingress.
 - `gotrue.config.smtp.*` / `gotrue.config.oauth.*`: set only if you enable SMTP or OAuth providers.
 - `appflowy-ai.secrets.*`: set only if you enable AI providers.
+- `appflowy-ai.enabled=false`: runs the core services without a paid AI provider. For keyword search without semantic embedding workers, also set `appflowy-search.config.backgroundIndexerEnabled=false`.
+- `*.image.digest`: pins an application or infrastructure image to an immutable registry digest; when set, it takes precedence over `image.tag`.
 - `ingress.scim.enabled`: defaults to `true` and adds the `/scim` route for SCIM provisioning; set it to `false` when SCIM is unused or must use a separate edge (see below).
+
+Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the chart derives the release's Service names. Leave them empty when using bundled infrastructure. Init containers wait for PostgreSQL, GoTrue and Cloud migrations before background workers start. Search uses one replica, a PVC and `Recreate` updates so two processes never write its keyword index concurrently. Redis persists its AOF on its PVC.
+
+The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
 ## Enterprise identity routes (SCIM, LDAP, OIDC, SAML)
 

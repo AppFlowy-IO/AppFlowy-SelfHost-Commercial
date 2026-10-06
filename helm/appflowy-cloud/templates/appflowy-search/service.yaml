@@ -1,0 +1,18 @@
+{{- if index .Values "appflowy-search" "enabled" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "appflowy.search.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-search
+spec:
+  type: {{ index .Values "appflowy-search" "service" "type" }}
+  ports:
+    - name: http
+      port: {{ index .Values "appflowy-search" "service" "port" }}
+      targetPort: http
+  selector:
+    {{- include "appflowy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-search
+{{- end }}

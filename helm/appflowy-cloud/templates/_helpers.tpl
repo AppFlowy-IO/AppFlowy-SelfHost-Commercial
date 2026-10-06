@@ -389,6 +389,10 @@ Service Name Helpers
 {{- printf "%s-ai" (include "appflowy.fullname" .) }}
 {{- end }}
 
+{{- define "appflowy.search.fullname" -}}
+{{- printf "%s-search" (include "appflowy.fullname" .) }}
+{{- end }}
+
 {{/*
 =============================================================================
 Image Helpers
@@ -402,11 +406,25 @@ Return the proper image name
 {{- $registryName := .Values.global.imageRegistry -}}
 {{- $repositoryName := .image.repository -}}
 {{- $tag := .image.tag | default "latest" -}}
-{{- if $registryName }}
+{{- if .image.digest }}
+{{- if $registryName }}{{ $registryName }}/{{ end }}{{ $repositoryName }}@{{ .image.digest }}
+{{- else if $registryName }}
 {{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
 {{- else }}
 {{- printf "%s:%s" $repositoryName $tag -}}
 {{- end }}
+{{- end }}
+
+{{/* Wait for Cloud's startup migrations before background services start. */}}
+{{- define "appflowy.waitForCloud" -}}
+initContainers:
+  - name: wait-for-cloud
+    image: {{ include "appflowy.image" (dict "Values" .Values "image" .Values.gotrue.image) | quote }}
+    command: [sh, -ec]
+    args:
+      - until curl --fail --silent --max-time 5 {{ include "appflowy.cloud.internalUrl" . }}/api/health >/dev/null; do sleep 2; done
+    securityContext:
+      {{- toYaml .Values.containerSecurityContext | nindent 6 }}
 {{- end }}
 
 {{/*

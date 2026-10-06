@@ -26,16 +26,16 @@ spec:
       {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml ($web.podSecurityContext | default .Values.podSecurityContext) | nindent 8 }}
       containers:
         - name: appflowy-web
           securityContext:
-            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+            {{- toYaml ($web.containerSecurityContext | default .Values.containerSecurityContext) | nindent 12 }}
           image: {{ include "appflowy.image" (dict "Values" .Values "image" $web.image) | quote }}
           imagePullPolicy: {{ $web.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 3000
+              containerPort: 80
               protocol: TCP
           env:
             - name: APPFLOWY_BASE_URL
