@@ -86,7 +86,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "appflowy.fullname" . }}-postgresql
+  name: {{ include "appflowy.fullname" . }}-postgresql-access
   labels:
     {{- include "appflowy.labels" . | nindent 4 }}
 spec:
@@ -109,7 +109,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "appflowy.fullname" . }}-redis
+  name: {{ include "appflowy.fullname" . }}-redis-access
   labels:
     {{- include "appflowy.labels" . | nindent 4 }}
 spec:
@@ -132,7 +132,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "appflowy.fullname" . }}-minio
+  name: {{ include "appflowy.fullname" . }}-minio-access
   labels:
     {{- include "appflowy.labels" . | nindent 4 }}
 spec:

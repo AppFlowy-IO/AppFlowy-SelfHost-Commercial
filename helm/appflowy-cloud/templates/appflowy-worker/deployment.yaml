@@ -29,6 +29,7 @@ spec:
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "appflowy.waitForCloud" . | nindent 6 }}
       containers:
         - name: appflowy-worker
           securityContext:

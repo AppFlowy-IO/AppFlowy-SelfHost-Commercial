@@ -12,7 +12,7 @@ Compose uses the public `appflowyinc/appflowy_cloud` and `appflowyinc/appflowy_w
 
 Nginx configuration and certificates remain in [`docker/nginx`](../docker/nginx). For HTTPS, replace the bundled development certificate and key in `docker/nginx/ssl/` with your deployment's certificates.
 
-For an existing installation, complete the [Redis persistence migration](#redis-persistence) before recreating Redis. For a new installation, start the services from the repository root:
+Start the services from the repository root:
 
 ```bash
 docker compose up -d
@@ -20,19 +20,15 @@ docker compose up -d
 
 With the default localhost settings, open [AppFlowy Web](http://localhost) or the [Admin console](http://localhost/console). The template creates the admin account `admin@example.com` with password `password`.
 
-If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing named data volumes and the default network. Containers whose definition changed are recreated in place: `nginx` and `appflowy_cloud` leave the old `cloud_proxy` network, and `minio`, `appflowy_cloud`, and `appflowy_worker` move to new image references. Unchanged service definitions are reused; Redis requires the persistence migration below. The old `<project>_cloud_proxy` network is left behind and can be removed with `docker network rm` after the upgrade.
+If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing named data volumes and the default network. Containers whose definition changed are recreated in place: `nginx` and `appflowy_cloud` leave the old `cloud_proxy` network, and `minio`, `appflowy_cloud`, and `appflowy_worker` move to new image references. Unchanged service definitions are reused. The old `<project>_cloud_proxy` network is left behind and can be removed with `docker network rm` after the upgrade.
 
-## Redis persistence
+## Storage and Redis
 
-The bundled Redis service enables AOF with `appendfsync everysec`, uses `maxmemory-policy noeviction`, and stores `/data` in the Compose-managed `redis_data` volume. Pending work survives container recreation when this volume is retained. One-second fsync still permits recent writes to be lost in a crash; keep durable backups and provision memory/disk capacity for your workload. This change does not set a memory limit or enable hosted storage quotas in self-host builds.
+PostgreSQL, MinIO, and Search use the named volumes `postgres_data`, `minio_data`, and `keyword_index_data`. Retain the Compose project name when recreating containers so they select the same volumes. `docker compose down -v` removes deployment data volumes; it is not an upgrade command.
 
-When upgrading the previous Redis service, its existing anonymous `/data` volume is **not** automatically copied into `redis_data`. Before running `docker compose up` with this change:
+Redis uses the image's default command. The root Compose file does not configure AOF, an explicit named Redis data volume, or a Redis health check. It does not guarantee that Redis-backed queues or pending work survive container replacement. Retaining PostgreSQL and MinIO data does not establish Redis queue durability.
 
-1. Pause Redis writers and back up the existing dataset. Keep the existing container and volume until migration is verified.
-2. Enable AOF on the running Redis with `redis-cli CONFIG SET appendonly yes`. Use `INFO persistence` to confirm `aof_rewrite_in_progress=0`, `aof_rewrite_scheduled=0`, and `aof_last_bgrewrite_status=ok` before stopping it. See [Redis's AOF migration procedure](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/#how-i-can-switch-to-aof-if-im-currently-using-dumprdb-snapshots).
-3. Stop Redis and copy its complete `/data` contents, including the AOF directory and manifest, into the new project's `redis_data` volume while retaining file ownership. Start Redis with the new configuration and verify the dataset before resuming writers.
-
-Retain the Compose project name so subsequent recreations select the same volume. `docker compose down -v` removes deployment data volumes; it is not an upgrade command. External Redis deployments need equivalent persistence settings on their own servers.
+For a local Swarm installation, follow the [Docker Swarm guide](docker-swarm.md). It uses a separate stack and direct Docker commands; the [deployment CI guide](deployment-ci.md) describes the automated checks and their limits.
 
 ## OAuth providers
 

@@ -29,6 +29,16 @@ spec:
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: wait-for-dependencies
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" .Values.gotrue.image) | quote }}
+          command: [sh, -ec]
+          args:
+            - |
+              until curl --fail --silent --max-time 5 {{ include "appflowy.gotrue.internalUrl" . }}/health >/dev/null; do sleep 2; done
+              {{- if .Values.global.s3.useMinio }}
+              until curl --fail --silent --max-time 5 {{ include "appflowy.s3.endpoint" . }}/minio/health/live >/dev/null; do sleep 2; done
+              {{- end }}
       containers:
         - name: appflowy-cloud
           securityContext:
@@ -128,16 +138,37 @@ spec:
               value: {{ $cloud.config.fileAuthEnabled | quote }}
 
             # AI service configuration
+            - name: AI_ENABLED
+              value: {{ index .Values "appflowy-ai" "enabled" | quote }}
             {{- if index .Values "appflowy-ai" "enabled" }}
             - name: AI_SERVER_HOST
               value: {{ include "appflowy.ai.fullname" . | quote }}
             - name: AI_SERVER_PORT
               value: {{ index .Values "appflowy-ai" "service" "port" | quote }}
+            {{- if index .Values "appflowy-ai" "secrets" "openaiApiKey" }}
+            - name: AI_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.ai.fullname" . }}-secret
+                  key: openai-api-key
+            {{- end }}
             {{- end }}
 
             # Web URL
+            - name: APPFLOWY_BASE_URL
+              value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
+            {{- if index .Values "appflowy-search" "enabled" }}
+            - name: APPFLOWY_SEARCH_SERVICE_URL
+              value: "http://{{ include "appflowy.search.fullname" . }}:{{ index .Values "appflowy-search" "service" "port" }}"
+            {{- end }}
+            - name: APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS
+              value: {{ $cloud.config.searchRequestTimeoutSecs | quote }}
+            - name: SIGNUP_WHITELIST_ENABLED
+              value: {{ $cloud.config.signupWhitelistEnabled | quote }}
+            - name: GUEST_INVITES_REQUIRE_ADMIN_APPROVAL
+              value: {{ $cloud.config.guestInvitesRequireAdminApproval | quote }}
 
             {{- if $cloud.config.mailer.enabled }}
             # Mailer configuration
@@ -158,6 +189,12 @@ spec:
               value: {{ $cloud.config.mailer.tlsKind | quote }}
             {{- end }}
 
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: {{ $metrics.portName | default "http" }}
+            periodSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /api/health
@@ -168,7 +205,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /api/ready
+              path: /api/health
               port: {{ $metrics.portName | default "http" }}
             initialDelaySeconds: 10
             periodSeconds: 5
