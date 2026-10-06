@@ -93,8 +93,6 @@ spec:
                   key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
             - name: APPFLOWY_BACKGROUND_INDEXER_ENABLED
               value: {{ $search.config.backgroundIndexerEnabled | quote }}
-            - name: APPFLOWY_INDEXER_DATABASE_ENABLED
-              value: {{ $search.config.databaseIndexerEnabled | quote }}
             - name: APPFLOWY_KEYWORD_SEARCH_ENABLED
               value: {{ $search.config.keywordSearchEnabled | quote }}
             - name: APPFLOWY_KEYWORD_WORKER_ENABLED

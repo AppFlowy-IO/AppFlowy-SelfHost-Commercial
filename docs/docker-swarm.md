@@ -26,7 +26,6 @@ Set your own `POSTGRES_PASSWORD`, `GOTRUE_ADMIN_EMAIL`, `GOTRUE_ADMIN_PASSWORD`,
 
 ```bash
 AI_ENABLED=false
-APPFLOWY_INDEXER_DATABASE_ENABLED=false
 ```
 
 This file will be loaded by the shell. Keep it as trusted shell assignments, quote literal secrets with single quotes (for example, `GOTRUE_ADMIN_PASSWORD='your-password'`), and retain the template's `${...}` references so dependent URLs expand. Never commit this file; `.local/` is ignored by Git. Keep it when reusing the stack's data.
