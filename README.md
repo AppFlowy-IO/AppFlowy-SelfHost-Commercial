@@ -54,7 +54,32 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.0 (Latest)
+### 🚀 v0.19.2 (Latest)
+
+#### New Features
+
+- **Legacy Word imports** — Added server support for importing `.doc` files into editable pages, including Word 97–2003 documents and HTML/MHTML exports with supported formatting, tables, and embedded images.
+- **Email-domain blocking (opt-in)** — Added Admin APIs to manage a registration email-domain blocklist and switch enforcement on or off independently of signup approval.
+
+#### Improvements
+
+- **Large imports** — Improved handling of database contention with smaller writes for imported content and attachments, plus retries for temporary lock conflicts.
+
+#### Bug Fixes
+
+- Fixed realtime sync stalls after permission changes and reconnects, including recovery from temporary backend failures.
+- Fixed DOCX imports that lost inherited bold formatting or embedded images.
+- Fixed MCP database-row deletions that left stored rows and connected views inconsistent after interrupted updates.
+
+#### ⚠️ Action Required
+
+- **Service rollout** — Drain application traffic and stop existing writers before the storage migration. Let updated Cloud finish migrations, then start matching self-hosted Worker, Search, and optional MCP builds before resuming traffic. Use the updated GoTrue image for the startup-permission fix.
+- **Migration tooling and rollback** — Use Cloud's updated startup migration runner, or `appflowy-migrate` for custom migration jobs. Preserve existing migration records and checksums. Rollback builds must support the updated migration runner and storage protocol.
+- **Email-domain blocking** — If blocking is required, set `email_domain_blocking_enabled=true` through the Admin system-configuration API. Existing domain lists were preserved, but enforcement defaulted to off and list downloads became explicit Admin actions.
+
+**Baseline:** [`36aaa3ca0a26043f8c26222f28713083ba072a13`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/36aaa3ca0a26043f8c26222f28713083ba072a13)
+
+### 🚀 v0.19.0
 
 #### New Features
 
