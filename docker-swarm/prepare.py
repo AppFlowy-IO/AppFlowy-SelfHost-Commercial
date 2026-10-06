@@ -127,7 +127,6 @@ def main() -> None:
         'ASSEMBLYAI_STREAMING_API_BASE': 'ws://127.0.0.1:9',
         'APPFLOWY_INDEXER_ENABLED': 'false',
         'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false',
-        'APPFLOWY_INDEXER_DATABASE_ENABLED': 'false',
         'APPFLOWY_KEYWORD_SEARCH_ENABLED': 'true',
         'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
         'SIGNUP_WHITELIST_ENABLED': 'false',
@@ -214,7 +213,6 @@ def main() -> None:
             'AI_ENABLED': 'false',
             'APPFLOWY_INDEXER_ENABLED': 'false',
             'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false',
-            'APPFLOWY_INDEXER_DATABASE_ENABLED': 'false',
         })
     # Preserve runtime shell variables. Compose config retains $$ escapes;
     # this generated YAML is parsed exactly once by docker stack deploy.

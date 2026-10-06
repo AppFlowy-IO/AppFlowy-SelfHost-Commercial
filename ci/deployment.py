@@ -181,7 +181,7 @@ class Deployment:
             'AWS_SECRET': credentials['s3_secret_key'], 'APPFLOWY_DATABASE_MAX_CONNECTIONS': '20',
             'AI_ENABLED': 'false', 'AI_OPENAI_API_KEY': '', 'ASSEMBLYAI_API_KEY': '',
             'AZURE_OPENAI_API_KEY': '', 'AZURE_OPENAI_ENDPOINT': '', 'AZURE_OPENAI_API_VERSION': '',
-            'APPFLOWY_KEYWORD_SEARCH_ENABLED': 'true', 'APPFLOWY_INDEXER_DATABASE_ENABLED': 'false',
+            'APPFLOWY_KEYWORD_SEARCH_ENABLED': 'true',
             'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
             'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': self.base_url + '/minio-api',
             'APPFLOWY_MAILER_SMTP_TLS_KIND': 'none',
@@ -214,8 +214,7 @@ class Deployment:
             service['logging'] = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '2'}}
             if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
                 service['environment'].update({'AI_ENABLED': 'false', 'APPFLOWY_INDEXER_ENABLED': 'false',
-                                               'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false',
-                                               'APPFLOWY_INDEXER_DATABASE_ENABLED': 'false'})
+                                               'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false'})
             if name == 'appflowy_cloud':
                 service['healthcheck']['start_period'] = '180s'
             if self.mode == 'swarm':

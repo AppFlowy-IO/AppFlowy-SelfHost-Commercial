@@ -441,7 +441,6 @@ appflowy-search:
   config:
     rustLog: info
     backgroundIndexerEnabled: true
-    databaseIndexerEnabled: false
     keywordSearchEnabled: true
     keywordWorkerEnabled: true
     keywordIndexMapSizeBytes: 2147483648
