@@ -1,0 +1,87 @@
+name: Backup integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_image:
+        description: Backup image to qualify with the core images in deploy.env (matching tag or digest)
+        type: string
+        required: true
+        default: appflowyinc/appflowy_backup:latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backup:
+    name: Compose Backup acceptance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      APPFLOWY_BACKUP_PROFILE: backup
+      BACKUP_IMAGE: ${{ inputs.backup_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ci/package-lock.json
+      - name: Install isolated test dependencies
+        run: |
+          python -m pip install -r docker-swarm/requirements.txt
+          npm ci --prefix ci
+          ci/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check Docker Compose compatibility
+        run: python ci/configuration.py --check-tools
+      - name: Resolve exact core and Backup image digests
+        run: >-
+          python ci/images.py ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --backup-image "$BACKUP_IMAGE" --output ci-artifacts/compose-backup/image-lock.json
+      - name: Start the deployment with Backup enabled
+        run: >-
+          python ci/deployment.py up --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --runtime "$RUNNER_TEMP/appflowy-backup"
+          --artifacts ci-artifacts/compose-backup
+          --images ci-artifacts/compose-backup/image-lock.json
+      - name: Assert core workflows and Backup restore acceptance
+        run: >-
+          python ci/deployment.py test --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --runtime "$RUNNER_TEMP/appflowy-backup"
+          --artifacts ci-artifacts/compose-backup
+          --images ci-artifacts/compose-backup/image-lock.json
+      - name: Register through AppFlowy Web and sign in from a fresh browser
+        run: >-
+          python ci/deployment.py register --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --runtime "$RUNNER_TEMP/appflowy-backup"
+          --artifacts ci-artifacts/compose-backup
+          --images ci-artifacts/compose-backup/image-lock.json
+      - name: Collect sanitized diagnostics
+        if: always() && hashFiles('ci-artifacts/compose-backup/image-lock.json') != ''
+        run: >-
+          python ci/deployment.py diagnostics --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --runtime "$RUNNER_TEMP/appflowy-backup"
+          --artifacts ci-artifacts/compose-backup
+          --images ci-artifacts/compose-backup/image-lock.json
+      - name: Remove only this runner's test deployment
+        if: always() && hashFiles('ci-artifacts/compose-backup/image-lock.json') != ''
+        run: >-
+          python ci/deployment.py cleanup --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --runtime "$RUNNER_TEMP/appflowy-backup"
+          --artifacts ci-artifacts/compose-backup
+          --images ci-artifacts/compose-backup/image-lock.json
+      - name: Upload sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-compose-backup-${{ github.run_attempt }}
+          path: ci-artifacts/compose-backup/
+          if-no-files-found: error
+          retention-days: 14

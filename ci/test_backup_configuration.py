@@ -86,6 +86,26 @@ class BackupConfigurationTests(unittest.TestCase):
                         'APPFLOWY_DATABASE_URL': 'postgres://private'}, clear=True):
             self.assertEqual(clean_environment(), {'PATH': '/bin'})
 
+    def test_compose_backup_is_disabled_until_the_profile_is_set(self):
+        source = isolated_source(self.root / 'compose-defaults')
+        settings = (source / 'deploy.env').read_text()
+        self.assertIn('\nAPPFLOWY_BACKUP_PROFILE=\n', settings)
+        for profile in ('', 'backup'):
+            with self.subTest(profile=profile):
+                (source / '.env').write_text(settings.replace(
+                    '\nAPPFLOWY_BACKUP_PROFILE=\n', '\nAPPFLOWY_BACKUP_PROFILE=' + profile + '\n'))
+                result = subprocess.run(['docker', 'compose', '--project-directory', str(source),
+                                         'config', '--format', 'json'], env=clean_environment(),
+                                        capture_output=True, text=True, check=True, timeout=30)
+                config = json.loads(result.stdout)
+                expected = CORE | {'ai'} | ({'appflowy_backup'} if profile else set())
+                self.assertEqual(set(config['services']), expected)
+                if profile:
+                    self.assertEqual(config['services']['appflowy_backup']['command'], ['bootstrap'])
+                    self.assertIn('backup_work', config['volumes'])
+                else:
+                    self.assertNotIn('backup_work', config['volumes'])
+
     def deployment(self, backup=True, mode='compose'):
         digest = 'sha256:' + 'a' * 64
         record = lambda name: {'source': name + ':latest', 'image': name + '@' + digest,

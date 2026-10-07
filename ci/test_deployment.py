@@ -108,6 +108,23 @@ class RuntimeSafetyTests(unittest.TestCase):
                 self.assertFalse((instance.runtime / 'helm-overrides.yaml').exists())
                 self.assertFalse((instance.runtime / 'credentials.json').exists())
 
+    def test_helm_and_kubectl_receive_the_runner_kubeconfig(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        self.lock.write_text(json.dumps(self.payload))
+        kubeconfig = str(self.root / 'appflowy-ci.kubeconfig')
+        with patch.dict(os.environ, {'KUBECONFIG': kubeconfig,
+                                     'APPFLOWY_DATABASE_URL': 'postgres://private'}):
+            instance = self.deployment('helm')
+        result = subprocess.CompletedProcess([], 0, stdout='', stderr='')
+        with patch.object(instance, 'guard'), patch.object(instance, 'render'), \
+                patch.object(instance, 'wait_http'), patch.object(instance, 'check_images'), \
+                patch('deployment.subprocess.run', return_value=result) as run:
+            instance.up()
+            self.assertEqual([call.args[0][0] for call in run.call_args_list], ['helm', 'kubectl'])
+            for call in run.call_args_list:
+                self.assertEqual(call.kwargs['env']['KUBECONFIG'], kubeconfig)
+                self.assertNotIn('APPFLOWY_DATABASE_URL', call.kwargs['env'])
+
     def test_image_reference_normalization_preserves_versions(self):
         self.assertEqual(normalized_image_reference('redis'), 'docker.io/library/redis:latest')
         self.assertEqual(normalized_image_reference('docker.io/redis:latest'),

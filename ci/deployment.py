@@ -124,7 +124,7 @@ class Deployment:
         self.base_url = 'http://' + self.hostname
         self.env = dict(clean_environment(), SWARM_TEST_DIR=str(runtime), SWARM_TEST_BASE_URL=self.base_url,
                         SWARM_BROWSER_CHANNEL='chromium')
-        for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP'):
+        for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP', 'KUBECONFIG'):
             if key in os.environ:
                 self.env[key] = os.environ[key]
         self.compose = ['docker', 'compose', '--env-file', str(runtime / 'test.env'),

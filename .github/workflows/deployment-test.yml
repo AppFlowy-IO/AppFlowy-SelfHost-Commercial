@@ -5,11 +5,6 @@ on:
   push:
     branches: [main, master, 'release/public/**']
   workflow_dispatch:
-    inputs:
-      backup_image:
-        description: Backup image to qualify (use the matching release tag or digest)
-        type: string
-        default: appflowyinc/appflowy_backup:latest
 
 permissions:
   contents: read
@@ -38,9 +33,7 @@ jobs:
           python -m unittest discover -s ci -p 'test_*.py'
           python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
       - name: Resolve exact linux/amd64 image digests once
-        env:
-          BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:latest' }}
-        run: python ci/images.py --backup --backup-image "$BACKUP_IMAGE" --output ci-artifacts/image-lock.json
+        run: python ci/images.py --output ci-artifacts/image-lock.json
       - uses: actions/upload-artifact@v4
         with:
           name: deployment-image-lock
@@ -49,7 +42,7 @@ jobs:
           retention-days: 14
 
   runtime:
-    name: Runtime (${{ matrix.name || matrix.deployment }})
+    name: Runtime (${{ matrix.deployment }})
     needs: images
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -60,13 +53,9 @@ jobs:
           - deployment: compose
           - deployment: swarm
           - deployment: helm
-          - deployment: compose
-            backup: true
-            name: compose-backup
     env:
       DEPLOYMENT_MODE: ${{ matrix.deployment }}
-      DEPLOYMENT_NAME: ${{ matrix.name || matrix.deployment }}
-      BACKUP_ARG: ${{ matrix.backup && '--backup' || '' }}
+      DEPLOYMENT_NAME: ${{ matrix.deployment }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,33 +93,33 @@ jobs:
         run: bash ci/start-kind.sh
       - name: Start the deployment and wait for core services
         run: >-
-          python ci/deployment.py up --mode "$DEPLOYMENT_MODE" $BACKUP_ARG
+          python ci/deployment.py up --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Assert workflows, browser collaboration, replacement and persistence
         run: >-
-          python ci/deployment.py test --mode "$DEPLOYMENT_MODE" $BACKUP_ARG
+          python ci/deployment.py test --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Register through AppFlowy Web and sign in from a fresh browser
         run: >-
-          python ci/deployment.py register --mode "$DEPLOYMENT_MODE" $BACKUP_ARG
+          python ci/deployment.py register --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Collect sanitized diagnostics
         if: always()
         run: >-
-          python ci/deployment.py diagnostics --mode "$DEPLOYMENT_MODE" $BACKUP_ARG
+          python ci/deployment.py diagnostics --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Remove only this runner's test deployment
         if: always()
         run: >-
-          python ci/deployment.py cleanup --mode "$DEPLOYMENT_MODE" $BACKUP_ARG
+          python ci/deployment.py cleanup --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
           --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
@@ -138,8 +127,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-${{ matrix.name || matrix.deployment }}-${{ github.run_attempt }}
-          path: ci-artifacts/${{ matrix.name || matrix.deployment }}/
+          name: deployment-${{ matrix.deployment }}-${{ github.run_attempt }}
+          path: ci-artifacts/${{ matrix.deployment }}/
           if-no-files-found: error
           retention-days: 14
 
@@ -150,12 +139,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require all four runtime acceptance jobs
+      - name: Require all three runtime acceptance jobs
         env:
           IMAGES_RESULT: ${{ needs.images.result }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
         run: |
           test "$IMAGES_RESULT" = success
           test "$RUNTIME_RESULT" = success
-          echo 'Compose, single-node Swarm, Helm, and Compose Backup runtime acceptance passed.'
+          echo 'Compose, single-node Swarm, and Helm runtime acceptance passed with Backup disabled.'
           echo 'External AI, semantic search, SMTP, TLS, Redis queue persistence, upgrades and multi-node/HA are outside this check.'

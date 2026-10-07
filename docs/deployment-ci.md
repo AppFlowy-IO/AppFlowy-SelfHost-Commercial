@@ -4,6 +4,10 @@
 
 Use **Deployment tests** as the required pull-request status check. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check. Adding the workflow does not configure repository branch protection automatically.
 
+Backup is disabled in the default installation and all three standard CI deployments. The separate,
+manually triggered [Backup integration](../.github/workflows/backup-test.yml) workflow enables it
+with `APPFLOWY_BACKUP_PROFILE=backup`.
+
 ## What a passing run verifies
 
 Each job starts a fresh installation on its own disposable GitHub-hosted Linux runner:
@@ -11,13 +15,12 @@ Each job starts a fresh installation on its own disposable GitHub-hosted Linux r
 | Job | Deployment under test |
 | --- | --- |
 | Compose | The root `docker-compose.yml`, with isolated test configuration. |
-| Compose Backup | The root Compose deployment with `docker-compose.backup.yml`, the Backup profile, and an independently pinned Backup image. |
 | Swarm | `docker-swarm/docker-stack.yml` on a single-node Swarm, with staged startup. |
 | Helm | `helm/appflowy-cloud` in a real kind Kubernetes cluster, through the chart's Ingress resources and an ingress controller. |
 
 Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whose published ingress ports hang on IPv6 `localhost`. Requests still pass through Swarm's published ingress port and Nginx. Compose and Helm use `http://localhost`.
 
-The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. The Backup lane adds the exact Backup digest. Manual workflow runs can supply `backup_image` to qualify a particular build. An unavailable image fails preparation; there is no successful skipped Backup result. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
+The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. It does not resolve or pull the Backup image. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
 
 All runtime jobs must verify:
 
@@ -35,8 +38,18 @@ Tests fail on timeouts and failed assertions. Registry download failures also fa
 
 ## Backup acceptance
 
-The Compose Backup lane uses the production Backup process, public Admin API, and restore
-coordinator. Its additional checks are implemented in [ci/backup_smoke.py](../ci/backup_smoke.py):
+Run **Backup integration** from GitHub Actions to qualify Backup explicitly. Its `backup_image`
+input selects a matching release tag or digest; the core images still come from the versioned
+`deploy.env`. Those Cloud, Worker, Search, GoTrue, Admin, and Backup builds must be compatible.
+The workflow sets `APPFLOWY_BACKUP_PROFILE=backup`, resolves immutable core and Backup image
+digests, and installs the root Compose deployment with `docker-compose.backup.yml`. The runtime
+harness writes that profile into the isolated installation's `.env` so ordinary Compose
+redeployment keeps Backup enabled. An unavailable image or missing Backup capability fails this
+workflow; it is separate from the standard **Deployment tests** check.
+
+The dedicated workflow runs the core application and browser journeys plus the production Backup
+process, public Admin API, and restore coordinator. Its additional checks are implemented in
+[ci/backup_smoke.py](../ci/backup_smoke.py):
 
 - Discover a ready runner with online backup, schedules, export, and ZIP restore capabilities.
 - Dispatch a real one-shot schedule, verify its one-hour retention and expiry metadata, and remove
@@ -142,8 +155,9 @@ changing any recorded deployment input requires a new lock. Rendered secrets rem
 
 Compose and Swarm do not explicitly configure Redis AOF or a named Redis data volume. Helm retains its existing chart-specific Redis configuration. CI checks application recovery after service replacement, but does not require a Redis marker to survive or claim that Redis-backed queues and pending work are durable.
 
-Each run uploads an image lock and separate sanitized evidence for Compose, Compose Backup, Swarm,
-and Helm. Review the application checks, browser results, recovery results, running-image evidence,
+The standard workflow uploads an image lock and separate sanitized evidence for Compose, Swarm,
+and Helm. The Backup workflow uploads its own image lock and Compose Backup evidence. Review the
+application checks, browser results, recovery results, running-image evidence,
 and diagnostic logs in those artifacts. `core-acceptance.json` records the completed functional and
 recovery checks; `backup-results.json` records the additional Backup checks;
 `backup-restore-<job>.json` records database identity, writer lifecycle, and hashed storage selections;
