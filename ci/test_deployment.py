@@ -108,6 +108,26 @@ class RuntimeSafetyTests(unittest.TestCase):
                 self.assertFalse((instance.runtime / 'helm-overrides.yaml').exists())
                 self.assertFalse((instance.runtime / 'credentials.json').exists())
 
+    def test_ci_server_tag_preserves_helm_source_validation(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        documents = self.helm_source_documents()
+        cloud = self.payload['services']['appflowy_cloud']
+        cloud['configured_source'] = cloud['source']
+        cloud['source'] = 'appflowy_cloud:0.19.3_test'
+        self.lock.write_text(json.dumps(self.payload))
+        instance = self.deployment('helm')
+        with patch.object(instance, 'run', return_value=yaml.safe_dump_all(documents)):
+            instance.validate_helm_source_images()
+
+        name = HELM_WORKLOADS['appflowy_cloud'].split('/', 1)[1]
+        document = next(item for item in documents if item['metadata']['name'] == name)
+        for bad_image in ('wrong.example/appflowy_cloud:latest', 'appflowy_cloud:wrong-version'):
+            with self.subTest(image=bad_image):
+                document['spec']['template']['spec']['containers'][0]['image'] = bad_image
+                with patch.object(instance, 'run', return_value=yaml.safe_dump_all(documents)):
+                    with self.assertRaisesRegex(RuntimeError, 'chart source image differs'):
+                        instance.validate_helm_source_images()
+
     def test_helm_and_kubectl_receive_the_runner_kubeconfig(self):
         self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
         self.lock.write_text(json.dumps(self.payload))

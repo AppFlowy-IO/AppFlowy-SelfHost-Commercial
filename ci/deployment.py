@@ -214,7 +214,8 @@ class Deployment:
             if len(containers) != 1:
                 raise RuntimeError(f'{service}: expected exactly one main container in {workload}')
             actual = containers[0]['image']
-            expected = self.helm_images[service]['source']
+            record = self.helm_images[service]
+            expected = record.get('configured_source', record['source'])
             if normalized_image_reference(actual) != normalized_image_reference(expected):
                 raise RuntimeError(f'{service}: chart source image differs from image lock source: '
                                    f'{actual} != {expected}')

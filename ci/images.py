@@ -16,6 +16,7 @@ from configuration import check_compose, isolated_source, source_fingerprint
 ROOT = Path(__file__).resolve().parents[1]
 CORE = {'nginx', 'postgres', 'redis', 'minio', 'gotrue', 'appflowy_cloud',
         'appflowy_worker', 'appflowy_search', 'appflowy_web', 'admin_frontend'}
+SERVER = {'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_backup'}
 
 
 def clean_environment():
@@ -106,12 +107,15 @@ def chart_redis_image():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search and optional Backup')
     parser.add_argument('--backup', action='store_true', help='Resolve the optional Backup image too')
     parser.add_argument('--backup-image', help='Explicit Backup build to qualify; recorded in the image lock')
     parser.add_argument('--local', action='store_true', help='Pin already installed native images for isolated local qualification')
     parser.add_argument('--helm-redis', action='store_true',
                         help="Append the chart's Redis image lock in the Helm job; never replace it with Compose Redis")
     args = parser.parse_args()
+    if args.server_tag and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}', args.server_tag):
+        parser.error('--server-tag must be a valid Docker image tag')
     if args.helm_redis:
         lock = json.loads(args.output.read_text())
         lock['helm_services'] = {'redis': resolve_image('helm Redis', chart_redis_image())}
@@ -130,15 +134,24 @@ def main():
         raise RuntimeError('Core services changed; update the runtime acceptance coverage explicitly')
     records = {}
     resolver = resolve_local_image if args.local else resolve_image
+
+    def resolve_selected(name, configured_source, explicit_source=None):
+        selected = explicit_source or (repository(configured_source) + ':' + args.server_tag
+            if args.server_tag and name in SERVER else configured_source)
+        record = resolver(name, selected)
+        if selected != configured_source:
+            record['configured_source'] = configured_source
+        return record
+
     for name in sorted(CORE):
-        records[name] = resolver(name, config['services'][name]['image'])
+        records[name] = resolve_selected(name, config['services'][name]['image'])
     lock = {'platform': 'linux/amd64', 'services': records,
             'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest(),
             'source_sha256': source_fingerprint(),
             'scope': 'Core deployment; paid external AI providers, SMTP, TLS, Redis queue persistence, upgrades and HA are not tested'}
     if args.backup:
-        lock['backup_services'] = {'appflowy_backup': resolver('appflowy_backup',
-            args.backup_image or backup_config['services']['appflowy_backup']['image'])}
+        lock['backup_services'] = {'appflowy_backup': resolve_selected('appflowy_backup',
+            backup_config['services']['appflowy_backup']['image'], args.backup_image)}
     elif args.backup_image:
         raise RuntimeError('--backup-image requires --backup')
     if args.local:

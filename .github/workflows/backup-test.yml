@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       backup_image:
-        description: Backup image to qualify with the core images in deploy.env (matching tag or digest)
+        description: Backup image to qualify with the CI server images (matching tag or digest)
         type: string
         required: true
-        default: appflowyinc/appflowy_backup:latest
+        default: appflowyinc/appflowy_backup:0.19.3_test
 
 permissions:
   contents: read
@@ -25,8 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
+      SERVER_IMAGE_TAG: 0.19.3_test
       APPFLOWY_BACKUP_PROFILE: backup
-      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:latest' }}
+      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.19.3_test' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,6 +48,7 @@ jobs:
       - name: Resolve exact core and Backup image digests
         run: >-
           python ci/images.py ${APPFLOWY_BACKUP_PROFILE:+--backup}
+          --server-tag "$SERVER_IMAGE_TAG"
           --backup-image "$BACKUP_IMAGE" --output ci-artifacts/compose-backup/image-lock.json
       - name: Start the deployment with Backup enabled
         run: >-
