@@ -91,6 +91,37 @@ class BackupSmokeTests(unittest.TestCase):
         self.suite.record.assert_called_once_with(
             'backup_capabilities', passed=False, reason='missing_api', http_status=404)
 
+    def test_readiness_timeout_identifies_missing_restore_without_exposing_response_text(self):
+        self.suite.request = Mock(return_value={
+            'runner_ready': True, 'supports_online_backup': True,
+            'supports_archive_restore': True, 'supports_schedules': True,
+            'supported_operations': ['recovery', 'export', 'private-response'],
+            'creation_blockers': ['private-password'], 'private': 'private-token',
+        })
+        with patch('backup_smoke.time.monotonic', side_effect=[0, 1, 4]), patch('backup_smoke.time.sleep'):
+            with self.assertRaisesRegex(RuntimeError, 'Backup capabilities exceeded'):
+                self.suite.ready()
+        self.suite.record.assert_called_once_with(
+            'backup_readiness', state='waiting', missing_capabilities=[],
+            missing_operations=['restore'], creation_blocker_count=1)
+
+    def test_readiness_recovers_from_outage_and_incomplete_capabilities(self):
+        ready = {'runner_ready': True, 'supports_online_backup': True,
+                 'supports_archive_restore': True, 'supports_schedules': True,
+                 'supported_operations': ['recovery', 'export', 'restore'],
+                 'creation_blockers': [], 'retention_hours': 24, 'recovery_retention_hours': 720}
+        self.suite.request = Mock(side_effect=[RequestFailure(503),
+            {**ready, 'runner_ready': False}, ready])
+        with patch('backup_smoke.time.sleep'):
+            self.suite.ready()
+        self.assertEqual(self.suite.record.call_count, 3)
+        self.suite.record.assert_any_call('backup_readiness', state='waiting', http_status=503)
+        self.suite.record.assert_any_call(
+            'backup_readiness', state='waiting', missing_capabilities=['runner_ready'],
+            missing_operations=[], creation_blocker_count=0)
+        self.suite.record.assert_called_with(
+            'backup_capabilities', passed=True, retention_hours=24, recovery_retention_hours=720)
+
     def test_poll_only_tolerates_restore_outage_and_fails_terminal_jobs(self):
         complete = {'status': 'completed', 'phase': 'completed'}
         self.suite.request = Mock(side_effect=[RequestFailure(503), complete])

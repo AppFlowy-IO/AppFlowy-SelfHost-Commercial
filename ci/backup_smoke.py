@@ -173,11 +173,19 @@ class BackupSmoke:
             time.sleep(1)
 
     def ready(self):
+        last_pending = None
+        def pending(**state):
+            nonlocal last_pending
+            if state != last_pending:
+                self.record('backup_readiness', state='waiting', **state)
+                last_pending = state
+
         def probe():
             try:
                 caps = self.request('GET', API + '/capabilities')
             except RequestFailure as exc:
                 if exc.status in (None, 502, 503, 504):
+                    pending(http_status=exc.status)
                     return None
                 if exc.status == 404:
                     self.record('backup_capabilities', passed=False, reason='missing_api', http_status=404)
@@ -187,10 +195,16 @@ class BackupSmoke:
                     ) from None
                 raise
             needed = {'recovery', 'export', 'restore'}
-            if (caps.get('runner_ready') and not caps.get('creation_blockers')
-                    and caps.get('supports_online_backup') and caps.get('supports_archive_restore')
-                    and caps.get('supports_schedules') and needed.issubset(caps.get('supported_operations', []))):
+            flags = ('runner_ready', 'supports_online_backup', 'supports_archive_restore', 'supports_schedules')
+            missing_flags = [flag for flag in flags if not caps.get(flag)]
+            missing_operations = sorted(needed - set(caps.get('supported_operations', [])))
+            blockers = len(caps.get('creation_blockers') or [])
+            if not missing_flags and not missing_operations and not blockers:
                 return caps
+            # Report only known capability names and counts. Do not copy arbitrary
+            # response fields or blocker text into logs containing private deployment data.
+            pending(missing_capabilities=missing_flags, missing_operations=missing_operations,
+                    creation_blocker_count=blockers)
         caps = self.poll('Backup capabilities', probe)
         self.record('backup_capabilities', passed=True, retention_hours=caps['retention_hours'],
                     recovery_retention_hours=caps['recovery_retention_hours'])

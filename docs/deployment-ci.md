@@ -102,7 +102,10 @@ so restore can create new index generations. With Backup enabled, Search prepare
 cache ownership before starting as the same UID (`999`) as Backup. LMDB files retain their
 private permissions; their common owner can read the data and write the reader lockfile.
 
-`backup-results.json` records completed checks and explicit limits. A successful result checks
+`backup-results.json` records completed checks, readiness transitions, and explicit limits.
+While readiness is pending, it identifies missing capabilities and operations, the blocker count,
+or a temporary HTTP failure without copying arbitrary API response text into logs.
+A successful result checks
 document marker bytes, not a decoded CRDT-text equivalence proof; it does not prove a concurrent
 HTTP/WebSocket edit fell inside the capture interval. Embedding inclusion is checked without
 calling an AI provider. The schedule's expiry timestamp and manual artifact deletion are tested,
