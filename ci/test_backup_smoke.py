@@ -83,6 +83,14 @@ class BackupSmokeTests(unittest.TestCase):
         self.assertEqual(payload['source_snapshot_id'], 'source')
         self.assertEqual(payload['content_mode'], 'empty')
 
+    def test_missing_backup_api_fails_with_compatible_image_guidance(self):
+        self.suite.request = Mock(side_effect=RequestFailure(404))
+        with self.assertRaisesRegex(RuntimeError, 'HTTP 404.*compatible Cloud'):
+            self.suite.ready()
+        self.suite.request.assert_called_once_with('GET', API + '/capabilities')
+        self.suite.record.assert_called_once_with(
+            'backup_capabilities', passed=False, reason='missing_api', http_status=404)
+
     def test_poll_only_tolerates_restore_outage_and_fails_terminal_jobs(self):
         complete = {'status': 'completed', 'phase': 'completed'}
         self.suite.request = Mock(side_effect=[RequestFailure(503), complete])

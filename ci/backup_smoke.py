@@ -176,6 +176,12 @@ class BackupSmoke:
             except RequestFailure as exc:
                 if exc.status in (None, 502, 503, 504):
                     return None
+                if exc.status == 404:
+                    self.record('backup_capabilities', passed=False, reason='missing_api', http_status=404)
+                    raise RuntimeError(
+                        'Cloud returned HTTP 404 for GET ' + API + '/capabilities; '
+                        'select compatible Cloud, Worker, Search, GoTrue and Backup builds that include Backup support'
+                    ) from None
                 raise
             needed = {'recovery', 'export', 'restore'}
             if (caps.get('runner_ready') and not caps.get('creation_blockers')

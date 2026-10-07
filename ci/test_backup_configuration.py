@@ -1,6 +1,7 @@
 """Backup source isolation, tool compatibility and installed Compose contracts."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -143,8 +144,12 @@ class BackupConfigurationTests(unittest.TestCase):
         def run(*args, **kwargs):
             calls.append(args)
             return json.dumps({'services': services}) if '--format' in args else ''
-        with patch('deployment.check_compose', return_value='2.30.0'), patch.object(instance, 'run', side_effect=run):
-            instance.render()
+        previous_umask = os.umask(0o077)
+        try:
+            with patch('deployment.check_compose', return_value='2.30.0'), patch.object(instance, 'run', side_effect=run):
+                instance.render()
+        finally:
+            os.umask(previous_umask)
         self.assertIn(str(instance.source / 'docker-compose.backup.yml'), instance.compose)
         self.assertIn(str(instance.source / '.env'), instance.compose)
         self.assertNotIn(str(instance.runtime / 'compose.yml'), instance.compose)
@@ -154,6 +159,17 @@ class BackupConfigurationTests(unittest.TestCase):
         self.assertIn('APPFLOWY_BACKUP_PROFILE=backup', installed)
         self.assertIn('COMPOSE_FILE=docker-compose.yml:docker-compose.backup.yml:ci.override.yml', installed)
         self.assertEqual((instance.source / '.env').stat().st_mode & 0o777, 0o600)
+        self.assertEqual(instance.runtime.stat().st_mode & 0o777, 0o700)
+        deployment_group = (instance.source / '.env').stat().st_gid
+        for name in (*SOURCE_FILES, 'ci.override.yml'):
+            path = instance.source / name
+            self.assertEqual(path.stat().st_gid, deployment_group)
+            self.assertTrue(path.stat().st_mode & 0o040, name + ' must be group-readable')
+            for directory in path.parents:
+                self.assertEqual(directory.stat().st_gid, deployment_group)
+                self.assertEqual(directory.stat().st_mode & 0o050, 0o050)
+                if directory == instance.source:
+                    break
         override = yaml.safe_load((instance.source / 'ci.override.yml').read_text())['services']
         self.assertEqual(override['appflowy_backup']['image'], instance.images['appflowy_backup']['image'])
         for service in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):

@@ -22,7 +22,7 @@ import uuid
 import yaml
 
 from images import CORE, ROOT, clean_environment, repository
-from configuration import check_compose, isolated_source, source_fingerprint
+from configuration import SOURCE_FILES, check_compose, isolated_source, source_fingerprint
 
 NAME = 'appflowy-ci'
 NAMESPACE = NAME
@@ -219,6 +219,20 @@ class Deployment:
                 raise RuntimeError(f'{service}: chart source image differs from image lock source: '
                                    f'{actual} != {expected}')
 
+    def write_backup_override(self, overrides):
+        private_write(self.source / 'ci.override.yml', yaml.safe_dump(overrides, sort_keys=False))
+        # Bootstrap adds the deployment owner's group before dropping to postgres.
+        # Its Compose subprocess needs to traverse this mount and read public source
+        # plus CI overrides, even under umask 077. Credentials stay owner-only; bootstrap
+        # copies .env into its private volume before dropping privileges.
+        for name in (*SOURCE_FILES, 'ci.override.yml'):
+            path = self.source / name
+            path.chmod(path.stat().st_mode | 0o040)
+            for directory in path.parents:
+                directory.chmod(directory.stat().st_mode | 0o050)
+                if directory == self.source:
+                    break
+
     def render(self):
         check_compose(clean_environment())
         if self.mode == 'helm':
@@ -324,7 +338,7 @@ class Deployment:
                     overlay['environment'] = {'APPFLOWY_BACKUP_COMPOSE_WRITERS': json.dumps(
                         ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search'])}
                 overrides['services'][name] = overlay
-            private_write(self.source / 'ci.override.yml', yaml.safe_dump(overrides, sort_keys=False))
+            self.write_backup_override(overrides)
             private_write(self.source / '.env', '\n'.join(lines) + '\n')
             self.run(*self.compose, 'config', '--quiet', env=clean_environment())
         private_write(self.runtime / 'metadata.json', json.dumps({'base_url': self.base_url, 'stack_name': self.name,

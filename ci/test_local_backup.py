@@ -167,6 +167,8 @@ class LocalBackupSafetyTests(unittest.TestCase):
         self.assertEqual((instance.source / 'docker-compose.yml').read_bytes(), (ROOT / 'docker-compose.yml').read_bytes())
         self.assertIn(str(instance.source / '.env'), instance.compose)
         self.assertNotIn(str(instance.runtime / 'compose.yml'), instance.compose)
+        self.assertEqual((instance.source / 'ci.override.yml').stat().st_mode & 0o777, 0o640)
+        self.assertEqual((instance.source / '.env').stat().st_mode & 0o777, 0o600)
 
     def test_cleanup_uses_original_installed_sources_when_checkout_or_external_lock_changes(self):
         instance = self.rendered()

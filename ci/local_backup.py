@@ -139,7 +139,7 @@ class LocalBackupDeployment(Deployment):
             if kind == 'networks':
                 names.add('default')
             override[kind] = {name: {'labels': {OWNER_LABEL: self.owner['token']}} for name in names}
-        private_write(path, yaml.safe_dump(override, sort_keys=False))
+        self.write_backup_override(override)
         # Source port interpolation avoids Compose's list merge appending a
         # second public binding when a loopback binding is added via an override.
         env_path = self.source / '.env'

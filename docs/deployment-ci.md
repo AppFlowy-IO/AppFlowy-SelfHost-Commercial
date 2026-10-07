@@ -81,6 +81,11 @@ Search-directory selections remain effective after recreation. A flattened resol
 cannot provide that persistence contract. All profiles use fresh disposable data; existing local
 deployment state is never a test input.
 
+Backup bootstrap adds the deployment owner's group before dropping to `postgres`. The harness
+grants that group read access to the versioned source and CI overrides, and traversal of their
+directories, including when the caller uses `umask 077`. The outer runtime directory stays `0700`
+and `.env` stays `0600`; bootstrap copies its settings privately before dropping privileges.
+
 `backup-results.json` records completed checks and explicit limits. A successful result checks
 document marker bytes, not a decoded CRDT-text equivalence proof; it does not prove a concurrent
 HTTP/WebSocket edit fell inside the capture interval. Embedding inclusion is checked without
