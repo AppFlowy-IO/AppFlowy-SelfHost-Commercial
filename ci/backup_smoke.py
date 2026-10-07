@@ -28,6 +28,9 @@ import zipfile
 API = '/api/admin/server-snapshots'
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 DEFAULT_TOKEN = object()
+# AppError's Actix response uses HTTP 200 for these authorization failures:
+# NotLoggedIn, NotEnoughPermissions, and UserUnAuthorized.
+AUTH_DENIAL_CODES = {1011, 1012, 1024}
 
 
 class RequestFailure(RuntimeError):
@@ -194,11 +197,26 @@ class BackupSmoke:
 
     def denied(self, path, token):
         try:
-            self.request('GET', path, token=token, binary=True)
+            data = self.request('GET', path, token=token, binary=True)
         except RequestFailure as exc:
             if exc.status in (401, 403):
+                self.record('backup_access_denied', passed=True, http_status=exc.status,
+                            authenticated=bool(token))
                 return
             raise
+        # Read the denial envelope even for download endpoints. HTTP 200 alone
+        # is not authorization success, but unrelated errors or returned data
+        # must never count as a successful access-control check.
+        try:
+            error = json.loads(data)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            error = None
+        if (isinstance(error, dict) and type(error.get('code')) is int
+                and error['code'] in AUTH_DENIAL_CODES and error.get('data') is None
+                and set(error).issubset({'code', 'message', 'data'})):
+            self.record('backup_access_denied', passed=True, http_status=200,
+                        application_code=error['code'], authenticated=bool(token))
+            return
         raise AssertionError('Private backup endpoint admitted an unauthorized caller')
 
     def wait_job(self, snapshot_id, restore=False, status='completed'):

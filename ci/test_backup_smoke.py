@@ -187,6 +187,26 @@ class BackupSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'unauthorized'):
             self.suite.denied(API + '/job/download', None)
 
+    def test_denial_accepts_permission_envelopes_but_never_data_or_unrelated_errors(self):
+        for code in (1011, 1012, 1024):
+            body = json.dumps({'code': code, 'message': 'Access denied'}).encode()
+            self.suite.opener.open = Mock(return_value=contextlib.closing(io.BytesIO(body)))
+            with self.subTest(code=code):
+                self.suite.denied(API + '/capabilities', 'ordinary-token')
+                self.suite.record.assert_called_with(
+                    'backup_access_denied', passed=True, http_status=200,
+                    application_code=code, authenticated=True)
+        for body in (b'PK private archive', b'\xff', b'not JSON',
+                     b'{"code":0,"data":{"private":true}}',
+                     b'{"code":1012,"data":{"private":true}}',
+                     b'{"code":1012,"private":"data"}',
+                     b'{"code":"1012","message":"Access denied"}',
+                     b'{"code":1005,"message":"Database error"}',
+                     b'{"code":-2,"message":"Not found"}'):
+            self.suite.opener.open = Mock(return_value=contextlib.closing(io.BytesIO(body)))
+            with self.subTest(body=body), self.assertRaisesRegex(AssertionError, 'unauthorized'):
+                self.suite.denied(API + '/job/download', None)
+
     def test_restore_observation_surrounds_real_request_and_readback(self):
         events = []
         self.suite.observe = lambda event, snapshot: events.append((event, snapshot))
