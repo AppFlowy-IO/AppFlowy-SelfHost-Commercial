@@ -42,7 +42,11 @@ Tests fail on timeouts and failed assertions. Registry download failures also fa
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release
 branch pushes. Automatic runs use `appflowyinc/appflowy_backup:latest`; manual runs can use the
 `backup_image` input to select a matching release tag or digest. The core images still come from
-the versioned `deploy.env`. Those Cloud, Worker, Search, GoTrue, Admin, and Backup builds must be compatible.
+the versioned Compose configuration and default to `latest`. Each run resolves those current tags
+to digests for reproducibility; there is no separate pinned release set for Backup CI. Cloud owns
+the Backup API and database migrations, so its `latest` image must include Backup support too.
+The image publishing process must keep the Cloud and Backup `latest` builds compatible. These
+deployment workflows consume published images; they do not build or publish replacement images.
 The workflow sets `APPFLOWY_BACKUP_PROFILE=backup`, resolves immutable core and Backup image
 digests, and installs the root Compose deployment with `docker-compose.backup.yml`. The runtime
 harness writes that profile into the isolated installation's `.env` so ordinary Compose
