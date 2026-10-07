@@ -1,0 +1,75 @@
+# Selected automatically when APPFLOWY_BACKUP_PROFILE=backup in the root .env.
+# Backup reuses the installation's database and object-storage connection settings.
+x-backup-artifact-environment: &backup-artifact-environment
+  APPFLOWY_BACKUP_BUCKET: ${APPFLOWY_BACKUP_BUCKET:-${APPFLOWY_S3_BUCKET}-backups}
+
+services:
+  appflowy_cloud:
+    environment:
+      <<: *backup-artifact-environment
+    healthcheck:
+      test: "curl --fail http://127.0.0.1:8000/api/ready || exit 1"
+
+  appflowy_search:
+    # LMDB creates private 0600 files, including the writable reader lockfile.
+    # Share Backup's postgres UID, migrating the cache before Search starts.
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        test -d /var/lib/appflowy/keyword_index
+        test ! -L /var/lib/appflowy/keyword_index
+        chown -R --no-dereference 999:999 /var/lib/appflowy/keyword_index
+        exec setpriv --reuid=999 --regid=999 --clear-groups "$$@"
+      - --
+    command: [appflowy_search]
+
+  appflowy_backup:
+    # Bootstrap prepares private state and socket access; application processes then drop to postgres.
+    user: root
+    # Restore creates a new index generation as postgres. A fresh named volume is root-owned;
+    # grant that service ownership of the mount root without changing existing index files.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        test -d /var/lib/appflowy/keyword_index
+        test ! -L /var/lib/appflowy/keyword_index
+        chown postgres:postgres /var/lib/appflowy/keyword_index
+        chmod u+rwx /var/lib/appflowy/keyword_index
+        exec appflowy_backup "$$@"
+      - --
+    command: [bootstrap]
+    stop_grace_period: 1500s
+    environment:
+      <<: *backup-artifact-environment
+      RUST_LOG: ${RUST_LOG:-info}
+      # Restore discovers this path from Docker metadata, before bootstrap defaults are visible.
+      APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
+      APPFLOWY_DATABASE_URL: ${APPFLOWY_DATABASE_URL}
+      APPFLOWY_S3_USE_MINIO: ${APPFLOWY_S3_USE_MINIO}
+      APPFLOWY_S3_MINIO_URL: ${APPFLOWY_S3_MINIO_URL}
+      APPFLOWY_S3_ACCESS_KEY: ${APPFLOWY_S3_ACCESS_KEY}
+      APPFLOWY_S3_SECRET_KEY: ${APPFLOWY_S3_SECRET_KEY}
+      APPFLOWY_S3_REGION: ${APPFLOWY_S3_REGION}
+    volumes:
+      - backup_work:/var/lib/appflowy-backup
+      - backup_coordinator_socket:/var/run/appflowy-backup
+      - .:/appflowy-deployment:ro
+      # Created automatically; keeps restored selections across ordinary Compose recreations.
+      - ./backup-ops/runtime:/appflowy-deployment/backup-ops/runtime
+      # LMDB capture needs its reader lockfile, so this mount remains writable.
+      - keyword_index_data:/var/lib/appflowy/keyword_index
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      appflowy_cloud:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  backup_work:
+  backup_coordinator_socket:

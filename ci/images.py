@@ -8,12 +8,15 @@ from pathlib import Path
 import re
 import subprocess
 import time
+import tempfile
 
 import yaml
+from configuration import check_compose, isolated_source, source_fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = {'nginx', 'postgres', 'redis', 'minio', 'gotrue', 'appflowy_cloud',
         'appflowy_worker', 'appflowy_search', 'appflowy_web', 'admin_frontend'}
+SERVER = {'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_backup'}
 
 
 def clean_environment():
@@ -71,6 +74,23 @@ def resolve_image(name, source):
             'config_digest': manifest['config']['digest'], 'platform': 'linux/amd64'}
 
 
+def resolve_local_image(name, source):
+    """Pin an already built native image by immutable configuration ID; never pull implicitly."""
+    records = json.loads(command('docker', 'image', 'inspect', source))
+    if len(records) != 1:
+        raise RuntimeError(name + ': expected one local image')
+    value = records[0]
+    platform = command('docker', 'info', '--format', '{{.OSType}}/{{.Architecture}}').strip()
+    platform = platform.replace('aarch64', 'arm64').replace('x86_64', 'amd64')
+    if value['Os'] + '/' + value['Architecture'] != platform:
+        raise RuntimeError(name + ': local image does not match the Docker engine platform')
+    digest = value['Id']
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+        raise RuntimeError(name + ': invalid local image identity')
+    print(name + ': ' + digest, flush=True)
+    return {'source': source, 'image': digest, 'config_digest': digest, 'platform': platform}
+
+
 def chart_redis_image():
     rendered = command('helm', 'template', 'appflowy-ci', str(ROOT / 'helm/appflowy-cloud'),
                        '--namespace', 'appflowy-ci', '-f', str(ROOT / 'ci/helm-values.yaml'))
@@ -87,24 +107,56 @@ def chart_redis_image():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search and optional Backup')
+    parser.add_argument('--backup', action='store_true', help='Resolve the optional Backup image too')
+    parser.add_argument('--backup-image', help='Explicit Backup build to qualify; recorded in the image lock')
+    parser.add_argument('--local', action='store_true', help='Pin already installed native images for isolated local qualification')
     parser.add_argument('--helm-redis', action='store_true',
                         help="Append the chart's Redis image lock in the Helm job; never replace it with Compose Redis")
     args = parser.parse_args()
+    if args.server_tag and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}', args.server_tag):
+        parser.error('--server-tag must be a valid Docker image tag')
     if args.helm_redis:
         lock = json.loads(args.output.read_text())
         lock['helm_services'] = {'redis': resolve_image('helm Redis', chart_redis_image())}
         args.output.write_text(json.dumps(lock, indent=2) + '\n')
         return
-    config = json.loads(command('docker', 'compose', '--env-file', str(ROOT / 'deploy.env'),
-                                '-f', str(ROOT / 'docker-compose.yml'), 'config', '--format', 'json'))
+    check_compose(clean_environment())
+    with tempfile.TemporaryDirectory(prefix='appflowy-image-source-') as directory:
+        source = isolated_source(Path(directory))
+        config = json.loads(command('docker', 'compose', '--env-file', str(source / 'deploy.env'),
+                                    '-f', str(source / 'docker-compose.yml'), 'config', '--format', 'json'))
+        backup_config = json.loads(command('docker', 'compose', '--env-file', str(source / 'deploy.env'),
+                                    '-f', str(source / 'docker-compose.yml'),
+                                    '-f', str(source / 'docker-compose.backup.yml'), '--profile', 'backup',
+                                    'config', '--format', 'json')) if args.backup else None
     if set(config['services']) - {'ai'} != CORE:
         raise RuntimeError('Core services changed; update the runtime acceptance coverage explicitly')
     records = {}
+    resolver = resolve_local_image if args.local else resolve_image
+
+    def resolve_selected(name, configured_source, explicit_source=None):
+        selected = explicit_source or (repository(configured_source) + ':' + args.server_tag
+            if args.server_tag and name in SERVER else configured_source)
+        record = resolver(name, selected)
+        if selected != configured_source:
+            record['configured_source'] = configured_source
+        return record
+
     for name in sorted(CORE):
-        records[name] = resolve_image(name, config['services'][name]['image'])
+        records[name] = resolve_selected(name, config['services'][name]['image'])
     lock = {'platform': 'linux/amd64', 'services': records,
             'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest(),
+            'source_sha256': source_fingerprint(),
             'scope': 'Core deployment; paid external AI providers, SMTP, TLS, Redis queue persistence, upgrades and HA are not tested'}
+    if args.backup:
+        lock['backup_services'] = {'appflowy_backup': resolve_selected('appflowy_backup',
+            backup_config['services']['appflowy_backup']['image'], args.backup_image)}
+    elif args.backup_image:
+        raise RuntimeError('--backup-image requires --backup')
+    if args.local:
+        lock['platform'] = next(iter(records.values()))['platform']
+        lock['local'] = True
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(lock, indent=2) + '\n')
 

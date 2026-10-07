@@ -41,6 +41,7 @@ spec:
               containerPort: 5001
               protocol: TCP
           env:
+            {{- include "appflowy.backup.redisSelection" . | nindent 12 }}
             # AI Server configuration
             - name: AI_SERVER_PORT
               value: {{ $ai.service.port | quote }}
@@ -79,7 +80,7 @@ spec:
             - name: AI_MINIO_URL
               value: {{ include "appflowy.s3.endpoint" . | quote }}
             - name: APPFLOWY_S3_BUCKET
-              value: {{ include "appflowy.s3.bucket" . | quote }}
+              {{- include "appflowy.backup.bucketSelection" . | nindent 14 }}
             - name: APPFLOWY_S3_REGION
               value: {{ include "appflowy.s3.region" . | quote }}
             - name: APPFLOWY_S3_ACCESS_KEY

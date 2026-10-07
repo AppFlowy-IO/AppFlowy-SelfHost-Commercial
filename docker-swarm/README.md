@@ -6,7 +6,8 @@ The [root docker-compose.yml](../docker-compose.yml) is the source of truth. Thi
 
 ## Deployment files
 
-- [docker-stack.yml](docker-stack.yml) preserves all 11 root services, including AI, with the same application images, environment variables, commands, health checks, ports, and volumes.
+- [docker-stack.yml](docker-stack.yml) preserves the 11 application services, including AI, with the same application images, environment variables, commands, health checks, ports, and volumes.
+- [docker-stack.backup.yml](docker-stack.backup.yml) adds opt-in Backup with the Swarm coordinator and Cloud readiness gate. It starts at zero replicas until the application is ready.
 - [docker-stack.bootstrap.yml](docker-stack.bootstrap.yml) initially scales application services to zero so infrastructure and migrations can start in order. It does not change application settings.
 - `.local/swarm.env` is the operator's private configuration for the direct Docker guide. It is copied from [deploy.env](../deploy.env), edited, and explicitly loaded into the shell before deployment.
 
@@ -16,6 +17,7 @@ The Swarm counterpart makes these explicit compatibility changes:
 
 - Adds legacy Compose `version: '3.8'` and a default overlay network.
 - Removes `depends_on`; Swarm does not implement Compose startup ordering.
+- Keeps the Compose `backup` profile out of the base stack. Checked-in source environment defaults are inlined without expanding variables; private Compose restore selections are excluded. Other required environment-file paths are rebased to the repository root. Unknown optional/raw files and profiles fail generation for explicit review.
 - Converts `restart` to `deploy.restart_policy`, retaining Swarm's default of one replica and using stop-first updates. Omitting an explicit base replica count lets the bootstrap override set zero replicas on older Docker CLIs.
 - Constrains PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
 - Converts Nginx's configuration and certificate mounts to Swarm configs, and its TLS private key mount to a Swarm secret. Source paths are relative to this folder.
@@ -28,7 +30,21 @@ Redis matches the root Compose configuration: the image's default command, with 
 
 The bootstrap override is for initial startup or a planned restart: applying it to a running stack scales application services down. For release upgrades, follow the migration and rollout requirements in the [root deployment instructions](../README.md). A generic Swarm rolling update does not implement that sequence, and the local tests have not validated release upgrades.
 
-Label one designated data node `appflowy.data=true`. Docker's local volumes do not move when services move to another node. Single-replica services have downtime during replacement. Multiple Cloud replicas, shared storage, stateful failover, cross-node networking, and backup restoration require separate validation.
+Label one designated data node `appflowy.data=true`. Docker's local volumes do not move when services move to another node. Single-replica services have downtime during replacement. Multiple Cloud replicas, shared storage, stateful failover, and cross-node networking require separate validation. Backup support uses the opt-in coordinator described below.
+
+## Backup and restore
+
+The opt-in [Backup stack overlay](docker-stack.backup.yml) requires a Backup image containing the Swarm deployment adapter and matching Cloud/Worker/Search images. Its deployment and storage contract is described in [the setup guide](../docs/docker-swarm.md#backup-and-restore). The base stack does not start Backup, even if the Compose `APPFLOWY_BACKUP_PROFILE` setting is enabled.
+
+The adapter supports **one ready manager**, labeled `appflowy.data=true`, with at most one replica per service. Cloud, GoTrue, Worker, and Search must be running before restoration; AI may remain disabled at zero replicas. The supported inventory contains the 11 application/infrastructure services plus Backup. Additional writer services and global services require a reviewed adapter extension.
+
+Online full backups, portable exports, and prepared backup/ZIP restoration use the existing backup engine. Restore saves service identities and specifications, scales every writer service to zero, waits for its tasks to stop, and then uses the shared database activation journal. Service updates use the Docker Engine's version check so a concurrent update cannot be overwritten. Cloud starts behind `/api/ready` validation before the remaining writers resume. The coordinator controls its worker through a private socket, preserving the coordinator while draining Backup's database connections.
+
+Keep the private `backup_work` volume and host runtime directory. The adapter publishes `docker-stack.restore.json` there, containing the selected bucket, Redis database, and Search directory. **Include this file on every subsequent stack deployment.** Ordinary task replacement retains the selection in Swarm's service specification. Omitting the file during redeployment can reconnect the application to the original resources.
+
+Do not redeploy, scale, update, remove, or replace services during restoration. An unexpected service identity/specification change stops automatic activation. `swarm-operation.json` records an update whose response may have been lost: the coordinator accepts the exact applied specification at a newer Engine version, or safely repeats the same update against its original version. A conflicting identity, specification, or version remains fenced for operator recovery; retain its journal and investigate rather than deleting the state.
+
+Legacy maintenance-lease capture, multi-node operation, external schedulers, and release migration automation are outside this adapter's supported contract. Unit tests cover service fencing, interrupted updates, configuration drift, and persistent selections. A Backup-enabled Swarm end-to-end acceptance run is still required with the final published image before release; the standard deployment CI lane only exercises the application stack.
 
 ## Optional: maintain source parity
 

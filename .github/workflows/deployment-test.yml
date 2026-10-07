@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SERVER_IMAGE_TAG: 0.19.4_test
+
 concurrency:
   group: deployment-test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -24,6 +27,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r docker-swarm/requirements.txt
+      - name: Check Docker Compose compatibility
+        run: python ci/configuration.py --check-tools
       - name: Check generated Swarm source matches Compose
         run: python docker-swarm/generate.py --check
       - name: Check test isolation and source rendering
@@ -31,7 +36,7 @@ jobs:
           python -m unittest discover -s ci -p 'test_*.py'
           python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
       - name: Resolve exact linux/amd64 image digests once
-        run: python ci/images.py --output ci-artifacts/image-lock.json
+        run: python ci/images.py --server-tag "$SERVER_IMAGE_TAG" --output ci-artifacts/image-lock.json
       - uses: actions/upload-artifact@v4
         with:
           name: deployment-image-lock
@@ -43,13 +48,17 @@ jobs:
     name: Runtime (${{ matrix.deployment }})
     needs: images
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        deployment: [compose, swarm, helm]
+        include:
+          - deployment: compose
+          - deployment: swarm
+          - deployment: helm
     env:
       DEPLOYMENT_MODE: ${{ matrix.deployment }}
+      DEPLOYMENT_NAME: ${{ matrix.deployment }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -78,6 +87,7 @@ jobs:
         run: |
           helm lint helm/appflowy-cloud
           helm lint helm/appflowy-cloud -f ci/helm-values.yaml
+          python -m unittest discover -s helm/appflowy-cloud/tests -p 'test_*.py'
       - name: Resolve the Redis image supplied by the Helm chart
         if: matrix.deployment == 'helm'
         run: python ci/images.py --helm-redis --output ci-artifacts/image-lock.json
@@ -88,33 +98,33 @@ jobs:
         run: >-
           python ci/deployment.py up --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
-          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Assert workflows, browser collaboration, replacement and persistence
         run: >-
           python ci/deployment.py test --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
-          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Register through AppFlowy Web and sign in from a fresh browser
         run: >-
           python ci/deployment.py register --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
-          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Collect sanitized diagnostics
         if: always()
         run: >-
           python ci/deployment.py diagnostics --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
-          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Remove only this runner's test deployment
         if: always()
         run: >-
           python ci/deployment.py cleanup --mode "$DEPLOYMENT_MODE"
           --runtime "$RUNNER_TEMP/appflowy-deployment"
-          --artifacts "ci-artifacts/$DEPLOYMENT_MODE"
+          --artifacts "ci-artifacts/$DEPLOYMENT_NAME"
           --images ci-artifacts/image-lock.json
       - name: Upload sanitized acceptance evidence
         if: always()
@@ -132,12 +142,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require all three runtime deployments
+      - name: Require all three runtime acceptance jobs
         env:
           IMAGES_RESULT: ${{ needs.images.result }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
         run: |
           test "$IMAGES_RESULT" = success
           test "$RUNTIME_RESULT" = success
-          echo 'Compose, single-node Swarm, and Helm runtime acceptance passed.'
+          echo 'Compose, single-node Swarm, and Helm runtime acceptance passed with Backup disabled.'
           echo 'External AI, semantic search, SMTP, TLS, Redis queue persistence, upgrades and multi-node/HA are outside this check.'
