@@ -26,7 +26,7 @@ spec:
       {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml ($admin.podSecurityContext | default .Values.podSecurityContext) | nindent 8 }}
       containers:
         - name: admin-frontend
           securityContext:
@@ -45,7 +45,7 @@ spec:
               value: "0.0.0.0"
             # Next.js admin frontend uses APPFLOWY_* envs; Rust admin frontend uses ADMIN_FRONTEND_*.
             - name: APPFLOWY_GOTRUE_BASE_URL
-              value: {{ include "appflowy.gotrue.externalUrl" . | quote }}
+              value: {{ include "appflowy.gotrue.internalUrl" . | quote }}
             - name: APPFLOWY_BASE_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
             {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}

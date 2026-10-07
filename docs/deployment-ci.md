@@ -1,0 +1,53 @@
+# Deployment CI
+
+[Deployment integration](../.github/workflows/deployment-test.yml) runs on pull requests, pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions.
+
+Use **Deployment tests** as the required pull-request status check. It succeeds only when image preparation and all three runtime jobs succeed; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check. Adding the workflow does not configure repository branch protection automatically.
+
+## What a passing run verifies
+
+Each job starts a fresh installation on its own disposable GitHub-hosted Linux runner:
+
+| Job | Deployment under test |
+| --- | --- |
+| Compose | The root `docker-compose.yml`, with isolated test configuration. |
+| Swarm | `docker-swarm/docker-stack.yml` on a single-node Swarm, with staged startup. |
+| Helm | `helm/appflowy-cloud` in a real kind Kubernetes cluster, through the chart's Ingress resources and an ingress controller. |
+
+Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whose published ingress ports hang on IPv6 `localhost`. Requests still pass through Swarm's published ingress port and Nginx. Compose and Helm use `http://localhost`.
+
+The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to all three jobs. It checks the actual running images against the image lock. Before applying those pins, it also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated file has drifted from the root Compose file.
+
+All three runtime jobs must verify:
+
+- Service readiness and the public API, authentication, Web, and Admin routes.
+- Administrator authentication, ordinary-user provisioning, login, and workspace access.
+- Document creation/readback, database creation, and row creation/edit/readback.
+- Attachment upload/download with byte equality, completed Worker HTML import, and keyword search.
+- Two browser clients exchanging document edits, reconnecting after Cloud replacement, and retaining content after reload and in a fresh browser context.
+- Replacement of storage/application services, followed by readback of the same documents, rows, attachments, imports, and search results. New imports and search indexing must also work after recovery.
+- Five checks in the final **Register through AppFlowy Web and sign in from a fresh browser** step: sign-up through Web's form, workspace access, document creation and editing, password sign-in to the same account in a fresh browser context, and readback of that same document's saved title and content. This journey uses neither an API-created user nor injected login tokens.
+
+The default license allows one occupied seat. After every recovery and image check passes, the final step removes only this disposable CI run's verified ordinary-user fixture through the supported Admin API. It checks the recorded creation UUID, generated email, sole workspace ownership, and single membership before deletion, then requires occupied seats to drop from one to zero with the license limit unchanged. The new browser user therefore exercises normal registration within the existing license. Cleanup is restricted to GitHub-hosted CI; it does not delete accounts in the retained local test deployment.
+
+Tests fail on timeouts and failed assertions. Registry download failures also fail the run; the workflow does not silently skip a deployment or a required application check.
+
+## Configuration and evidence
+
+CI starts with `deploy.env`, generates temporary credentials, disables external AI/semantic indexing and SMTP, and applies settings sized for a test runner. It preserves each source deployment's storage configuration. Keyword search remains enabled. Helm's checked-in test settings are in [ci/helm-values.yaml](../ci/helm-values.yaml).
+
+Compose and Swarm do not explicitly configure Redis AOF or a named Redis data volume. Helm retains its existing chart-specific Redis configuration. CI checks application recovery after service replacement, but does not require a Redis marker to survive or claim that Redis-backed queues and pending work are durable.
+
+Each run uploads an image lock and separate sanitized evidence for Compose, Swarm, and Helm. Review the application checks, browser results, recovery results, running-image evidence, and diagnostic logs in those artifacts. `core-acceptance.json` records the completed functional and recovery checks; `fixture-cleanup.json` records the verified fixture removal. The final registration journey produces `registration-results.json` and `registration.log`; available results and logs are collected even if it fails. Final `acceptance.json` is written only after registration passes. Resolved environment files, generated account credentials, and Kubernetes secrets stay in the runner's temporary directory and are not uploaded.
+
+Completed test evidence is saved before collecting optional service diagnostics. Each diagnostic command has a 30-second timeout; failures produce warnings and sanitized details in `diagnostic-failures.json` while collection continues. Single-node Swarm logs come directly from this stack's local task containers, including retained containers from service replacement. A diagnostic failure does not change the result of an application assertion or bypass a failed test step.
+
+Python and Playwright are CI/test dependencies installed by the workflow. They are **not installation requirements** for AppFlowy: the [Swarm setup guide](docker-swarm.md) uses Docker commands directly.
+
+## Scope of the result
+
+A green check means that the tested commit and recorded images passed these core workflows on fresh Linux AMD64 installations. It does not certify every AppFlowy feature or every deployment environment.
+
+External AI providers, semantic search, SMTP delivery, OAuth/SAML/LDAP/SCIM, HTTPS certificates, ARM64, upgrades from existing databases, interrupted imports, Redis queue durability, backup restoration, multi-node Swarm, and high availability require additional tests. The default kind network plugin does not enforce NetworkPolicy, so this job does not certify network isolation. A fresh-install test does not replace the release-specific migration steps in the [deployment instructions](../README.md).
+
+The full Compose and Swarm configurations still contain optional AI; the runtime acceptance profile leaves it disabled. Helm renders its normal templates with a separate CI values overlay. Keep these test overrides explicit when extending coverage so CI cannot hide a broken deployment setting.

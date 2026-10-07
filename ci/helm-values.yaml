@@ -1,0 +1,51 @@
+# Disposable kind cluster profile. CI supplies fresh secrets and locked image
+# digests in a private overlay; this file must not contain real credentials.
+fullnameOverride: appflowy-ci
+global:
+  domain: localhost
+  scheme: http
+  wsScheme: ws
+  s3:
+    presignedUrlEndpoint: http://localhost/minio-api
+ingress:
+  className: nginx
+  certManager:
+    enabled: false
+  tls:
+    enabled: false
+  scim:
+    enabled: false
+gotrue:
+  config:
+    mailerAutoconfirm: true
+appflowy-ai:
+  enabled: false
+appflowy-cloud:
+  config:
+    databaseMaxConnections: 10
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 768Mi}
+appflowy-search:
+  config:
+    backgroundIndexerEnabled: false
+    keywordIndexMapSizeBytes: 268435456
+  persistence:
+    size: 1Gi
+appflowy-worker:
+  config:
+    importTickInterval: 2
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+postgresql:
+  primary:
+    persistence:
+      size: 2Gi
+redis:
+  master:
+    persistence:
+      size: 1Gi
+minio:
+  persistence:
+    size: 1Gi

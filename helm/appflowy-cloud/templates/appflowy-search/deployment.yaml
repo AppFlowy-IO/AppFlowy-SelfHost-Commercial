@@ -1,0 +1,181 @@
+{{- if index .Values "appflowy-search" "enabled" }}
+{{- $search := index .Values "appflowy-search" }}
+{{- if ne (int $search.replicaCount) 1 }}
+{{- fail "appflowy-search.replicaCount must be 1: the keyword index requires a single writer" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appflowy.search.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-search
+spec:
+  replicas: {{ $search.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-search
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-global.yaml") . | sha256sum }}
+        {{- with $search.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "appflowy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: appflowy-search
+    spec:
+      {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "appflowy.waitForCloud" . | nindent 6 }}
+      containers:
+        - name: appflowy-search
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $search.image) | quote }}
+          imagePullPolicy: {{ $search.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $search.service.port }}
+          env:
+            - name: RUST_LOG
+              value: {{ $search.config.rustLog | quote }}
+            - name: APPFLOWY_SEARCH_HOST
+              value: "0.0.0.0"
+            - name: APPFLOWY_SEARCH_PORT
+              value: {{ $search.service.port | quote }}
+            - name: POSTGRES_USER
+              value: {{ include "appflowy.postgresql.username" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.postgresql.secretName" . }}
+                  key: {{ include "appflowy.postgresql.secretKey" . }}
+            - name: APPFLOWY_SEARCH_DATABASE_URL
+              value: {{ include "appflowy.postgresql.url" . | quote }}
+            {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.redis.secretName" . }}
+                  key: {{ include "appflowy.redis.secretKey" . }}
+            {{- end }}
+            - name: APPFLOWY_SEARCH_REDIS_URL
+              value: {{ include "appflowy.redis.url" . | quote }}
+            - name: APPFLOWY_GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.jwt.secretName" . }}
+                  key: {{ include "appflowy.jwt.secretKey" . }}
+            - name: APPFLOWY_S3_USE_MINIO
+              value: {{ .Values.global.s3.useMinio | quote }}
+            - name: APPFLOWY_S3_MINIO_URL
+              value: {{ include "appflowy.s3.endpoint" . | quote }}
+            - name: APPFLOWY_S3_BUCKET
+              value: {{ include "appflowy.s3.bucket" . | quote }}
+            - name: APPFLOWY_S3_REGION
+              value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.accessKey | default "root-user" }}
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
+            - name: APPFLOWY_BACKGROUND_INDEXER_ENABLED
+              value: {{ $search.config.backgroundIndexerEnabled | quote }}
+            - name: APPFLOWY_KEYWORD_SEARCH_ENABLED
+              value: {{ $search.config.keywordSearchEnabled | quote }}
+            - name: APPFLOWY_KEYWORD_WORKER_ENABLED
+              value: {{ $search.config.keywordWorkerEnabled | quote }}
+            - name: APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES
+              value: {{ $search.config.keywordIndexMapSizeBytes | int64 | quote }}
+            - name: APPFLOWY_KEYWORD_INDEX_DIR
+              value: /var/lib/appflowy/keyword_index
+            {{- $ai := index .Values "appflowy-ai" }}
+            {{- if and $ai.enabled $ai.secrets.openaiApiKey }}
+            - name: AI_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.ai.fullname" . }}-secret
+                  key: openai-api-key
+            {{- end }}
+            {{- if and $ai.enabled $ai.secrets.azureOpenaiApiKey }}
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.ai.fullname" . }}-secret
+                  key: azure-openai-api-key
+            - name: AZURE_OPENAI_ENDPOINT
+              value: {{ $ai.secrets.azureOpenaiEndpoint | quote }}
+            - name: AZURE_OPENAI_API_VERSION
+              value: {{ $ai.secrets.azureOpenaiApiVersion | quote }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          resources:
+            {{- toYaml $search.resources | nindent 12 }}
+          volumeMounts:
+            - name: keyword-index
+              mountPath: /var/lib/appflowy/keyword_index
+      volumes:
+        - name: keyword-index
+          {{- if $search.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "appflowy.search.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with $search.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $search.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $search.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if $search.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "appflowy.search.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if $search.persistence.storageClass }}
+  storageClassName: {{ $search.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $search.persistence.size }}
+{{- end }}
+{{- end }}

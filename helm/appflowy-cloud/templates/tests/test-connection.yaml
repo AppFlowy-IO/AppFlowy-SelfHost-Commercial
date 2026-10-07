@@ -88,6 +88,14 @@ spec:
           curl -sf http://{{ include "appflowy.ai.fullname" . }}:{{ index .Values "appflowy-ai" "service" "port" }}/health && echo "AppFlowy AI: OK" || exit 1
     {{- end }}
 
+    {{- if index .Values "appflowy-search" "enabled" }}
+    - name: test-appflowy-search
+      image: curlimages/curl:latest
+      command: ['sh', '-ec']
+      args:
+        - curl --fail --silent http://{{ include "appflowy.search.fullname" . }}:{{ index .Values "appflowy-search" "service" "port" }}/health
+    {{- end }}
+
     {{- if .Values.minio.enabled }}
     - name: test-minio
       image: curlimages/curl:latest

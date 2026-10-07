@@ -1,0 +1,8 @@
+{
+  "name": "appflowy-deployment-tests",
+  "private": true,
+  "description": "Browser acceptance tests for Compose, Swarm, and Helm deployments",
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

@@ -27,6 +27,12 @@ spec:
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" .Values.postgresql.image) | quote }}
+          command: [sh, -ec]
+          args:
+            - until pg_isready -h {{ include "appflowy.postgresql.host" . }} -p {{ include "appflowy.postgresql.port" . }} -U {{ include "appflowy.postgresql.username" . }}; do sleep 2; done
       containers:
         - name: gotrue
           securityContext:

@@ -1,0 +1,28 @@
+# Initial startup only: start infrastructure before application migrations.
+# Apply after docker-stack.yml, then scale services using docs/docker-swarm.md.
+version: '3.8'
+services:
+  nginx:
+    deploy:
+      replicas: 0
+  gotrue:
+    deploy:
+      replicas: 0
+  appflowy_cloud:
+    deploy:
+      replicas: 0
+  admin_frontend:
+    deploy:
+      replicas: 0
+  ai:
+    deploy:
+      replicas: 0
+  appflowy_worker:
+    deploy:
+      replicas: 0
+  appflowy_search:
+    deploy:
+      replicas: 0
+  appflowy_web:
+    deploy:
+      replicas: 0
