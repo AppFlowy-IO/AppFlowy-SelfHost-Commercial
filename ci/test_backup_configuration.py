@@ -104,6 +104,12 @@ class BackupConfigurationTests(unittest.TestCase):
                 if profile:
                     self.assertEqual(config['services']['appflowy_backup']['command'], ['bootstrap'])
                     self.assertIn('backup_work', config['volumes'])
+                    backup = config['services']['appflowy_backup']
+                    work = Path(backup['environment']['APPFLOWY_BACKUP_WORK_DIR'])
+                    self.assertTrue(work.is_absolute())
+                    self.assertTrue(any(volume.get('source') == 'backup_work'
+                                        and Path(volume['target']) in work.parents
+                                        for volume in backup['volumes']))
                 else:
                     self.assertNotIn('backup_work', config['volumes'])
 

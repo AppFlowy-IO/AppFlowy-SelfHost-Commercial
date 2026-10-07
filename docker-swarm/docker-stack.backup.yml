@@ -15,6 +15,7 @@ services:
       APPFLOWY_REDIS_URI: ${APPFLOWY_REDIS_URI}
       APPFLOWY_BACKUP_BUCKET: ${APPFLOWY_BACKUP_BUCKET:?Set the private Backup artifact bucket}
       RUST_LOG: ${RUST_LOG:-info}
+      APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
       APPFLOWY_DATABASE_URL: ${APPFLOWY_DATABASE_URL}
       APPFLOWY_S3_USE_MINIO: ${APPFLOWY_S3_USE_MINIO}
       APPFLOWY_S3_MINIO_URL: ${APPFLOWY_S3_MINIO_URL}
@@ -23,13 +24,27 @@ services:
       APPFLOWY_S3_REGION: ${APPFLOWY_S3_REGION}
       APPFLOWY_BACKUP_DEPLOYMENT: swarm
       APPFLOWY_BACKUP_SWARM_STACK: ${APPFLOWY_SWARM_STACK:-appflowy-swarm}
-      APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
       APPFLOWY_BACKUP_RESTORE_DIRECTORY: /var/lib/appflowy-backup/restore
       APPFLOWY_BACKUP_SWARM_RUNTIME_DIRECTORY: /appflowy-deployment/backup-ops/swarm-runtime
       APPFLOWY_BACKUP_SEARCH_INDEX_DIR: /var/lib/appflowy/keyword_index
       APPFLOWY_BACKUP_SERVICE_SOCKET: /var/run/appflowy-backup/service.sock
       APPFLOWY_BACKUP_COORDINATOR_SOCKET: /var/run/appflowy-backup/coordinator.sock
     user: root
+    entrypoint:
+    - /bin/sh
+    - -ec
+    - 'test -d /var/lib/appflowy/keyword_index
+
+      test ! -L /var/lib/appflowy/keyword_index
+
+      chown postgres:postgres /var/lib/appflowy/keyword_index
+
+      chmod u+rwx /var/lib/appflowy/keyword_index
+
+      exec appflowy_backup "$$@"
+
+      '
+    - --
     command:
     - bootstrap
     stop_grace_period: 1500s

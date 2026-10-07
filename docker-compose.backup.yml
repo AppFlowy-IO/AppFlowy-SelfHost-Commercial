@@ -13,11 +13,25 @@ services:
   appflowy_backup:
     # Bootstrap prepares private state and socket access; application processes then drop to postgres.
     user: root
+    # Restore creates a new index generation as postgres. A fresh named volume is root-owned;
+    # grant that service ownership of the mount root without changing existing index files.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        test -d /var/lib/appflowy/keyword_index
+        test ! -L /var/lib/appflowy/keyword_index
+        chown postgres:postgres /var/lib/appflowy/keyword_index
+        chmod u+rwx /var/lib/appflowy/keyword_index
+        exec appflowy_backup "$$@"
+      - --
     command: [bootstrap]
     stop_grace_period: 1500s
     environment:
       <<: *backup-artifact-environment
       RUST_LOG: ${RUST_LOG:-info}
+      # Restore discovers this path from Docker metadata, before bootstrap defaults are visible.
+      APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
       APPFLOWY_DATABASE_URL: ${APPFLOWY_DATABASE_URL}
       APPFLOWY_S3_USE_MINIO: ${APPFLOWY_S3_USE_MINIO}
       APPFLOWY_S3_MINIO_URL: ${APPFLOWY_S3_MINIO_URL}
