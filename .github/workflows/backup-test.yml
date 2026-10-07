@@ -1,6 +1,9 @@
-name: Backup integration
+name: AppFlowy Backup integration
 
 on:
+  pull_request:
+  push:
+    branches: [main, master, 'release/public/**']
   workflow_dispatch:
     inputs:
       backup_image:
@@ -23,7 +26,7 @@ jobs:
     timeout-minutes: 90
     env:
       APPFLOWY_BACKUP_PROFILE: backup
-      BACKUP_IMAGE: ${{ inputs.backup_image }}
+      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

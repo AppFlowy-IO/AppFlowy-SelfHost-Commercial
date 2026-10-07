@@ -4,9 +4,10 @@
 
 Use **Deployment tests** as the required pull-request status check. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check. Adding the workflow does not configure repository branch protection automatically.
 
-Backup is disabled in the default installation and all three standard CI deployments. The separate,
-manually triggered [Backup integration](../.github/workflows/backup-test.yml) workflow enables it
-with `APPFLOWY_BACKUP_PROFILE=backup`.
+Backup is disabled in the default installation and all three standard CI deployments. The separate
+[AppFlowy Backup integration](../.github/workflows/backup-test.yml) workflow runs on pull requests,
+pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions. Only that
+workflow enables Backup with `APPFLOWY_BACKUP_PROFILE=backup`.
 
 ## What a passing run verifies
 
@@ -38,9 +39,10 @@ Tests fail on timeouts and failed assertions. Registry download failures also fa
 
 ## Backup acceptance
 
-Run **Backup integration** from GitHub Actions to qualify Backup explicitly. Its `backup_image`
-input selects a matching release tag or digest; the core images still come from the versioned
-`deploy.env`. Those Cloud, Worker, Search, GoTrue, Admin, and Backup builds must be compatible.
+The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release
+branch pushes. Automatic runs use `appflowyinc/appflowy_backup:latest`; manual runs can use the
+`backup_image` input to select a matching release tag or digest. The core images still come from
+the versioned `deploy.env`. Those Cloud, Worker, Search, GoTrue, Admin, and Backup builds must be compatible.
 The workflow sets `APPFLOWY_BACKUP_PROFILE=backup`, resolves immutable core and Backup image
 digests, and installs the root Compose deployment with `docker-compose.backup.yml`. The runtime
 harness writes that profile into the isolated installation's `.env` so ordinary Compose
