@@ -53,6 +53,94 @@ Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the 
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
+## Backup and restore
+
+`appflowy-backup.enabled` defaults to `false`. Enabling it requires a Backup image built with the
+Kubernetes adapter and compatible Cloud, Worker, Search and Admin images from the same tested
+release. An older Compose-only Backup image cannot run this configuration. The adapter and chart
+have deterministic unit/render coverage; a complete restore in a live cluster remains a release
+acceptance requirement before production use.
+
+The current Kubernetes adapter supports online backup, schedules, export and ZIP restoration for
+one replica of each chart-managed writer, bundled persistent PostgreSQL, and persistent Search.
+Cloud, Worker, Search, GoTrue and enabled AI are included in the writer inventory. Cloud and GoTrue
+autoscalers must be disabled. Workloads managed by Argo CD, Flux or KEDA are rejected: running a
+second controller during database cutover can restart a writer. Do not run Helm upgrades, rollouts,
+manual scaling or another deployment reconciler while a restore is pending. Legacy physical
+backup maintenance leases are not supported by this adapter.
+
+Backup and Search share the same writable `ReadWriteOnce` keyword-index PVC and fixed node.
+This allows LMDB read transactions to maintain their lockfile during online capture. Do not replace
+that local filesystem with NFS or a generic shared network filesystem. Kubernetes
+[`ReadWriteOnce` permits multiple pods on one node](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes);
+it does not prove that the writer has stopped. The coordinator scales every registered writer to
+zero, waits for terminating pods to exit, checks the inventory again and rejects replacement
+workload identities before changing the database.
+
+Add these settings to your existing release values, selecting your built image and node:
+
+```yaml
+appflowy-backup:
+  enabled: true
+  image:
+    tag: "<tested-backup-version>" # Or set digest: sha256:...
+  nodeName: "<kubernetes.io/hostname label of the Search storage node>"
+  # Kubernetes API endpoint/Service CIDR as seen by your NetworkPolicy provider.
+  apiServerCIDR: "10.96.0.1/32"
+  persistence:
+    size: 50Gi
+  artifacts:
+    bucket: "appflowy-backups"
+```
+
+The API egress rule allows TCP 443 and 6443 to that CIDR. Check whether your cluster's network
+plugin evaluates policy before or after Service address translation and use the actual API
+destination it enforces. The Backup ServiceAccount can read pod/autoscaler inventory, update only
+the named application Deployments, read the named PostgreSQL StatefulSet and manage its runtime
+ConfigMap within the release namespace. It has no Secret-reading, pod-exec or cluster-wide rights.
+PostgreSQL tools run inside Backup using credentials already mounted through Secret references.
+
+Backup and Search run as UID/GID 999. On an existing installation, stop Search and migrate the
+existing index PVC's ownership to that identity before enabling Backup, then allow Search to
+restart. The storage initializer refuses existing files owned by another UID; it does not change
+ownership recursively while a live Search process may be writing. Newly provisioned storage is
+initialized automatically. Size the Backup work PVC for extracted archives and the prepared
+database as well as the durable journals; this is separate from the artifact bucket.
+
+The coordinator writes an independent `<fullname>-backup-runtime` ConfigMap containing only the
+selected source bucket, Redis database number, Search directory and Cloud verification flag.
+Helm does not render, replace or delete it. Application environment entries reference this map,
+so normal pod replacement and subsequent Helm upgrades keep the restored resources. Backup's
+artifact bucket and prefix remain fixed and are shared with Cloud, keeping downloads and imports
+connected to the same archive repository. Keep Backup enabled after a restore; pause schedules in
+Admin instead of disabling the chart feature, which would remove these runtime references.
+
+Restore intent, admitted workload UIDs, the previous selection and each API mutation are written
+to the Backup PVC before cutover. API updates use resource-version comparison; an uncertain or
+conflicting response retains the journal and blocks another mutation. On restart, the coordinator
+acquires its exclusive process lock and recovers that journal before accepting new work. Database
+OID checks distinguish an interrupted switch from a completed commit. Cloud starts alone with
+application writes fenced for migration validation, must pass `/api/ready`, then stops before
+commit. GoTrue and Cloud become ready before the remaining writers resume. Search receives a new
+generation and rebuild plan; captured LMDB files never become an unchecked serving index.
+
+Retain the Backup PVC, runtime ConfigMap, Search PVC and restore journals while recovering an
+interrupted operation. The Backup PVC has Helm's `keep` policy. If a workload UID changed, an API
+mutation conflicted or the original Backup pod is still running, inspect the retained state and
+workload inventory before retrying; deleting a journal is not a recovery procedure.
+
+Read-only chart checks:
+
+```bash
+helm lint helm/appflowy-cloud -f ci/helm-values.yaml
+python3 -m unittest discover -s helm/appflowy-cloud/tests -v
+```
+
+Release acceptance must additionally restore accounts, permissions, documents, database rows and
+attachment bytes in a disposable cluster; recreate all pods and perform a Helm upgrade afterward;
+interrupt the coordinator before and after database commit; and verify rollback/forward recovery,
+a second restore, and Search rebuild with and without captured indexes.
+
 ## Enterprise identity routes (SCIM, LDAP, OIDC, SAML)
 
 SCIM provisioning is served by Cloud at `/scim/v2` and authenticated with a per-connection bearer

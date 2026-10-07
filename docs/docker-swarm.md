@@ -2,7 +2,7 @@
 
 Run a fresh AppFlowy installation on a local, single-node Docker Swarm using Docker commands directly. You need a running Docker Desktop or Docker Engine and a shell; no Python, extra packages, or setup script is required. Run these commands from the repository root.
 
-The [Swarm stack](../docker-swarm/docker-stack.yml) preserves all 11 services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 10 services, leaving optional AI at zero replicas.
+The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 11 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 10 services, leaving optional AI at zero replicas.
 
 ## 1. Prepare your configuration
 
@@ -141,3 +141,49 @@ This removes the stack and retains named volumes. To start again, load the same 
 To enable AI later, configure its provider credentials, set `AI_ENABLED=true`, and follow the staged deployment with `docker service scale appflowy-swarm_ai=1` in the final stage. Reapplying only the base stack starts every service at once, so it is not the staged migration procedure.
 
 See [docker-swarm/README.md](../docker-swarm/README.md) for optional automated tests and parity maintenance, and [deployment CI](deployment-ci.md) for automated Compose, Swarm, and Helm checks. This single-node guide does not establish multi-node operation, high availability, or safe release upgrades.
+
+## Backup and restore
+
+Backup is opt-in and requires an image built with the Swarm deployment adapter. Use matching release images for Backup, Cloud, Worker, and Search. The adapter implementation and unit tests do not replace a full restore acceptance run against the final image; the existing Swarm CI deployment excludes Backup.
+
+Before deploying the stack, prepare a private, persistent host directory. Do not reuse Compose's `backup-ops/runtime` directory:
+
+```bash
+mkdir -p docker-swarm/.local/backup-runtime
+chmod 700 docker-swarm/.local/backup-runtime
+export APPFLOWY_SWARM_STACK=appflowy-swarm
+export APPFLOWY_BACKUP_BUCKET="${APPFLOWY_BACKUP_BUCKET:-${APPFLOWY_S3_BUCKET}-backups}"
+export APPFLOWY_SWARM_BACKUP_RUNTIME_DIR="$(pwd)/docker-swarm/.local/backup-runtime"
+```
+
+Retain these variables in your private shell configuration. Set `APPFLOWY_BACKUP_VERSION` to the matching image tag (or `tag@sha256:...` when pinning its digest). Create the initial empty selection overlay **only if it does not already exist**:
+
+```bash
+if [ ! -e "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json" ]; then
+  (umask 077; printf '%s\n' '{"version":"3.8","services":{}}' > "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json")
+fi
+```
+
+Use all four files in place of the deployment command in step 3, then follow the same staged startup:
+
+```bash
+docker stack deploy \
+  -c docker-swarm/docker-stack.yml \
+  -c docker-swarm/docker-stack.backup.yml \
+  -c "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json" \
+  -c docker-swarm/docker-stack.bootstrap.yml \
+  "$APPFLOWY_SWARM_STACK"
+```
+
+The Backup overlay starts its service at zero replicas. When Cloud, Worker and Search are healthy, start it:
+
+```bash
+docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_backup=1"
+docker service logs --tail 100 "${APPFLOWY_SWARM_STACK}_appflowy_backup"
+```
+
+Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. It manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
+
+Every later deployment must include the persisted selection overlay. Keep the `backup_work` volume and runtime directory across upgrades, task replacement, and planned shutdowns. Bootstrap retains the host directory group; generated selections use mode `0640` so that group can read them for redeployment. The runtime file may contain Redis credentials; protect it like the deployment environment. Follow the release migration order for upgrades and restart Backup only after application readiness. Do not change service definitions or replica counts while a restore is active.
+
+See [the coordinator and recovery contract](../docker-swarm/README.md#backup-and-restore) for interrupted-update behavior and support limits. Legacy maintenance-lease capture and multi-node restore are not supported.

@@ -182,7 +182,7 @@ Redis URL
 redis://:$(REDIS_PASSWORD)@{{ include "appflowy.redis.host" . }}:{{ include "appflowy.redis.port" . }}
 {{- else -}}
 redis://{{ include "appflowy.redis.host" . }}:{{ include "appflowy.redis.port" . }}
-{{- end }}
+{{- end }}{{- if index .Values "appflowy-backup" "enabled" }}/$(APPFLOWY_ACTIVE_REDIS_DATABASE){{- end }}
 {{- end }}
 
 {{/*
@@ -422,7 +422,7 @@ initContainers:
     image: {{ include "appflowy.image" (dict "Values" .Values "image" .Values.gotrue.image) | quote }}
     command: [sh, -ec]
     args:
-      - until curl --fail --silent --max-time 5 {{ include "appflowy.cloud.internalUrl" . }}/api/health >/dev/null; do sleep 2; done
+      - until curl --fail --silent --max-time 5 {{ include "appflowy.cloud.internalUrl" . }}/api/ready >/dev/null; do sleep 2; done
     securityContext:
       {{- toYaml .Values.containerSecurityContext | nindent 6 }}
 {{- end }}
@@ -438,3 +438,33 @@ imagePullSecrets:
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/* Backup owns the runtime ConfigMap outside Helm so upgrades retain restored resources. */}}
+{{- define "appflowy.backup.fullname" -}}
+{{- printf "%s-backup" (include "appflowy.fullname" .) -}}
+{{- end -}}
+{{- define "appflowy.backup.runtime" -}}
+{{- printf "%s-backup-runtime" (include "appflowy.fullname" .) -}}
+{{- end -}}
+{{- define "appflowy.backup.bucket" -}}
+{{- index .Values "appflowy-backup" "artifacts" "bucket" | default (printf "%s-backups" (include "appflowy.s3.bucket" .)) -}}
+{{- end -}}
+{{- define "appflowy.backup.redisSelection" -}}
+{{- if index .Values "appflowy-backup" "enabled" }}
+- name: APPFLOWY_ACTIVE_REDIS_DATABASE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "appflowy.backup.runtime" . }}
+      key: redis-database
+{{- end }}
+{{- end -}}
+{{- define "appflowy.backup.bucketSelection" -}}
+{{- if index .Values "appflowy-backup" "enabled" }}
+valueFrom:
+  configMapKeyRef:
+    name: {{ include "appflowy.backup.runtime" . }}
+    key: bucket
+{{- else }}
+value: {{ include "appflowy.s3.bucket" . | quote }}
+{{- end }}
+{{- end -}}

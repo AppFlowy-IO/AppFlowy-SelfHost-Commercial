@@ -6,6 +6,11 @@ With Docker and Docker Compose **2.30 or newer** installed, first copy the envir
 cp deploy.env .env
 ```
 
+Check the installed plugin with `docker compose version --short`. The configuration uses optional,
+raw environment files for persistent restore selections, which require Compose 2.30 or newer.
+Older plugins can reject the base file even while Backup is disabled. The CI tooling checks this
+minimum before rendering any deployment.
+
 Edit `.env` to set your domain, HTTPS/WebSocket schemes, credentials, and optional email or AI settings. Replace the example passwords and JWT secret before exposing the deployment publicly. Compose [loads the root `.env` automatically](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/), and Git ignores this file.
 
 Compose uses the public `appflowyinc/appflowy_cloud` and `appflowyinc/appflowy_worker` images. Both provide AMD64 and ARM64 builds, and Docker selects the image architecture for your host automatically.
@@ -63,9 +68,15 @@ Compose service names in the Backup service's `APPFLOWY_BACKUP_COMPOSE_WRITERS` 
 setting through a Compose override before using restore.
 
 Backup uses `appflowyinc/appflowy_backup:${APPFLOWY_BACKUP_VERSION:-latest}`. Use the Backup image
-published with your Cloud release and set `APPFLOWY_BACKUP_VERSION` to that release's immutable
+published with your Cloud release and set `APPFLOWY_BACKUP_VERSION` to that release's
 tag when available. Its PostgreSQL tools must support your database version and extensions;
 the bundled deployment uses PostgreSQL 16 with pgvector.
+
+Qualify Cloud, Worker, Search, GoTrue, Admin, and Backup together. A successfully pulled `latest`
+tag does not establish compatibility. For an unreleased build, select its exact image through an
+override and retain the image digest with the deployment's recovery records. The
+[Backup CI lane](deployment-ci.md#backup-acceptance) records the tested digests and fails if the
+running images differ.
 
 ### Storage and retention
 
@@ -107,10 +118,41 @@ a normal `docker compose up -d` continues using the restored object bucket, Redi
 search directory. The directory is created automatically and ignored by Git. Preserve it when
 moving or upgrading the deployment; do not edit its generated files by hand.
 
+Keep the original Compose files, `.env`, and appended overrides as the deployment inputs.
+A flattened `docker compose config` export resolves the current environment files and can freeze
+old storage selections; do not replace the installed source files with that export after restore.
+The selected object bucket and Redis database must agree across Cloud, Worker, Search, and any
+additional writers. Search uses a fresh active index directory and rebuilds restored workspaces;
+an included LMDB archive remains a diagnostic cache rather than being served as current data.
+
 Keep the existing Compose project name when upgrading. If an older deployment used
 `snapshot_runner`, stop and remove that old service with its previous configuration before
 starting `appflowy_backup`. Preserve any older pgBackRest repositories and configuration needed
 to restore legacy recovery chains; new backups no longer require them.
+
+### Upgrade with existing backups
+
+For the v0.19.2 storage rollout, follow the [release migration requirements](../README.md#release-notes):
+
+1. Retain a usable recovery point, the deployment configuration and secrets, the private artifact
+   bucket, `backup_work`, and `backup-ops/runtime/`. Keep the current Compose project name.
+2. Drain application traffic and stop all application writers, including optional MCP or custom
+   integrations. Pause Backup work for the rollout so capture cannot overlap the migration.
+3. Run the updated Cloud migration runner, or the matching `appflowy-migrate` for a custom job.
+   Preserve the existing migration history and checksums; do not edit migration records to bypass
+   a restore or startup failure.
+4. After migrations finish, start the matching GoTrue, Cloud, Worker, Search, Admin, and Backup
+   builds, check readiness, and then resume application traffic.
+5. Verify an existing recovery point or ZIP against the upgraded build in an isolated installation
+   before relying on it for rollback. A rollback build must understand the updated storage protocol
+   and migration history. Redacted exports also require Backup's schema policy to match the migrated
+   Cloud schema.
+
+Restore preparation uses the migration runner before switching the live database. During the
+verification stage, Cloud's `/api/ready` probe can succeed while application requests remain fenced;
+the supplied backup override uses this probe so the coordinator can finish the switch before
+restarting other writers. Wait for the restore job and normal application readiness before opening
+clients. Preserve the private restore journal if a coordinator restart interrupts this process.
 
 ### Pause Backup
 

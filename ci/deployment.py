@@ -22,6 +22,7 @@ import uuid
 import yaml
 
 from images import CORE, ROOT, clean_environment, repository
+from configuration import check_compose, isolated_source, source_fingerprint
 
 NAME = 'appflowy-ci'
 NAMESPACE = NAME
@@ -81,15 +82,34 @@ def sanitize(text, private):
 
 
 class Deployment:
-    def __init__(self, mode, runtime, artifacts, lock):
+    def __init__(self, mode, runtime, artifacts, lock, backup=False, name=NAME, hostname=None,
+                 installed_source=False):
         self.mode, self.runtime, self.artifacts = mode, runtime.resolve(), artifacts.resolve()
+        self.backup = backup
+        self.name = name
+        self.pull_images = True
+        if backup and mode != 'compose':
+            raise RuntimeError('The Backup runtime acceptance profile currently requires Compose')
         self.lock = json.loads(lock.read_text())
         self.images = self.lock['services']
         if set(self.images) != CORE:
             raise RuntimeError('Image lock does not cover exactly all ten core services')
-        expected = hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest()
+        source_root = self.runtime / 'deployment' if installed_source else ROOT
+        if installed_source and (not backup or mode != 'compose' or not self.lock.get('source_files')):
+            raise RuntimeError('Installed source validation requires a recorded Compose Backup manifest')
+        expected = hashlib.sha256((source_root / 'docker-compose.yml').read_bytes()).hexdigest()
         if self.lock['compose_sha256'] != expected:
             raise RuntimeError('Image lock belongs to a different Compose source')
+        fingerprint = (source_fingerprint(source_root, self.lock['source_files']) if installed_source
+                       else source_fingerprint())
+        if self.lock.get('source_sha256') != fingerprint:
+            raise RuntimeError('Image lock belongs to different deployment or backup source files')
+        if backup:
+            extra = self.lock.get('backup_services', {})
+            if set(extra) != {'appflowy_backup'}:
+                raise RuntimeError('Backup acceptance requires its own pinned Backup image')
+            self.images = {**self.images, **extra}
+        self.services = set(self.images)
         self.helm_images = dict(self.images)
         if mode == 'helm':
             redis = self.lock.get('helm_services', {}).get('redis')
@@ -100,23 +120,33 @@ class Deployment:
         # Some Docker releases accept IPv6 connections to published Swarm
         # ports without forwarding them. Use IPv4 through the same public port.
         # https://github.com/moby/moby/issues/53091
-        self.hostname = '127.0.0.1' if mode == 'swarm' else 'localhost'
+        self.hostname = hostname or ('127.0.0.1' if mode == 'swarm' else 'localhost')
         self.base_url = 'http://' + self.hostname
-        self.env = dict(os.environ, SWARM_TEST_DIR=str(runtime), SWARM_TEST_BASE_URL=self.base_url,
+        self.env = dict(clean_environment(), SWARM_TEST_DIR=str(runtime), SWARM_TEST_BASE_URL=self.base_url,
                         SWARM_BROWSER_CHANNEL='chromium')
+        for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'RUNNER_TEMP'):
+            if key in os.environ:
+                self.env[key] = os.environ[key]
         self.compose = ['docker', 'compose', '--env-file', str(runtime / 'test.env'),
-                        '-p', NAME, '-f', str(runtime / 'compose.yml')]
+                        '-p', self.name, '-f', str(runtime / 'compose.yml')]
+        self.source = self.runtime / 'deployment'
+        if backup:
+            self.compose = ['docker', 'compose', '--project-directory', str(self.source),
+                            '--env-file', str(self.source / '.env'), '-p', self.name]
+            for name in ('docker-compose.yml', 'docker-compose.backup.yml', 'ci.override.yml'):
+                self.compose += ['-f', str(self.source / name)]
         self.diagnostic_failures = []
 
     def run(self, *args, timeout=600, check=True, env=None, combined=False):
-        result = subprocess.run(args, capture_output=True, text=True, env=env or self.env, timeout=timeout)
+        result = subprocess.run(args, capture_output=True, text=True,
+                                env=self.env if env is None else env, timeout=timeout)
         if result.returncode and check:
             output = sanitize(result.stdout + result.stderr, self.runtime)
             raise RuntimeError(f'{args[0]} {args[1]} failed ({result.returncode}):\n{output[-8000:]}')
         return result.stdout + result.stderr if combined else result.stdout
 
     def kubectl(self, *args, **kwargs):
-        return self.run('kubectl', '--context', 'kind-' + NAME, '-n', NAMESPACE, *args, **kwargs)
+        return self.run('kubectl', '--context', 'kind-' + self.name, '-n', NAMESPACE, *args, **kwargs)
 
     def evidence(self, name, value):
         text = value if isinstance(value, str) else json.dumps(value, indent=2) + '\n'
@@ -168,7 +198,7 @@ class Deployment:
     def validate_helm_source_images(self):
         # Render the source chart before applying runtime image pins. Otherwise
         # a broken repository/tag in the chart would be silently repaired by CI.
-        rendered = self.run('helm', 'template', NAME, str(ROOT / 'helm/appflowy-cloud'),
+        rendered = self.run('helm', 'template', self.name, str(ROOT / 'helm/appflowy-cloud'),
                             '--namespace', NAMESPACE, '-f', str(ROOT / 'ci/helm-values.yaml'),
                             env=clean_environment())
         documents = [document for document in yaml.safe_load_all(rendered) if document]
@@ -190,10 +220,12 @@ class Deployment:
                                    f'{actual} != {expected}')
 
     def render(self):
+        check_compose(clean_environment())
         if self.mode == 'helm':
             self.validate_helm_source_images()
         self.runtime.mkdir(parents=True, exist_ok=True)
         self.runtime.chmod(0o700)
+        isolated_source(self.source)
         credentials = {'admin_email': 'ci-' + secrets.token_hex(6) + '@example.com',
                        'admin_password': secrets.token_urlsafe(32),
                        'postgres_password': secrets.token_hex(24), 'jwt_secret': secrets.token_hex(32),
@@ -203,7 +235,8 @@ class Deployment:
             'FQDN': self.hostname, 'SCHEME': 'http', 'WS_SCHEME': 'ws',
             'APPFLOWY_BASE_URL': self.base_url, 'APPFLOWY_WEB_URL': self.base_url,
             'APPFLOWY_WEBSOCKET_BASE_URL': 'ws://' + self.hostname + '/ws/v2',
-            'NGINX_PORT': '80', 'NGINX_TLS_PORT': '443',
+            'NGINX_PORT': self.hostname.rpartition(':')[2] if ':' in self.hostname else '80',
+            'NGINX_TLS_PORT': str(getattr(self, 'tls_port', 443)),
             'POSTGRES_PASSWORD': credentials['postgres_password'],
             'GOTRUE_ADMIN_EMAIL': credentials['admin_email'], 'GOTRUE_ADMIN_PASSWORD': credentials['admin_password'],
             'GOTRUE_JWT_SECRET': credentials['jwt_secret'], 'GOTRUE_MAILER_AUTOCONFIRM': 'true',
@@ -215,7 +248,10 @@ class Deployment:
             'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
             'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': self.base_url + '/minio-api',
             'APPFLOWY_MAILER_SMTP_TLS_KIND': 'none',
+            'APPFLOWY_BACKUP_PROFILE': 'backup' if self.backup else '',
         }
+        if self.backup:
+            values['COMPOSE_FILE'] = 'docker-compose.yml:docker-compose.backup.yml:ci.override.yml'
         for prefix in ('GOTRUE_SMTP', 'APPFLOWY_MAILER_SMTP'):
             values.update({prefix + '_HOST': '127.0.0.1', prefix + '_PORT': '2525'})
         values.update({'GOTRUE_SMTP_USER': '', 'GOTRUE_SMTP_PASS': '',
@@ -232,9 +268,11 @@ class Deployment:
         lines.extend(key + '=' + value for key, value in values.items() if key not in seen)
         env_file = self.runtime / 'test.env'
         private_write(env_file, '\n'.join(lines) + '\n')
-        source = ROOT / ('docker-swarm/docker-stack.yml' if self.mode == 'swarm' else 'docker-compose.yml')
-        rendered = json.loads(self.run('docker', 'compose', '--env-file', str(env_file), '-p', NAME,
-                                      '-f', str(source), 'config', '--format', 'json', env=clean_environment()))
+        source = self.source / ('docker-swarm/docker-stack.yml' if self.mode == 'swarm' else 'docker-compose.yml')
+        render_command = ['docker', 'compose', '--env-file', str(env_file), '-p', self.name, '-f', str(source)]
+        if self.backup:
+            render_command += ['-f', str(self.source / 'docker-compose.backup.yml'), '--profile', 'backup']
+        rendered = json.loads(self.run(*render_command, 'config', '--format', 'json', env=clean_environment()))
         rendered['services'].pop('ai')
         for name, service in rendered['services'].items():
             for key in ('command', 'entrypoint'):
@@ -243,7 +281,7 @@ class Deployment:
             service['image'] = self.images[name]['image']
             service['logging'] = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '2'}}
             if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
-                service['environment'].update({'AI_ENABLED': 'false', 'APPFLOWY_INDEXER_ENABLED': 'false',
+                service['environment'].update({'AI_ENABLED': 'false', 'APPFLOWY_INDEXER_ENABLED': 'true',
                                                'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false'})
             if name == 'appflowy_cloud':
                 service['healthcheck']['start_period'] = '180s'
@@ -264,18 +302,36 @@ class Deployment:
                         volume['bind'].pop('create_host_path', None)
                         if not volume['bind']:
                             volume.pop('bind')
-        if set(rendered['services']) != CORE:
-            raise RuntimeError('Rendered deployment does not contain all ten core services')
+        if set(rendered['services']) != self.services:
+            raise RuntimeError('Rendered deployment does not contain the expected core and optional services')
         if self.mode == 'swarm':
             rendered.pop('name', None)
             rendered['version'] = '3.8'
         private_write(self.runtime / ('stack.yml' if self.mode == 'swarm' else 'compose.yml'),
                       yaml.safe_dump(rendered, sort_keys=False))
-        private_write(self.runtime / 'metadata.json', json.dumps({'base_url': self.base_url, 'stack_name': NAME,
+        if self.backup:
+            # Keep the real source files and env_file references active. A flattened config
+            # would silently revert the restored bucket/Redis/index on the next deployment.
+            overrides = {'services': {'ai': {'profiles': ['ci-disabled-ai']}}}
+            for name, service in rendered['services'].items():
+                overlay = {'image': service['image'], 'logging': service['logging']}
+                if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
+                    overlay['environment'] = {key: service['environment'][key] for key in
+                        ('AI_ENABLED', 'APPFLOWY_INDEXER_ENABLED', 'APPFLOWY_BACKGROUND_INDEXER_ENABLED')}
+                if name == 'appflowy_cloud':
+                    overlay['healthcheck'] = {'start_period': '180s'}
+                if name == 'appflowy_backup':
+                    overlay['environment'] = {'APPFLOWY_BACKUP_COMPOSE_WRITERS': json.dumps(
+                        ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search'])}
+                overrides['services'][name] = overlay
+            private_write(self.source / 'ci.override.yml', yaml.safe_dump(overrides, sort_keys=False))
+            private_write(self.source / '.env', '\n'.join(lines) + '\n')
+            self.run(*self.compose, 'config', '--quiet', env=clean_environment())
+        private_write(self.runtime / 'metadata.json', json.dumps({'base_url': self.base_url, 'stack_name': self.name,
                       'mode': self.mode, 'images': {key: value['image'] for key, value in
                        (self.helm_images if self.mode == 'helm' else self.images).items()}}))
         if self.mode == 'helm':
-            overrides = {'fullnameOverride': NAME, 'global': {'domain': 'localhost', 'scheme': 'http',
+            overrides = {'fullnameOverride': self.name, 'global': {'domain': 'localhost', 'scheme': 'http',
                          'wsScheme': 'ws', 'jwt': {'secret': credentials['jwt_secret']},
                          'postgresql': {'password': credentials['postgres_password']},
                          's3': {'presignedUrlEndpoint': self.base_url + '/minio-api'}},
@@ -293,11 +349,11 @@ class Deployment:
         self.evidence('image-lock.json', self.lock)
 
     def docker_containers(self, service):
-        label = (f'com.docker.swarm.service.name={NAME}_{service}' if self.mode == 'swarm'
+        label = (f'com.docker.swarm.service.name={self.name}_{service}' if self.mode == 'swarm'
                  else f'com.docker.compose.service={service}')
         args = ['docker', 'ps', '-q', '--filter', 'label=' + label]
         if self.mode == 'compose':
-            args += ['--filter', 'label=com.docker.compose.project=' + NAME]
+            args += ['--filter', 'label=com.docker.compose.project=' + self.name]
         ids = self.run(*args).split()
         return json.loads(self.run('docker', 'inspect', *ids)) if ids else []
 
@@ -342,15 +398,15 @@ class Deployment:
     def up(self):
         self.guard()
         if self.mode == 'compose':
-            if self.run('docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=' + NAME).strip():
+            if self.run('docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project=' + self.name).strip():
                 raise RuntimeError('Refusing to use an existing Compose project')
         self.render()
         if self.mode == 'helm':
-            self.run('helm', 'upgrade', '--install', NAME, str(ROOT / 'helm/appflowy-cloud'),
-                     '--kube-context', 'kind-' + NAME, '--namespace', NAMESPACE, '--create-namespace',
+            self.run('helm', 'upgrade', '--install', self.name, str(ROOT / 'helm/appflowy-cloud'),
+                     '--kube-context', 'kind-' + self.name, '--namespace', NAMESPACE, '--create-namespace',
                      '-f', str(ROOT / 'ci/helm-values.yaml'), '-f', str(self.runtime / 'helm-overrides.yaml'),
                      '--wait', '--timeout', '15m', timeout=960)
-            self.kubectl('wait', '--for=condition=Ready', 'pod', '-l', 'app.kubernetes.io/instance=' + NAME,
+            self.kubectl('wait', '--for=condition=Ready', 'pod', '-l', 'app.kubernetes.io/instance=' + self.name,
                          '--timeout=300s', timeout=330)
         else:
             if self.mode == 'swarm':
@@ -364,21 +420,23 @@ class Deployment:
                 # Validate with the actual stack parser, then deploy the same file once.
                 self.run('docker', 'stack', 'config', '-c', str(self.runtime / 'stack.yml'))
                 self.run('docker', 'stack', 'deploy', '--resolve-image', 'never',
-                         '-c', str(self.runtime / 'stack.yml'), NAME)
+                         '-c', str(self.runtime / 'stack.yml'), self.name)
             else:
                 private_write(self.runtime / 'created-compose', 'true')
-                self.run(*self.compose, 'pull', timeout=1200)
-            for index, stage in enumerate(STAGES):
+                if self.pull_images:
+                    self.run(*self.compose, 'pull', timeout=1200)
+            stages = STAGES + ([['appflowy_backup']] if self.backup else [])
+            for index, stage in enumerate(stages):
                 if self.mode == 'compose':
-                    self.run(*self.compose, 'up', '-d', '--no-deps', *stage)
+                    self.run(*self.compose, 'up', '-d', '--no-deps', '--pull', 'never', *stage)
                 elif index:
-                    self.run('docker', 'service', 'scale', '--detach', *[NAME + '_' + name + '=1' for name in stage])
+                    self.run('docker', 'service', 'scale', '--detach', *[self.name + '_' + name + '=1' for name in stage])
                 self.wait_services(stage)
         self.wait_http()
         self.check_images('initial-images.json')
 
     def helm_pods(self):
-        return json.loads(self.kubectl('get', 'pods', '-l', 'app.kubernetes.io/instance=' + NAME, '-o', 'json'))['items']
+        return json.loads(self.kubectl('get', 'pods', '-l', 'app.kubernetes.io/instance=' + self.name, '-o', 'json'))['items']
 
     def check_images(self, filename):
         records = []
@@ -415,7 +473,7 @@ class Deployment:
                     raise RuntimeError(name + ': expected exactly one running container from the image lock')
                 records.append({'service': name, **matches[0]})
             # Helm uses the ingress controller instead of the standalone nginx image.
-            controller = json.loads(self.run('kubectl', '--context', 'kind-' + NAME, '-n', 'ingress-nginx',
+            controller = json.loads(self.run('kubectl', '--context', 'kind-' + self.name, '-n', 'ingress-nginx',
                                             'get', 'pods', '-l', 'app.kubernetes.io/component=controller', '-o', 'json'))['items']
             if len(controller) != 1:
                 raise RuntimeError('Expected exactly one real ingress-nginx controller')
@@ -425,7 +483,7 @@ class Deployment:
             records.append({'service': 'nginx', 'replacement': 'real ingress-nginx controller; chart ingress routes tested',
                             'containers': [{'image': row['image'], 'image_id': row['imageID']} for row in statuses]})
         else:
-            for name in sorted(CORE):
+            for name in sorted(self.services):
                 rows = self.docker_containers(name)
                 if len(rows) != 1 or rows[0]['Image'] != self.images[name]['config_digest']:
                     raise RuntimeError(name + ': actual Docker image differs from shared image lock')
@@ -453,9 +511,9 @@ class Deployment:
         else:
             before = {row['Id'] for row in self.docker_containers(service)}
             if self.mode == 'compose':
-                self.run(*self.compose, 'up', '-d', '--no-deps', '--force-recreate', service)
+                self.run(*self.compose, 'up', '-d', '--no-deps', '--pull', 'never', '--force-recreate', service)
             else:
-                self.run('docker', 'service', 'update', '--force', '--detach', NAME + '_' + service)
+                self.run('docker', 'service', 'update', '--force', '--detach', self.name + '_' + service)
             self.wait_services([service], before=before)
             changed = {'before': sorted(before), 'after': [row['Id'] for row in self.docker_containers(service)]}
         record = {'service': service, **changed, 'seconds': round(time.monotonic() - started, 2)}
@@ -615,11 +673,48 @@ class Deployment:
                           '--state', str(self.runtime / 'recovery-api-state.json'), '--timeout', '300', timeout=900)
         print(sanitize(output, self.runtime), end='', flush=True)
         self.check_images('recovered-images.json')
+        backup_result = None
+        if self.backup:
+            from backup_smoke import BackupSmoke
+            from backup_observer import ComposeRestoreObserver
+            backup_result = BackupSmoke(self.runtime, self.base_url, verify=None,
+                redeploy=self.backup_redeploy, evidence=self.evidence,
+                observe=ComposeRestoreObserver(self.runtime, self.run, self.docker_containers, self.evidence),
+                timeout=1800).run()
         self.evidence('core-acceptance.json', {'passed': True, 'mode': self.mode,
+                      'backup': backup_result,
                       'coverage': ['auth', 'document', 'database row create/edit', 'attachment bytes', 'worker import',
                                    'keyword search', 'browser realtime', 'WebSocket reconnect', 'durable application state'],
                       'excluded': ['external AI providers', 'semantic search', 'SMTP', 'TLS', 'upgrades',
                                    'Redis queue persistence', 'multi-node networking', 'node loss', 'HA']})
+
+    def backup_selection(self):
+        """Hash effective resource selections, retaining no connection credentials in evidence."""
+        selected = {}
+        for name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
+            rows = self.docker_containers(name)
+            if len(rows) != 1:
+                raise RuntimeError('Backup redeploy requires exactly one ' + name)
+            environment = dict(value.split('=', 1) for value in rows[0]['Config']['Env'] if '=' in value)
+            keys = ('APPFLOWY_S3_BUCKET', 'APPFLOWY_REDIS_URI', 'APPFLOWY_WORKER_REDIS_URL',
+                    'APPFLOWY_SEARCH_REDIS_URL', 'APPFLOWY_KEYWORD_INDEX_DIR')
+            selected[name] = {key: hashlib.sha256(environment[key].encode()).hexdigest()
+                              for key in keys if key in environment}
+        return selected
+
+    def backup_redeploy(self):
+        self.guard()
+        before = self.backup_selection()
+        selections = self.source / 'backup-ops/runtime'
+        if not selections.is_dir() or not list(selections.glob('selection-*.env')):
+            raise RuntimeError('Restore did not persist its deployment selections')
+        self.run(*self.compose, 'up', '-d', '--pull', 'never', env=clean_environment())
+        self.wait_services(sorted(self.services))
+        self.wait_http()
+        after = self.backup_selection()
+        if before != after:
+            raise RuntimeError('Ordinary Compose redeploy changed restored resource selections')
+        self.evidence('backup-redeploy.json', {'passed': True, 'selection_sha256': after})
 
     def register(self):
         self.guard()
@@ -646,13 +741,13 @@ class Deployment:
         self.diagnostic_failures = []
         self.evidence('diagnostic-failures.json', self.diagnostic_failures)
         if self.mode == 'helm':
-            kubectl = ['kubectl', '--context', 'kind-' + NAME, '-n', NAMESPACE]
+            kubectl = ['kubectl', '--context', 'kind-' + self.name, '-n', NAMESPACE]
             for label, args in [('pods', ('get', 'pods', '-o', 'wide')),
                                 ('events', ('get', 'events', '--sort-by=.metadata.creationTimestamp')),
                                 ('volumes', ('get', 'pvc'))]:
                 self.evidence(label + '.txt', self.diagnostic_command(label, *kubectl, *args).stdout)
             inventory = self.diagnostic_command('pod inventory', *kubectl, 'get', 'pods',
-                '-l', 'app.kubernetes.io/instance=' + NAME, '-o', 'json', combined=False)
+                '-l', 'app.kubernetes.io/instance=' + self.name, '-o', 'json', combined=False)
             try:
                 pods = json.loads(inventory.stdout)['items'] if inventory.returncode == 0 else []
             except (ValueError, KeyError, TypeError):
@@ -666,12 +761,12 @@ class Deployment:
                                   self.diagnostic_command(name + '/' + container['name'], *kubectl,
                                                           'logs', name, '-c', container['name'], '--tail=160').stdout)
         else:
-            for name in sorted(CORE):
+            for name in sorted(self.services):
                 if self.mode == 'swarm':
                     # This suite runs on one node. Local task logs avoid the
                     # manager's log aggregator and include retained old tasks.
                     containers = self.diagnostic_command(name + ' containers', 'docker', 'ps', '-aq',
-                        '--filter', 'label=com.docker.swarm.service.name=' + NAME + '_' + name, combined=False)
+                        '--filter', 'label=com.docker.swarm.service.name=' + self.name + '_' + name, combined=False)
                     parts = [containers.stdout + containers.stderr] if containers.returncode != 0 else []
                     for container in containers.stdout.split() if containers.returncode == 0 else []:
                         if not re.fullmatch(r'[a-f0-9]{12,64}', container):
@@ -688,13 +783,13 @@ class Deployment:
                 self.evidence(name + '.log', log)
             if self.mode == 'swarm':
                 self.evidence('stack-tasks.txt', self.diagnostic_command(
-                    'stack tasks', 'docker', 'stack', 'ps', NAME, '--no-trunc').stdout)
+                    'stack tasks', 'docker', 'stack', 'ps', self.name, '--no-trunc').stdout)
                 # Select only network fields: full service/container inspection
                 # would include private environment variables and credentials.
                 commands = {
                     'engine': ('docker', 'version', '--format', '{{json .Server}}'),
                     'node_address': ('docker', 'info', '--format', '{{.Swarm.NodeAddr}}'),
-                    'published_endpoint': ('docker', 'service', 'inspect', NAME + '_nginx',
+                    'published_endpoint': ('docker', 'service', 'inspect', self.name + '_nginx',
                                            '--format', '{{json .Endpoint}}'),
                     'ingress_subnet': ('docker', 'network', 'inspect', 'ingress',
                                        '--format', '{{json .IPAM.Config}}'),
@@ -714,12 +809,12 @@ class Deployment:
         self.guard()
         if self.mode == 'helm':
             if (Path(os.environ['RUNNER_TEMP']) / 'appflowy-kind.created').exists():
-                self.run('kind', 'delete', 'cluster', '--name', NAME, check=False)
+                self.run('kind', 'delete', 'cluster', '--name', self.name, check=False)
         elif self.mode == 'compose':
             if (self.runtime / 'created-compose').exists():
                 self.run(*self.compose, 'down', '--volumes', '--remove-orphans', check=False)
         elif (self.runtime / 'created-swarm').exists():
-            self.run('docker', 'stack', 'rm', NAME, check=False)
+            self.run('docker', 'stack', 'rm', self.name, check=False)
             deadline = time.monotonic() + 90
             while self.run('docker', 'service', 'ls', '-q').strip() and time.monotonic() < deadline:
                 time.sleep(2)
@@ -734,8 +829,9 @@ def main():
     parser.add_argument('--runtime', type=Path, required=True)
     parser.add_argument('--artifacts', type=Path, required=True)
     parser.add_argument('--images', type=Path, required=True)
+    parser.add_argument('--backup', action='store_true', help='Enable and qualify Compose Backup')
     args = parser.parse_args()
-    deployment = Deployment(args.mode, args.runtime.resolve(), args.artifacts.resolve(), args.images)
+    deployment = Deployment(args.mode, args.runtime.resolve(), args.artifacts.resolve(), args.images, backup=args.backup)
     try:
         getattr(deployment, args.action)()
     except Exception as exc:

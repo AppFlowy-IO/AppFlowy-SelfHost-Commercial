@@ -33,9 +33,19 @@ spec:
         - name: wait-for-dependencies
           image: {{ include "appflowy.image" (dict "Values" .Values "image" .Values.gotrue.image) | quote }}
           command: [sh, -ec]
+          {{- if index .Values "appflowy-backup" "enabled" }}
+          env:
+            - name: APPFLOWY_RESTORE_VERIFY_ONLY
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "appflowy.backup.runtime" . }}
+                  key: verify-only
+          {{- end }}
           args:
             - |
-              until curl --fail --silent --max-time 5 {{ include "appflowy.gotrue.internalUrl" . }}/health >/dev/null; do sleep 2; done
+              if [ "${APPFLOWY_RESTORE_VERIFY_ONLY:-false}" != true ]; then
+                until curl --fail --silent --max-time 5 {{ include "appflowy.gotrue.internalUrl" . }}/health >/dev/null; do sleep 2; done
+              fi
               {{- if .Values.global.s3.useMinio }}
               until curl --fail --silent --max-time 5 {{ include "appflowy.s3.endpoint" . }}/minio/health/live >/dev/null; do sleep 2; done
               {{- end }}
@@ -50,6 +60,18 @@ spec:
               containerPort: 8000
               protocol: TCP
           env:
+            {{- include "appflowy.backup.redisSelection" . | nindent 12 }}
+            {{- if index .Values "appflowy-backup" "enabled" }}
+            - name: APPFLOWY_RESTORE_VERIFY_ONLY
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "appflowy.backup.runtime" . }}
+                  key: verify-only
+            - name: APPFLOWY_BACKUP_BUCKET
+              value: {{ include "appflowy.backup.bucket" . | quote }}
+            - name: APPFLOWY_BACKUP_PREFIX
+              value: {{ index .Values "appflowy-backup" "artifacts" "prefix" | quote }}
+            {{- end }}
             # Application configuration
             - name: RUST_LOG
               value: {{ $cloud.config.rustLog | quote }}
@@ -95,7 +117,7 @@ spec:
             - name: APPFLOWY_S3_MINIO_URL
               value: {{ include "appflowy.s3.endpoint" . | quote }}
             - name: APPFLOWY_S3_BUCKET
-              value: {{ include "appflowy.s3.bucket" . | quote }}
+              {{- include "appflowy.backup.bucketSelection" . | nindent 14 }}
             - name: APPFLOWY_S3_REGION
               value: {{ include "appflowy.s3.region" . | quote }}
             - name: APPFLOWY_S3_CREATE_BUCKET
@@ -191,7 +213,7 @@ spec:
 
           startupProbe:
             httpGet:
-              path: /api/health
+              path: /api/startup
               port: {{ $metrics.portName | default "http" }}
             periodSeconds: 5
             failureThreshold: 60
@@ -205,7 +227,7 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /api/health
+              path: /api/ready
               port: {{ $metrics.portName | default "http" }}
             initialDelaySeconds: 10
             periodSeconds: 5

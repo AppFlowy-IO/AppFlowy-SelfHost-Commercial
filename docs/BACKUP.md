@@ -6,7 +6,10 @@ Users can continue editing while a backup is created. A restore briefly pauses t
 
 ## Enable Backup
 
-Use Docker Compose **2.30 or newer** and matching releases of Cloud, Worker, Search, and Backup.
+Use Docker Compose **2.30 or newer** and matching releases of Cloud, Worker, Search, GoTrue, Admin,
+and Backup. These instructions use the supplied Compose deployment. Platform-specific setup and
+restrictions are documented separately in the [Swarm guide](docker-swarm.md) and
+[Helm guide](../helm/appflowy-cloud/README.md#backup-and-restore).
 
 1. In your deployment's root `.env`, set:
 
@@ -25,6 +28,12 @@ Use Docker Compose **2.30 or newer** and matching releases of Cloud, Worker, Sea
    ![Admin Tools → Backup page](../asset/backup-admin-overview.png)
 
 The supplied Compose configuration handles startup. Backup reuses your PostgreSQL, Redis, and object-storage connection settings, creates a private backup bucket, and prepares the files needed for restore. You do not need a separate configuration file or pgBackRest setup.
+
+For an existing `.env`, retain your credentials and project name and copy the template's
+`COMPOSE_FILE`, `COMPOSE_PROFILES`, and `COMPOSE_PATH_SEPARATOR` settings before enabling Backup.
+Follow the [upgrade procedure](docker-compose.md#upgrade-with-existing-backups) when adopting the
+new storage migration and service builds. Creating a Backup image alone does not upgrade Cloud's
+Admin API, migrations, or the Search restore protocol.
 
 By default, a deployment using the `appflowy` object bucket stores backups in `appflowy-backups`. When using external S3, the configured credentials must be allowed to create that private bucket, or you can create it beforehand. See [storage and deployment details](docker-compose.md#backup) for optional settings.
 
@@ -63,11 +72,26 @@ A restore replaces the server's workspaces, pages, databases, files, and account
 4. Wait for the job to finish. The server may disconnect during the final switch. Sign in again using an account from the restored backup.
 5. Verify your workspaces, page hierarchy, databases, files, and permissions before reconnecting other clients.
 
+Search results return as the restored workspaces are reindexed. This applies whether the backup
+included Search data or omitted it; the active index starts fresh. Restore selects a fresh Redis
+database rather than replaying previous locks and background jobs. Configuration, deployment
+secrets, and external encryption keys remain part of your separate recovery procedure.
+
 Created export rows do not offer **Restore server**. Use the explicit ZIP import flow on the target installation when restoring a portable export.
 
 ![Restore progress after the server session is replaced](../asset/backup-restore-session.png)
 
 Keep the automatically generated `backup-ops/runtime/` directory and the deployment's data volumes. They preserve the restored selection when you later run `docker compose up -d`.
+
+Keep the same Compose project name and override files on subsequent starts. If restore is
+interrupted, retain the Backup work volume and generated runtime directory and restart the same
+coordinator configuration. Its durable journal determines whether to finish the committed switch
+or recover the previous selection. Do not manually select one restored bucket or Redis database
+while other services still use the previous selection.
+
+The [deployment acceptance checks](deployment-ci.md#backup-acceptance) exercise the Compose API
+and restore workflow on a disposable installation. A new image is qualified only when its recorded
+runtime checks pass; rendering configuration or passing unit tests alone does not qualify restore.
 
 ## Common problems
 

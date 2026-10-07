@@ -15,6 +15,12 @@ For Google Drive and Google Calendar setup in Admin and account connections from
 For optional server backups, set `APPFLOWY_BACKUP_PROFILE=backup` in `.env` and run
 `docker compose up -d` (Compose 2.30 or newer). Once Backup is ready, open **Tools → Backup**.
 See the [Backup guide](docs/BACKUP.md) and [Compose details](docs/docker-compose.md#backup).
+Existing installations must retain their Compose project name, override files, and
+`backup-ops/runtime/` restore selections. Upgrade Cloud, Worker, Search, GoTrue, Admin, and Backup
+as a compatible set; follow the [backup upgrade procedure](docs/docker-compose.md#upgrade-with-existing-backups)
+for the v0.19.2 storage migration. Swarm and Helm use their own deployment guides and activation
+adapters; the [Compose Backup acceptance lane](docs/deployment-ci.md#backup-acceptance) does not
+qualify those platforms.
 
 ## Deployment Options
 

@@ -17,6 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
 from images import CORE, ROOT, clean_environment
+from configuration import source_fingerprint
 
 
 class RuntimeSafetyTests(unittest.TestCase):
@@ -28,7 +29,8 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.lock = self.root / 'images.json'
         self.payload = {'services': {name: {'source': name + ':latest', 'image': name + '@' + digest,
                                           'digest': digest, 'config_digest': digest} for name in CORE},
-                        'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest()}
+                        'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest(),
+                        'source_sha256': source_fingerprint()}
         self.lock.write_text(json.dumps(self.payload))
 
     def deployment(self, mode='compose'):
