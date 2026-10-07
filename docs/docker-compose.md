@@ -62,3 +62,19 @@ For Okta, follow the [SAML setup guide](OKTA_SAML.md). The SAML settings forward
 ## Enterprise identity
 
 SCIM provisioning, custom OIDC / OAuth providers, and LDAP sign-in are configured in the Admin console rather than through `.env`. See [SCIM Provisioning](SCIM.md), [OIDC / OAuth](OIDC.md), and [LDAP](LDAP.md). The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) already routes `/scim` to AppFlowy Cloud and sets `X-Forwarded-For` for `/api`; if you use a customized Nginx configuration, the SCIM and LDAP guides show the exact directives to add.
+
+## Search admission
+
+This Compose deployment includes Search and sets `APPFLOWY_SEARCH_ENABLED=true` by default.
+Set it to `false` when deliberately deploying without Search. It supplies the initial and reset
+value; an Admin **Environment → Search** override is stored in PostgreSQL and takes precedence,
+including after restarts. Worker, MCP, and Search observe the same stored setting without
+requiring their environments to be changed.
+
+Disabling stops new Search tasks and pauses Search consumers after propagation (notification
+plus a five-second recovery poll). Existing durable work is retained. Re-enabling reconciles
+content changed while disabled; temporary Search outages do not disable task admission.
+AI and individual indexing capabilities retain their own narrower controls.
+
+Upgrade Cloud, Worker, Search, and MCP together, with Cloud migrations completing first.
+Older binaries do not implement this runtime gate.
