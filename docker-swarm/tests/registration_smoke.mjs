@@ -57,9 +57,16 @@ async function workspace(page) {
   await expect(page.getByTestId('sidebar-page-header')).toBeVisible({ timeout: 60000 });
   await expect(page.getByTestId('current-workspace-name')).toBeVisible();
   const id = new URL(page.url()).pathname.split('/')[2];
-  await page.getByTestId('workspace-dropdown-trigger').click();
-  await expect(page.getByText(user.email, { exact: true })).toBeVisible();
+  const menu = page.getByTestId('workspace-dropdown-content');
+  // Initial workspace navigation can close the menu after the first click.
+  // Reopen it when needed while still requiring this account's visible email.
+  await expect(async () => {
+    if (!(await menu.isVisible())) await page.getByTestId('workspace-dropdown-trigger').click();
+    await expect(menu).toBeVisible({ timeout: 1000 });
+    await expect(menu.getByText(user.email, { exact: true })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 30000, intervals: [500, 1000, 2000] });
   await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
   return id;
 }
 
