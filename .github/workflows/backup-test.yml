@@ -10,7 +10,7 @@ on:
         description: Backup image to qualify with the CI server images (matching tag or digest)
         type: string
         required: true
-        default: appflowyinc/appflowy_backup:0.19.3_test
+        default: appflowyinc/appflowy_backup:0.19.4_test
 
 permissions:
   contents: read
@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      SERVER_IMAGE_TAG: 0.19.3_test
+      SERVER_IMAGE_TAG: 0.19.4_test
       APPFLOWY_BACKUP_PROFILE: backup
-      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.19.3_test' }}
+      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.19.4_test' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

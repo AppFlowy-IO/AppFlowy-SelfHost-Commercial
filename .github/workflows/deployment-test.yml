@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  SERVER_IMAGE_TAG: 0.19.3_test
+  SERVER_IMAGE_TAG: 0.19.4_test
 
 concurrency:
   group: deployment-test-${{ github.workflow }}-${{ github.ref }}

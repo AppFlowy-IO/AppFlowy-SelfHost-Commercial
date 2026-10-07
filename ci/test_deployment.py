@@ -113,7 +113,7 @@ class RuntimeSafetyTests(unittest.TestCase):
         documents = self.helm_source_documents()
         cloud = self.payload['services']['appflowy_cloud']
         cloud['configured_source'] = cloud['source']
-        cloud['source'] = 'appflowy_cloud:0.19.3_test'
+        cloud['source'] = 'appflowy_cloud:0.19.4_test'
         self.lock.write_text(json.dumps(self.payload))
         instance = self.deployment('helm')
         with patch.object(instance, 'run', return_value=yaml.safe_dump_all(documents)):

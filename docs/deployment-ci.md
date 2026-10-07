@@ -23,7 +23,7 @@ Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whos
 
 The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. It does not resolve or pull the Backup image. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
 
-For temporary qualification, both workflows pass `--server-tag 0.19.3_test` to the image
+For temporary qualification, both workflows pass `--server-tag 0.19.4_test` to the image
 resolver. This selects that tag for Cloud, Worker, Search, and optional Backup.
 GoTrue, Web, Admin, and infrastructure images use their configured references. Installation
 defaults remain `latest`. For each override, the image lock records the selected reference and
@@ -47,7 +47,7 @@ Tests fail on timeouts and failed assertions. Registry download failures also fa
 ## Backup acceptance
 
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release
-branch pushes. Automatic runs use `appflowyinc/appflowy_backup:0.19.3_test`; manual runs can use the
+branch pushes. Automatic runs use `appflowyinc/appflowy_backup:0.19.4_test`; manual runs can use the
 `backup_image` input to select a matching release tag or digest. The core images still come from
 the versioned Compose configuration, with the CI server-tag override described above. Each run
 resolves the selected tags to digests for reproducibility. Cloud owns the Backup API and database
