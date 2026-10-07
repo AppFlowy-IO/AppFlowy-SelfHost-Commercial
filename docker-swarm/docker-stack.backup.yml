@@ -8,6 +8,23 @@ services:
       APPFLOWY_BACKUP_BUCKET: ${APPFLOWY_BACKUP_BUCKET:?Set the private Backup artifact bucket}
     healthcheck:
       test: curl --fail http://127.0.0.1:8000/api/ready || exit 1
+  appflowy_search:
+    user: root
+    entrypoint:
+    - /bin/sh
+    - -ec
+    - 'test -d /var/lib/appflowy/keyword_index
+
+      test ! -L /var/lib/appflowy/keyword_index
+
+      chown -R --no-dereference 999:999 /var/lib/appflowy/keyword_index
+
+      exec setpriv --reuid=999 --regid=999 --clear-groups "$$@"
+
+      '
+    - --
+    command:
+    - appflowy_search
   appflowy_backup:
     image: appflowyinc/appflowy_backup:${APPFLOWY_BACKUP_VERSION:-latest}
     environment:

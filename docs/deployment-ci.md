@@ -98,8 +98,9 @@ directories, including when the caller uses `umask 077`. The outer runtime direc
 and `.env` stays `0600`; bootstrap copies its settings privately before dropping privileges.
 The Backup container explicitly advertises its work directory for restore discovery through
 Docker metadata. Its entrypoint grants `postgres` ownership of the shared search-volume root
-so restore can create new index generations; existing index files retain their ownership and
-permissions.
+so restore can create new index generations. With Backup enabled, Search prepares its shared
+cache ownership before starting as the same UID (`999`) as Backup. LMDB files retain their
+private permissions; their common owner can read the data and write the reader lockfile.
 
 `backup-results.json` records completed checks and explicit limits. A successful result checks
 document marker bytes, not a decoded CRDT-text equivalence proof; it does not prove a concurrent

@@ -70,7 +70,9 @@ class GeneratorTests(unittest.TestCase):
             GENERATOR.check_parity(self.source, stack)
 
     def test_backup_overlay_selects_swarm_and_starts_only_after_application_readiness(self):
-        overlay = GENERATOR.derive_backup(self.source, yaml.safe_load(GENERATOR.BACKUP_SOURCE.read_text()))
+        source = yaml.safe_load(GENERATOR.BACKUP_SOURCE.read_text())
+        overlay = GENERATOR.derive_backup(self.source, source)
+        self.assertEqual(overlay['services']['appflowy_search'], source['services']['appflowy_search'])
         backup = overlay['services']['appflowy_backup']
         self.assertEqual(backup['environment']['APPFLOWY_BACKUP_DEPLOYMENT'], 'swarm')
         self.assertEqual(backup['command'], ['bootstrap'])

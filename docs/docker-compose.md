@@ -61,6 +61,10 @@ bridge provides access; the host socket's ownership and permissions are unchange
 Docker group ID, `runner.env`, pgBackRest configuration, or stanza initialization step for new
 online backups. The live PostgreSQL image and archive settings are unchanged.
 
+With Backup enabled, Search starts as UID/GID `999`, matching Backup's `postgres` user.
+Before Search starts, its entrypoint migrates the shared cache's ownership while retaining
+file permissions. This lets Backup capture private LMDB data and use its reader lockfile.
+
 The Backup coordinator has Docker administration access so it can pause and restart application
 services during restore. The default writer list covers Cloud, GoTrue, Worker, Search, and AI.
 If you add MCP, connectors, or other services that write to this installation, include their

@@ -10,6 +10,21 @@ services:
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/ready || exit 1"
 
+  appflowy_search:
+    # LMDB creates private 0600 files, including the writable reader lockfile.
+    # Share Backup's postgres UID, migrating the cache before Search starts.
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        test -d /var/lib/appflowy/keyword_index
+        test ! -L /var/lib/appflowy/keyword_index
+        chown -R --no-dereference 999:999 /var/lib/appflowy/keyword_index
+        exec setpriv --reuid=999 --regid=999 --clear-groups "$$@"
+      - --
+    command: [appflowy_search]
+
   appflowy_backup:
     # Bootstrap prepares private state and socket access; application processes then drop to postgres.
     user: root

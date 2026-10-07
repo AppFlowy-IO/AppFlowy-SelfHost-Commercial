@@ -112,6 +112,7 @@ class BackupConfigurationTests(unittest.TestCase):
                                         for volume in backup['volumes']))
                 else:
                     self.assertNotIn('backup_work', config['volumes'])
+                    self.assertIsNone(config['services']['appflowy_search'].get('entrypoint'))
 
     def deployment(self, backup=True, mode='compose'):
         digest = 'sha256:' + 'a' * 64

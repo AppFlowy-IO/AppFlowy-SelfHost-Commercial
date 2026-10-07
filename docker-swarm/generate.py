@@ -211,7 +211,9 @@ def derive_backup(source: dict, override: dict) -> dict:
     }
     cloud = copy.deepcopy(override['services']['appflowy_cloud'])
     cloud['environment']['APPFLOWY_BACKUP_BUCKET'] = service['environment']['APPFLOWY_BACKUP_BUCKET']
-    return {'version': '3.8', 'services': {'appflowy_cloud': cloud, 'appflowy_backup': service},
+    search = copy.deepcopy(override['services']['appflowy_search'])
+    return {'version': '3.8', 'services': {'appflowy_cloud': cloud, 'appflowy_search': search,
+                                       'appflowy_backup': service},
             'volumes': {'backup_work': None, 'backup_coordinator_socket': None}}
 
 
