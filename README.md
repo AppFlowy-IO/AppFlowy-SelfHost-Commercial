@@ -64,7 +64,18 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.2 (Latest)
+### 🚀 v0.19.5 (Latest)
+
+#### Bug Fixes
+
+- Fixed missed sidebar updates for connected viewers and stale database row synchronization after deletions and restores.
+- Fixed document import retries that could discard pages and attachments already saved before a temporary conflict.
+- Fixed stale attachment access checks after unpublishing.
+
+
+**Baseline:** [`d55254037786da52456dfab1ccbf931e8e3a9772`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/d55254037786da52456dfab1ccbf931e8e3a9772)
+
+### 🚀 v0.19.2
 
 #### New Features
 
