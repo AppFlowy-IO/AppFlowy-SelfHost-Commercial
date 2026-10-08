@@ -4,6 +4,20 @@ Open `https://your-domain/api/docs` to browse AppFlowy's business APIs and send 
 installation through Swagger UI. With the default local Docker Compose setup, open
 [http://localhost/api/docs](http://localhost/api/docs).
 
+Start with these four steps: **open Swagger → authorize → list workspaces → try another API**.
+
+## Watch the 41-second walkthrough
+
+This recording shows requests being executed and their responses inspected, including pages,
+database row IDs, quick notes, and file upload/download. Press **Play** below, then follow the steps.
+
+https://github.com/user-attachments/assets/3a4ab66c-515a-4fee-8986-9ba09d590c56
+
+The recording and response screenshots use disposable data from a local development preview
+captured on 2026-10-08 against a hosted-mode test server. Use your own deployment URL and IDs;
+the preview's localhost port is not a deployment setting. Credentials are masked and generated
+curl output is hidden in these examples.
+
 ## Before you begin
 
 - Run a self-host AppFlowy Cloud image containing the Swagger integration. Older images do not
@@ -19,7 +33,7 @@ needed. All UI assets are served by your installation.
 `APPFLOWY_ENABLE_SWAGGER` is no longer used. Remove it from older `.env` files or Compose overrides;
 setting it to `false` does not disable Swagger.
 
-## Open the API reference
+## Step 1: Open Swagger
 
 | Resource | URL |
 | --- | --- |
@@ -30,21 +44,16 @@ The bundled [Nginx configuration](../docker/nginx/nginx.conf) already forwards `
 including `/api/docs` and its subpaths. If you use a custom reverse proxy, preserve these paths and
 forward them to the same Cloud service as your other API requests.
 
-Expand an API group or use the filter to find an operation. Leave the **Servers** selection on
-**This AppFlowy installation** so requests use the same domain as the documentation page.
+Leave **Servers** set to **This AppFlowy installation**. Use **Filter by tag** to find a category,
+then expand an operation. The **Authorize** button is beside the server selector.
 
 ![Swagger API catalog with the server selector, Authorize button, and API groups](../asset/openapi/01-swagger-overview.png)
-
-The screenshots and [video walkthrough](#walkthrough-and-examples) show real requests captured on
-2026-10-08 in a local development preview using a hosted-mode test server and disposable data.
-Use your own deployment URL and resource IDs; the preview's localhost port is not a deployment
-setting.
 
 The reference covers business operations such as workspaces, pages, databases, files, sharing,
 publishing, search, and AI. Server administration, SCIM provisioning, and license/billing management
 are excluded. Available features still depend on your installation's configuration and license.
 
-## Authorize requests
+## Step 2: Authorize requests
 
 Browsing the reference does not require an API token. To execute authenticated operations, use a
 GoTrue **user access token** issued by this installation:
@@ -55,6 +64,13 @@ GoTrue **user access token** issued by this installation:
    copy the token from `Authorization: Bearer <token>` without the `Bearer ` prefix.
 3. In Swagger UI, click **Authorize**, paste the token into **bearerAuth**, click **Authorize**,
    then close the dialog.
+
+Paste only the token into the **Value** field shown below. Swagger adds the `Bearer` prefix for you.
+Use **bearerAuth** and leave **sessionCookie** empty for these API requests.
+
+![Swagger Authorize dialog showing the empty bearerAuth Value field and Authorize button](../asset/openapi/09-authorize.png)
+
+### Alternative: Get a token with email and password
 
 For an account with email/password sign-in, you can also obtain `access_token` from GoTrue:
 
@@ -71,12 +87,12 @@ are not user access tokens. Keep your token private; it grants your account's pe
 Swagger retains authorization in the current tab's memory. Refreshing the page clears it. If the
 token expires, obtain a new one and authorize again.
 
-## Test your first API
+## Step 3: List your workspaces
 
 1. Expand **Workspaces → List workspace** (`GET /api/workspace`).
 2. Click **Try it out**, then **Execute**.
-3. Inspect **Server response**. For responses using AppFlowy's JSON envelope, `code: 0` means
-   success; HTTP `200` alone does not guarantee business success.
+3. Scroll to **Server response** and find your workspaces under `data`. For AppFlowy's JSON
+   envelope, `code: 0` means success; HTTP `200` alone does not guarantee business success.
 4. Copy a returned workspace ID into another operation's `workspace_id` parameter. Replace example
    page, database, and object IDs with real IDs from that workspace.
 
@@ -91,41 +107,67 @@ Some operations require additional setup, such as an AI provider, an existing pa
 file in the documented format. WebSocket and legacy GET-with-body operations are listed with
 **Try it out** disabled because the browser cannot execute those transports.
 
-## Walkthrough and examples
+## Step 4: Try another API
 
-[Watch the 41-second Swagger walkthrough (MP4)](https://github.com/user-attachments/assets/3a4ab66c-515a-4fee-8986-9ba09d590c56)
-to see requests executed and their responses inspected. It demonstrates workspaces, pages,
-database row IDs, quick notes, and file upload/download. Credentials are masked and the generated
-curl section is hidden in the recording and screenshots.
+Every operation follows the same flow: **Try it out → fill in the parameters and body → Execute →
+inspect Server response**. Use IDs returned by your installation, rather than copying the IDs in
+these screenshots.
 
-<details>
-<summary>More screenshots: pages, database rows, quick notes, and files</summary>
+### Create a page
 
-**Create a page.** Supply an existing workspace and parent space, then inspect the returned page ID.
+1. Open **Pages and spaces → Post page view** (`POST /api/workspace/{workspace_id}/page-view`).
+2. Set `workspace_id` to the ID from step 3. In the body, set `parent_view_id` to an existing space
+   in that workspace and set the page `name`. The example below creates a document with `layout: 0`
+   and `content_mode: "create_content"`.
+3. Click **Execute**. On success, copy `data.view_id` from **Server response** for the next request.
+
+Example body (replace `YOUR_SPACE_ID` with an existing space ID):
+
+```json
+{
+  "parent_view_id": "YOUR_SPACE_ID",
+  "layout": 0,
+  "name": "My Swagger test page",
+  "content_mode": "create_content"
+}
+```
 
 ![Create a page through Swagger and inspect the successful response](../asset/openapi/03-create-page.png)
 
-**Read the page.** Use the returned ID to retrieve the page from the same workspace.
+### Read the page you created
+
+Open **Pages and spaces → Get page view**, reuse the same `workspace_id`, and set `view_id` to the
+ID returned when creating the page. Execute it to inspect the page content in **Server response**.
 
 ![Read the created page through Swagger](../asset/openapi/04-read-page.png)
 
-**List database row IDs.** Use a database prepared in your workspace to find IDs for subsequent requests.
+### List database row IDs
+
+Use a database already present in your workspace. Fill in its workspace and database IDs, then
+execute the row-list operation. Copy a returned row ID when testing operations on an individual row.
 
 ![List row IDs from a prepared database through Swagger](../asset/openapi/05-database-rows.png)
 
-**Create a quick note.** Enter the request body and inspect the newly created note.
+### Create a quick note
+
+Fill in the workspace ID and note content, then click **Execute**. The response contains the newly
+created note, which you can use in later read or update requests.
 
 ![Create a quick note through Swagger](../asset/openapi/06-create-quick-note.png)
 
-**Upload a file.** Select a local file using the file input, then execute the upload.
+### Upload a file
+
+Fill in the required parameters and select a local file using the file input, then click
+**Execute**. Retain the uploaded file's identifiers for the download request.
 
 ![Upload a selected file through Swagger](../asset/openapi/07-upload-file.png)
 
-**Download the file.** Use the stored file's identifiers to retrieve its bytes.
+### Download the file
+
+Use the same workspace and stored file identifiers. After **Execute**, use the **Download file**
+link in **Server response** to save the returned bytes.
 
 ![Successful file download response and download link in Swagger](../asset/openapi/08-download-file.png)
-
-</details>
 
 ## Download and update the document
 
