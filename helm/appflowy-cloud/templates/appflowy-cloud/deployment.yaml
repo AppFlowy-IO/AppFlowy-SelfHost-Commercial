@@ -181,6 +181,8 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
+            - name: APPFLOWY_SEARCH_ENABLED
+              value: {{ index .Values "appflowy-search" "enabled" | quote }}
             {{- if index .Values "appflowy-search" "enabled" }}
             - name: APPFLOWY_SEARCH_SERVICE_URL
               value: "http://{{ include "appflowy.search.fullname" . }}:{{ index .Values "appflowy-search" "service" "port" }}"

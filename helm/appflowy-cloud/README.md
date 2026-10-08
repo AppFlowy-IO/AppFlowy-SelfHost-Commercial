@@ -46,6 +46,7 @@ Optional but common:
 - `gotrue.config.smtp.*` / `gotrue.config.oauth.*`: set only if you enable SMTP or OAuth providers.
 - `appflowy-ai.secrets.*`: set only if you enable AI providers.
 - `appflowy-ai.enabled=false`: runs the core services without a paid AI provider. For keyword search without semantic embedding workers, also set `appflowy-search.config.backgroundIndexerEnabled=false`.
+- `appflowy-search.enabled`: controls deployment of Search and supplies Cloud's initial/reset `APPFLOWY_SEARCH_ENABLED` default. A stored **Admin → Environment → Search** override takes precedence, including after restarts; changing the chart default does not replace that override.
 - `*.image.digest`: pins an application or infrastructure image to an immutable registry digest; when set, it takes precedence over `image.tag`.
 - `ingress.scim.enabled`: defaults to `true` and adds the `/scim` route for SCIM provisioning; set it to `false` when SCIM is unused or must use a separate edge (see below).
 
