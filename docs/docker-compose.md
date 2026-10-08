@@ -177,6 +177,16 @@ Redis uses the image's default command. The root Compose file does not configure
 
 For a local Swarm installation, follow the [Docker Swarm guide](docker-swarm.md). It uses a separate stack and direct Docker commands; the [deployment CI guide](deployment-ci.md) describes the automated checks and their limits.
 
+## Interactive business API documentation
+
+Self-host Cloud images containing Swagger support serve the interactive API reference automatically
+at `https://your-domain/api/docs` (or `http://localhost/api/docs` locally). No enable flag or separate
+Swagger container is required. The existing Nginx `/api` location forwards the page and its assets.
+
+See the [OpenAPI guide](OPENAPI.md) for authentication, testing requests, downloading the document,
+and updating Swagger with your Cloud image. Remove `APPFLOWY_ENABLE_SWAGGER` from older `.env` or
+Compose overrides; it is no longer used and setting it to `false` does not disable the page.
+
 ## OAuth providers
 
 The [`gotrue` service](../docker-compose.yml) forwards Google, GitHub, and Discord OAuth settings from the root `.env`. The settings are listed in [`deploy.env`](../deploy.env).

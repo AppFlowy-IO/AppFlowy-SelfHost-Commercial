@@ -22,6 +22,8 @@ for the v0.19.2 storage migration. Swarm and Helm use their own deployment guide
 adapters; the [Compose Backup acceptance lane](docs/deployment-ci.md#backup-acceptance) does not
 qualify those platforms.
 
+To browse and test your installation's business APIs in Swagger UI, see the [OpenAPI guide](docs/OPENAPI.md).
+
 ## Deployment Options
 
 AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
