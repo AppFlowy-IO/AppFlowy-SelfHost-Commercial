@@ -6,18 +6,19 @@ installation through Swagger UI. With the default local Docker Compose setup, op
 
 Start with these four steps: **open Swagger → authorize → list workspaces → try another API**.
 
-## Watch the 41-second walkthrough
+## Watch the 94-second walkthrough
 
-This recording shows requests being executed and their responses inspected, including pages,
-database row IDs, quick notes, and file upload/download. Press **Play** below, then follow the steps.
+This recording shows the current 16-category Swagger UI, authorization, and real requests for
+workspaces, pages, database rows, quick notes, and file upload/download. Press **Play** below,
+then follow the steps.
 
-https://github.com/user-attachments/assets/3a4ab66c-515a-4fee-8986-9ba09d590c56
+https://github.com/user-attachments/assets/aaaf5d22-7026-4184-828c-5d1d35ad5d27
 
 The recording and response screenshots use disposable data from a local development preview
 captured on 2026-10-08 against a hosted-mode test server. Use your own deployment URL and IDs;
 the preview's localhost port is not a deployment setting. Credentials are masked and generated
-curl output is hidden in these examples. The video predates the simplified categories; use the
-current names in the steps and catalog screenshot below.
+curl output is hidden in these examples. All screenshots and the video use the same API categories
+described below.
 
 ## Before you begin
 
@@ -170,29 +171,31 @@ ID returned when creating the page. Execute it to inspect the page content in **
 
 ### List database row IDs
 
-Use a database already present in your workspace. Fill in its workspace and database IDs, then
-execute the row-list operation. Copy a returned row ID when testing operations on an individual row.
+Open **Databases → List database row id** for a database already present in your workspace.
+Fill in its workspace and database IDs, then execute the operation. Copy a returned row ID when
+testing operations on an individual row.
 
 ![List row IDs from a prepared database through Swagger](../asset/openapi/05-database-rows.png)
 
 ### Create a quick note
 
-Fill in the workspace ID and note content, then click **Execute**. The response contains the newly
-created note, which you can use in later read or update requests.
+Open **Pages & notes → Post quick note**, fill in the workspace ID and note content, then click
+**Execute**. The response contains the newly created note, which you can use in later read or
+update requests.
 
 ![Create a quick note through Swagger](../asset/openapi/06-create-quick-note.png)
 
 ### Upload a file
 
-Fill in the required parameters and select a local file using the file input, then click
-**Execute**. Retain the uploaded file's identifiers for the download request.
+Open **Files → Put blob v1**, fill in the required parameters and select a local file using the
+file input, then click **Execute**. Retain the uploaded file's identifiers for the download request.
 
 ![Upload a selected file through Swagger](../asset/openapi/07-upload-file.png)
 
 ### Download the file
 
-Use the same workspace and stored file identifiers. After **Execute**, use the **Download file**
-link in **Server response** to save the returned bytes.
+Open **Files → Get blob v1** and use the same workspace and stored file identifiers. After
+**Execute**, use the **Download file** link in **Server response** to save the returned bytes.
 
 ![Successful file download response and download link in Swagger](../asset/openapi/08-download-file.png)
 
