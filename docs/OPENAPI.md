@@ -33,6 +33,13 @@ forward them to the same Cloud service as your other API requests.
 Expand an API group or use the filter to find an operation. Leave the **Servers** selection on
 **This AppFlowy installation** so requests use the same domain as the documentation page.
 
+![Swagger API catalog with the server selector, Authorize button, and API groups](../asset/openapi/01-swagger-overview.png)
+
+The screenshots and [video walkthrough](#walkthrough-and-examples) show real requests captured on
+2026-10-08 in a local development preview using a hosted-mode test server and disposable data.
+Use your own deployment URL and resource IDs; the preview's localhost port is not a deployment
+setting.
+
 The reference covers business operations such as workspaces, pages, databases, files, sharing,
 publishing, search, and AI. Server administration, SCIM provisioning, and license/billing management
 are excluded. Available features still depend on your installation's configuration and license.
@@ -73,6 +80,8 @@ token expires, obtain a new one and authorize again.
 4. Copy a returned workspace ID into another operation's `workspace_id` parameter. Replace example
    page, database, and object IDs with real IDs from that workspace.
 
+![List workspace request after Execute, showing the response and returned workspace IDs](../asset/openapi/02-list-workspaces.png)
+
 Requests run with your user's normal permissions. Use a test workspace for write operations:
 creating, updating, or deleting through Swagger changes the actual installation. An account created
 directly through GoTrue must first initialize its AppFlowy profile; opening AppFlowy Web completes
@@ -81,6 +90,42 @@ the normal sign-in flow before you test workspace APIs.
 Some operations require additional setup, such as an AI provider, an existing page, or a binary
 file in the documented format. WebSocket and legacy GET-with-body operations are listed with
 **Try it out** disabled because the browser cannot execute those transports.
+
+## Walkthrough and examples
+
+[Watch the 41-second Swagger walkthrough (MP4)](https://github.com/user-attachments/assets/3a4ab66c-515a-4fee-8986-9ba09d590c56)
+to see requests executed and their responses inspected. It demonstrates workspaces, pages,
+database row IDs, quick notes, and file upload/download. Credentials are masked and the generated
+curl section is hidden in the recording and screenshots.
+
+<details>
+<summary>More screenshots: pages, database rows, quick notes, and files</summary>
+
+**Create a page.** Supply an existing workspace and parent space, then inspect the returned page ID.
+
+![Create a page through Swagger and inspect the successful response](../asset/openapi/03-create-page.png)
+
+**Read the page.** Use the returned ID to retrieve the page from the same workspace.
+
+![Read the created page through Swagger](../asset/openapi/04-read-page.png)
+
+**List database row IDs.** Use a database prepared in your workspace to find IDs for subsequent requests.
+
+![List row IDs from a prepared database through Swagger](../asset/openapi/05-database-rows.png)
+
+**Create a quick note.** Enter the request body and inspect the newly created note.
+
+![Create a quick note through Swagger](../asset/openapi/06-create-quick-note.png)
+
+**Upload a file.** Select a local file using the file input, then execute the upload.
+
+![Upload a selected file through Swagger](../asset/openapi/07-upload-file.png)
+
+**Download the file.** Use the stored file's identifiers to retrieve its bytes.
+
+![Successful file download response and download link in Swagger](../asset/openapi/08-download-file.png)
+
+</details>
 
 ## Download and update the document
 
