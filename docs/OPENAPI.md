@@ -16,7 +16,8 @@ https://github.com/user-attachments/assets/3a4ab66c-515a-4fee-8986-9ba09d590c56
 The recording and response screenshots use disposable data from a local development preview
 captured on 2026-10-08 against a hosted-mode test server. Use your own deployment URL and IDs;
 the preview's localhost port is not a deployment setting. Credentials are masked and generated
-curl output is hidden in these examples.
+curl output is hidden in these examples. The video predates the simplified categories; use the
+current names in the steps and catalog screenshot below.
 
 ## Before you begin
 
@@ -49,9 +50,35 @@ then expand an operation. The **Authorize** button is beside the server selector
 
 ![Swagger API catalog with the server selector, Authorize button, and API groups](../asset/openapi/01-swagger-overview.png)
 
-The reference covers business operations such as workspaces, pages, databases, files, sharing,
-publishing, search, and AI. Server administration, SCIM provisioning, and license/billing management
-are excluded. Available features still depend on your installation's configuration and license.
+### Find the right category
+
+Categories follow the task you want to perform. Each API appears once, so related operations stay
+together even when their URLs use different prefixes.
+
+| Category | Use it to… |
+| --- | --- |
+| **Account & sign-in** | Sign in, inspect available sign-in methods, and manage your profile. |
+| **Workspaces & spaces** | Create and configure workspaces and spaces, and inspect workspace activity. |
+| **Members & groups** | Invite people and manage workspace members and groups. |
+| **Sharing & permissions** | Grant, inspect, revoke, or request access to pages and spaces. |
+| **Pages & notes** | Create, read, organize, and delete pages and quick notes; browse the folder tree. |
+| **Databases** | Manage database views, fields, and rows; duplicate or restore a database. |
+| **Forms** | Manage form sharing and submit public forms. |
+| **Comments & notifications** | Comment, mention people, follow pages, and manage reminders and notifications. |
+| **Publishing** | Publish pages to the web and manage published content. |
+| **Files** | Upload, download, and manage attachments. |
+| **Imports & exports** | Import documents or CSV data and export workspaces or PDFs. |
+| **Search** | Find content and backlinks, or rebuild search embeddings. |
+| **Templates** | Browse and manage templates, their categories, and creators. |
+| **Integrations** | Connect external services and authorize third-party API clients. |
+| **AI** | Use chat, writing assistance, database assistance, models, and meeting transcription. |
+| **Sync & history** | Synchronize collaboration state and inspect or revert its versions. |
+
+For example, find a CSV import under **Imports & exports**, a group access grant under
+**Sharing & permissions**, and database duplication under **Databases**.
+
+Server administration, SCIM provisioning, and license/billing management are excluded. Available
+features still depend on your installation's configuration and license.
 
 ## Step 2: Authorize requests
 
@@ -89,7 +116,7 @@ token expires, obtain a new one and authorize again.
 
 ## Step 3: List your workspaces
 
-1. Expand **Workspaces → List workspace** (`GET /api/workspace`).
+1. Expand **Workspaces & spaces → List workspace** (`GET /api/workspace`).
 2. Click **Try it out**, then **Execute**.
 3. Scroll to **Server response** and find your workspaces under `data`. For AppFlowy's JSON
    envelope, `code: 0` means success; HTTP `200` alone does not guarantee business success.
@@ -115,7 +142,7 @@ these screenshots.
 
 ### Create a page
 
-1. Open **Pages and spaces → Post page view** (`POST /api/workspace/{workspace_id}/page-view`).
+1. Open **Pages & notes → Post page view** (`POST /api/workspace/{workspace_id}/page-view`).
 2. Set `workspace_id` to the ID from step 3. In the body, set `parent_view_id` to an existing space
    in that workspace and set the page `name`. The example below creates a document with `layout: 0`
    and `content_mode: "create_content"`.
@@ -136,7 +163,7 @@ Example body (replace `YOUR_SPACE_ID` with an existing space ID):
 
 ### Read the page you created
 
-Open **Pages and spaces → Get page view**, reuse the same `workspace_id`, and set `view_id` to the
+Open **Pages & notes → Get page view**, reuse the same `workspace_id`, and set `view_id` to the
 ID returned when creating the page. Execute it to inspect the page content in **Server response**.
 
 ![Read the created page through Swagger](../asset/openapi/04-read-page.png)
