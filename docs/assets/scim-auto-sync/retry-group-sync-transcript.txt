@@ -1,0 +1,17 @@
+Real Admin Retry sync action, using a controlled local demonstration fault: only the projected AppFlowy name was made stale before recording this excerpt. This was not an observed Authentik failure. The received SCIM data was unchanged. The live endpoint restored the name and queued normal membership processing; the monitor then confirmed Synced. No cuts within this 32-second excerpt.
+
+0–15s
+Controlled recovery: a stale AppFlowy group name was introduced.
+The received SCIM group name and membership were left unchanged.
+
+15–20s
+Needs attention confirms that the received name is not applied.
+Select Retry sync to reapply the latest data AppFlowy has received.
+
+20–24s
+Sync requested means the request was accepted.
+Pending shows that background membership work has not finished.
+
+24–32s
+The monitor refreshes and confirms Synced.
+Retry sync does not pull newer changes from the identity provider.

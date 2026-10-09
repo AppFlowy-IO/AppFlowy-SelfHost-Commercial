@@ -5,9 +5,9 @@ AppFlowy Self-Hosted implements SCIM 2.0 so that your identity provider (IdP) ca
 SCIM provisions accounts; it does not sign users in. Pair it with [OIDC / OAuth](OIDC.md) or [LDAP](LDAP.md) so that provisioned users can authenticate. [SAML](OKTA_SAML.md) can also be paired, subject to the account-matching behaviour described in [Sign-in for provisioned users](#sign-in-for-provisioned-users).
 
 For a step-by-step example with screenshots and videos, follow
-[Automatic group sync with SCIM](SCIM_AUTO_SYNC.md). It demonstrates adding and
-removing members in Authentik, seeing the matching AppFlowy group update, and
-assigning that group to a space.
+[Automatic group sync with SCIM](SCIM_AUTO_SYNC.md). It demonstrates group creation,
+renaming and deletion, adding/removing/replacing members, directory display-name
+behavior, sync status and **Retry sync**, and assigning a group to a space.
 
 ## What SCIM provisioning does
 
@@ -348,6 +348,19 @@ Provision the test identity again through the IdP, then sign in at `https://your
 
 ### 9. Ongoing checks
 
+- **Group sync status.** In **SCIM Provisioning**, select the **SCIM groups** count beneath
+  a connection name. The monitor shows **Synced**, **Pending**, **Retrying**, or
+  **Needs attention**, with applied / eligible member counts. It refreshes every five seconds
+  while open and visible. Synced covers the latest data AppFlowy has received, not changes
+  still waiting in the IdP. **Last directory change** is not a successful-sync timestamp.
+  Status checks are read-only. **Retry sync** explicitly reapplies the group's received
+  name and queues membership work; it does not pull unsent changes from the IdP.
+  Wait for **Synced** after **Sync requested**. If a missing group is recreated, review
+  and reassign its space/page grants. Retry requires an enabled connection.
+  This view requires matching Cloud and Admin versions with group monitoring and retry support.
+  See the [screenshots, video, and status explanations](SCIM_AUTO_SYNC.md#watch-group-sync-status-in-admin).
+  The [recovery walkthrough](SCIM_AUTO_SYNC.md#f-recover-a-group-with-retry-sync)
+  shows Needs attention → Pending → Synced.
 - **Token expiry.** Check the **Status** column weekly and rotate while it shows **Token expiring soon**. After a rotation, the old token answers `401` immediately and the new one `200`; re-run the IdP's connection test with the new token. Rotating once during initial setup, before the IdP holds the token, is a safe way to rehearse the procedure.
 - **Worker health.** The reconciliation worker exports counters that are not reachable through Nginx. Read them from inside the container:
 
