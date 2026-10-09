@@ -2,7 +2,7 @@
 
 Captured from the real Microsoft Entra admin center and local AppFlowy test
 instance on October 9, 2026, for
-[the AD and Entra guide](../../AD_SCIM_AUTO_SYNC.md#using-microsoft-entra-id-instead).
+[the Microsoft Entra guide](../../ENTRA_SCIM_AUTO_SYNC.md).
 The media does not establish a Windows AD connection or an ADUC test.
 
 ## Earlier setup references
