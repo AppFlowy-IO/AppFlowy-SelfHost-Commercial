@@ -17,3 +17,6 @@ flake.lock
 
 # Private Backup configuration, certificates and deployment state.
 /backup-ops/
+
+# Local Python deployment checks.
+**/__pycache__/
