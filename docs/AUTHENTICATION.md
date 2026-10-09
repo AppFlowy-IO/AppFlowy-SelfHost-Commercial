@@ -16,8 +16,12 @@ These features are configured through the Admin console under **Authentication**
 The SCIM, OIDC, and LDAP guides each include a **Verify the setup** section followed by troubleshooting. Run the verification after configuring the method and again after upgrades.
 
 To see group membership sync in action, use the illustrated
-[SCIM auto-sync walkthrough](SCIM_AUTO_SYNC.md), including videos of member
+[Authentik auto-sync walkthrough](AUTHENTIK_AUTO_SYNC.md), including videos of member
 addition, member removal, and assigning the synced group to a space.
+
+For an on-premises Windows Server directory, follow the
+[AD-to-SCIM walkthrough](AD_SCIM_AUTO_SYNC.md), which also distinguishes Microsoft
+Entra ID and explains when a separate connector is needed.
 
 ### Example identity provider: Authentik
 

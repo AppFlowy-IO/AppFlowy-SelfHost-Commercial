@@ -1,4 +1,8 @@
-# Automatic group sync with SCIM
+# Automatic group sync from Authentik with SCIM
+
+For groups managed in on-premises Windows Server Active Directory, start with
+[Automatic Windows AD group sync with SCIM](AD_SCIM_AUTO_SYNC.md). That guide adds
+the AD-to-connector stage and explains the alternative Microsoft Entra ID route.
 
 Manage your team in Authentik and let SCIM keep its AppFlowy group up to date. This
 walkthrough shows how to connect the two systems, create, rename, and delete a group,
