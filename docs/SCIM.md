@@ -4,6 +4,15 @@ AppFlowy Self-Hosted implements SCIM 2.0 so that your identity provider (IdP) ca
 
 SCIM provisions accounts; it does not sign users in. Pair it with [OIDC / OAuth](OIDC.md) or [LDAP](LDAP.md) so that provisioned users can authenticate. [SAML](OKTA_SAML.md) can also be paired, subject to the account-matching behaviour described in [Sign-in for provisioned users](#sign-in-for-provisioned-users).
 
+For a step-by-step example with screenshots and videos, follow
+[Automatic group sync from Authentik](AUTHENTIK_AUTO_SYNC.md). It demonstrates group creation,
+renaming and deletion, adding/removing/replacing members, directory display-name
+behavior, sync status and **Retry sync**, and assigning a group to a space.
+
+For on-premises Windows Server AD, use
+[Automatic Windows AD group sync with SCIM](AD_SCIM_AUTO_SYNC.md). It explains the
+connector, AD group changes, and how the Microsoft Entra ID route differs.
+
 ## What SCIM provisioning does
 
 - **Users.** Creates AppFlowy accounts from the IdP, adds them to one workspace with a default role, and removes workspace access when the IdP deactivates or deletes them.
@@ -161,11 +170,20 @@ The Enterprise User extension (`urn:ietf:params:scim:schemas:extension:enterpris
 
 ### Microsoft Entra ID
 
+For current portal screenshots, group-assignment requirements, and a lifecycle
+verification checklist, see the [Entra walkthrough](AD_SCIM_AUTO_SYNC.md#using-microsoft-entra-id-instead).
+
 1. In **Enterprise applications**, open your AppFlowy application and go to **Provisioning**.
-2. Set **Provisioning Mode** to **Automatic**.
-3. Under **Admin Credentials**, enter the **Tenant URL** and **Secret Token**, then click **Test Connection**. Entra probes `/Users` and `/Groups` with a filter for a random value and expects an empty list.
-4. Under **Mappings**, keep `userName` as the matching attribute (mapped from `userPrincipalName` or `mail`), map `displayName`, `active`, and `externalId`, and delete the unsupported attributes.
-5. Keep **Scope** at **Sync only assigned users and groups**, assign the users and groups to provision, then set **Provisioning Status** to **On**.
+2. Select **New configuration**. In the legacy view, set **Provisioning Mode** to **Automatic** and expand **Admin Credentials**; follow the new-experience link if shown.
+3. Choose **Bearer authentication**, enter the **Tenant URL** and **Secret token**, then select **Test connection** and create/save after success. Entra probes `/Users` and `/Groups` with a filter for a random value and expects an empty list. The HTTPS endpoint must be reachable from the provisioning service.
+4. Under **Attribute mapping** / **Mappings**, keep `userName` as the matching attribute (mapped from `userPrincipalName` or `mail`, whichever is the AppFlowy sign-in email), map `displayName`, `active`, and `externalId`, and delete unsupported or read-only mappings. Enable Group provisioning with `displayName`, `members`, and `externalId`.
+5. Keep **Scope** at **Sync only assigned users and groups**, assign the test users and groups, then **Start provisioning** (or set **Provisioning Status** to **On** in the legacy view). Group-based application assignment requires Entra ID P1/P2 and uses direct memberships.
+
+For Microsoft's SCIM-compatible PATCH behavior, including member removal and
+boolean `active` updates, use
+`https://your-domain/scim/v2?aadOptscim062020` as the Tenant URL. This flag does not
+apply to **Provision on demand**; verify those changes through scheduled
+provisioning. See [Microsoft's compatibility guidance](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/application-provisioning-config-problem-scim-compatibility).
 
 ### Okta
 
@@ -184,7 +202,7 @@ The Enterprise User extension (`urn:ietf:params:scim:schemas:extension:enterpris
 ## How provisioning works
 
 - **New users** receive an AppFlowy account and join the connection's workspace at the effective role. An existing account with the same email address is reused rather than duplicated.
-- **Seat limits apply.** When the workspace would exceed the licensed seat count, AppFlowy answers with SCIM `409` and the IdP reports the failure. Upgrade the plan or free a seat, then let the IdP retry.
+- **Seat limits apply.** When activation would exceed licensed capacity, AppFlowy accepts a visible SCIM User record but grants no new access. Admin shows **Waiting for seats**. Apply the upgraded license and activation retries automatically; freeing a seat also allows a background retry. Deactivating or deleting the waiting User cancels the request. See the [illustrated seat-recovery walkthrough](AUTHENTIK_AUTO_SYNC.md#when-your-license-runs-out-of-seats).
 - **Deactivating a user** (`active: false`) removes the user from the workspace and releases the seat. If the user has no other workspace, the account is also banned in the authentication service: new sign-ins are refused and the session can no longer be refreshed, so the user is signed out when the current access token expires (up to `GOTRUE_JWT_EXP`, 7 days in the template). Until then the user remains signed in but no longer sees the workspace. A user who keeps another workspace is not banned. To end sessions immediately, delete the user in the Admin console. Reactivation restores membership at the strongest role among the default and the user's remaining mapped groups.
 - **Deleting a user** removes workspace access and the SCIM record, and blocks new sign-ins if the user has no other workspace. The AppFlowy account itself is retained. A later re-provision creates a new SCIM resource ID.
 - **Group membership** in a mapped group grants at least the mapped role. Removing a user from a mapped group, renaming or deleting a mapped group, or changing the connection's mappings recomputes the user's role. Unmapped groups do not change roles but remain available as workspace groups for space and page permissions. A background worker applies role changes within a few seconds.
@@ -276,7 +294,8 @@ Expect `"totalResults":1`. A user created by the IdP must also be deactivated an
 | Create response | Cause |
 | --- | --- |
 | `409` with `scimType: uniqueness` | The `userName` is already provisioned on this connection. |
-| `409` with a license message | No free seat. |
+| `201`/`200` with `X-AppFlowy-Provisioning-State: waiting_for_seat` | User record accepted; activation waits for capacity. `active` reports current workspace membership, normally `false` while waiting. |
+| `409` with a license message | A non-activation license conflict, or an older server without automatic seat recovery. Check the installed version and license. |
 | `403` | The email belongs to a system administrator or to the workspace owner. |
 | `400 invalidValue` naming an attribute | The IdP maps an attribute that AppFlowy does not store. |
 
@@ -343,6 +362,19 @@ Provision the test identity again through the IdP, then sign in at `https://your
 
 ### 9. Ongoing checks
 
+- **Group sync status.** In **SCIM Provisioning**, select the **SCIM groups** count beneath
+  a connection name. The monitor shows **Synced**, **Pending**, **Retrying**, **Waiting for seats**, or
+  **Needs attention**, with applied / eligible member counts. It refreshes every five seconds
+  while open and visible. Synced covers the latest data AppFlowy has received, not changes
+  still waiting in the IdP. **Last directory change** is not a successful-sync timestamp.
+  Status checks are read-only. **Retry sync** explicitly reapplies the group's received
+  name and queues membership work; it does not pull unsent changes from the IdP.
+  Wait for **Synced** after **Sync requested**. If a missing group is recreated, review
+  and reassign its space/page grants. Retry requires an enabled connection.
+  This view requires matching Cloud and Admin versions with group monitoring and retry support.
+  See the [screenshots, video, and status explanations](AUTHENTIK_AUTO_SYNC.md#watch-group-sync-status-in-admin).
+  The [recovery walkthrough](AUTHENTIK_AUTO_SYNC.md#f-recover-a-group-with-retry-sync)
+  shows Needs attention → Pending → Synced.
 - **Token expiry.** Check the **Status** column weekly and rotate while it shows **Token expiring soon**. After a rotation, the old token answers `401` immediately and the new one `200`; re-run the IdP's connection test with the new token. Rotating once during initial setup, before the IdP holds the token, is a safe way to rehearse the procedure.
 - **Worker health.** The reconciliation worker exports counters that are not reachable through Nginx. Read them from inside the container:
 
@@ -361,7 +393,8 @@ Provision the test identity again through the IdP, then sign in at `https://your
 | IdP test returns `403` | The IdP used `http://` instead of `https://`, or the deployment is on the Free Tier. | Use the HTTPS Tenant URL, or upgrade to a Seed plan or higher. |
 | IdP test returns `404` or `502` | The edge does not route `/scim` to AppFlowy Cloud. | Add the `/scim` location shown above and reload Nginx. |
 | IdP test reports an SSL or connection error | The certificate is not publicly trusted, or the host is not reachable from the internet. | Install a CA-issued certificate and check DNS and firewall rules. |
-| `409` when creating a user | Duplicate `userName`, or the workspace has reached its seat limit. | Check for an existing user with that email, or increase the licensed seats. |
+| `409` when creating a user | Duplicate `userName`, or a license conflict on an older server. | Find the existing User by `userName`; upgrade the server for automatic seat recovery. |
+| Admin shows Waiting for seats | An accepted activation needs license capacity. | Apply an upgraded license or free a seat. Background retries use the latest received directory state. |
 | `400 invalidFilter` | The IdP used an unsupported filter. | Match users on `userName` or `externalId` and groups on `displayName`, using `eq`. |
 | Provisioning fails on an attribute | The IdP maps an attribute that AppFlowy does not store. | Remove the attribute from the IdP mapping. |
 | Users are provisioned but cannot sign in | SCIM does not authenticate. | Configure [OIDC](OIDC.md), [SAML](OKTA_SAML.md), or [LDAP](LDAP.md), and make sure the sign-in email matches `userName`. |

@@ -1,0 +1,57 @@
+Edited walkthrough of real Authentik SCIM group changes. Silent video with captions. Labeled still captures show the creation form and verified AppFlowy results. Idle waits are removed; duration is not a sync-latency measurement. The new group was included in the existing provider’s Group filters during setup, outside this recording. No manual full sync or direct AppFlowy membership edit was used. The separate Retry sync exercise is shown in retry-group-sync.mp4.
+
+0.0–5.0s
+Create Design — SCIM Demo in Authentik (still capture).
+Include it in the SCIM provider’s Group filters.
+
+5.0–12.0s
+After provider setup, Admin has received the empty group.
+2 groups received; Design shows 0 / 0 eligible and Synced.
+
+12.0–27.0s
+Rename the directory group to Product Design — SCIM Demo.
+Save Changes; AppFlowy automatically applies the new group name.
+
+27.0–44.0s
+Add Alice in the directory group’s Users tab.
+Choose Add Existing User, select Alice, then Assign.
+
+44.0–54.0s
+The directory now lists Alice in Product Design.
+Refreshing this table reloads its view; it does not trigger SCIM.
+
+54.0–59.0s
+AppFlowy result — still capture after the addition.
+Product Design contains Alice; no AppFlowy membership edit was made.
+
+59.0–76.0s
+Next, add Bob to the same directory group.
+Then remove Alice to demonstrate replacing one member with another.
+
+76.0–100.0s
+Remove Alice from this group and confirm Delete.
+This deletes her group membership; her user account remains.
+
+100.0–105.0s
+AppFlowy result — still capture after the replacement.
+The group now contains Bob only. Equal counts can hide different members.
+
+105.0–116.0s
+Update Bob’s directory display name.
+SCIM stores it; AppFlowy keeps his existing profile name.
+
+116.0–121.0s
+AppFlowy People — still capture after the directory name update.
+Bob’s existing profile name is preserved; both demo accounts remain.
+
+121.0–132.0s
+Delete Product Design — SCIM Demo in Authentik.
+This removes the group, not Alice’s or Bob’s account.
+
+132.0–142.8s
+The Admin connection count updates automatically from 2 to 1.
+Engineering remains. No manual full sync was started.
+
+142.8–147.8s
+Final Admin result — still capture after deletion.
+Only Engineering remains, with Bob and a Synced badge.
