@@ -1,5 +1,7 @@
 # Deployment CI
 
+[Documentation](README.md)
+
 [Deployment integration](../.github/workflows/deployment-test.yml) runs on pull requests, pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions.
 
 Use **Deployment tests** as the required pull-request status check. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check. Adding the workflow does not configure repository branch protection automatically.

@@ -1,5 +1,7 @@
 # LDAP Authentication
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md)
+
 AppFlowy Self-Hosted can authenticate users against an LDAP directory such as Active Directory or OpenLDAP. Users sign in with their existing directory credentials, and AppFlowy can create their account and add them to a workspace on first sign-in.
 
 AppFlowy verifies the password directly against the directory and then creates the AppFlowy session itself. Directory passwords are never stored or forwarded to the authentication service.

@@ -1,5 +1,7 @@
 # Automatic group sync from Authentik with SCIM
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md) / [SCIM setup](SCIM.md) / [Operations](SCIM_OPERATIONS.md)
+
 For groups managed in on-premises Windows Server Active Directory, start with
 [Automatic Windows AD group sync with SCIM](AD_SCIM_AUTO_SYNC.md). That guide adds
 the AD-to-connector stage and explains the alternative Microsoft Entra ID route.
@@ -485,6 +487,10 @@ her membership in Product Design; it does not delete her account.
 
 ### E. Modify a directory user's display name
 
+This recording uses the default with workspace name sync disabled. Enable
+[Sync workspace profile names](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles)
+when directory names should also appear in this workspace's member profiles.
+
 1. In Authentik, edit Bob's user record.
 2. Change **Display Name** from **Bob Rivera** to **Bob Rivera — Design**, then save.
    Keep his username and email unchanged.
@@ -500,7 +506,7 @@ her membership in Product Design; it does not delete her account.
 **Expected result:** Bob remains the same group member. His updated directory
 display name is stored on this connection's SCIM user record, while AppFlowy keeps
 his existing profile name. In this demo, AppFlowy still displays his email address.
-This is expected behavior, not a failed group sync. The group badge checks the
+This is expected with workspace name sync disabled, not a failed group sync. The group badge checks the
 group's name and eligible member identities; it does not compare profile names.
 
 You can restore Bob's directory display name after the exercise. For other user
@@ -718,7 +724,7 @@ grants you configured earlier.
 | Sync stopped after token rotation | Replace the token in the existing Authentik provider. Do not recreate the provider just to change its token. |
 | A removed group member can still access the space | Look for direct grants, another group, owner access, or broader space permissions. |
 | You cannot edit the synchronized roster in AppFlowy | This is expected. Make the membership change in Authentik. |
-| A user's directory display name changed but their AppFlowy profile did not | This is expected. The SCIM user value is stored separately from the AppFlowy profile name. |
+| A user's directory display name changed but the workspace name did not | With name sync disabled, this is expected. Enable [Sync workspace profile names](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles) to manage names in this workspace. The global personal name stays independent. |
 
 For protocol errors, connection tests, and lifecycle behavior, continue with
 [SCIM verification](SCIM.md#verify-the-setup) and

@@ -1,5 +1,7 @@
 # AppFlowy OpenAPI and Swagger UI
 
+[Documentation](README.md)
+
 Open `https://your-domain/api/docs` to browse AppFlowy's business APIs and send requests to your own
 installation through Swagger UI. With the default local Docker Compose setup, open
 [http://localhost/api/docs](http://localhost/api/docs).

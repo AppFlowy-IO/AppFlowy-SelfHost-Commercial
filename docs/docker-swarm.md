@@ -1,5 +1,7 @@
 # Docker Swarm setup
 
+[Documentation](README.md)
+
 Run a fresh AppFlowy installation on a local, single-node Docker Swarm using Docker commands directly. You need a running Docker Desktop or Docker Engine and a shell; no Python, extra packages, or setup script is required. Run these commands from the repository root.
 
 The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 11 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 10 services, leaving optional AI at zero replicas.

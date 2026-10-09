@@ -1,5 +1,7 @@
 # Automatic Windows AD group sync with SCIM
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md) / [SCIM setup](SCIM.md) / [Operations](SCIM_OPERATIONS.md)
+
 Keep users and groups in **on-premises Windows Server Active Directory (AD)** and
 send their changes to AppFlowy through a SCIM connector. This guide uses
 **self-hosted Authentik** for that connector. Administrators make directory changes
@@ -198,9 +200,11 @@ return {"userName": email}
 
 This is an outgoing SCIM mapping, not an LDAP source mapping. The name places the
 override after the standard mapping in Authentik's name-based mapping order.
-Inspect the final mapping result before provisioning; keep `displayName`, `active`
-and a stable `externalId`, and remove unsupported attributes such as `department`
-and `manager`. Keep the standard Group mapping.
+Inspect the final mapping result before provisioning; keep `displayName`, `active`,
+and a stable `externalId` for the first test. Keep the standard Group mapping.
+Optional employee fields must use the supported Enterprise User extension; a
+manager must reference a SCIM User in the same connection, not an AD object ID.
+See the [current attribute contract](SCIM.md#attribute-mapping) before adding fields.
 [Authentik's mapping behavior](https://docs.goauthentik.io/add-secure-apps/providers/scim/#attribute-mapping)
 
 AppFlowy's `userName` is immutable after creation. Do not demonstrate an email
@@ -267,7 +271,7 @@ during the Engineering membership tests.
 | Remove Alice from Engineering | Engineering contains Bob: **1 member**; Alice remains a workspace Member |
 | Replace Bob with Alice | Engineering contains Alice: still **1 member**, but a different person |
 | Rename the Engineering group object | The same synchronized group receives the new name; retain its AD object identity |
-| Change Alice's AD display name | The connector and SCIM User record update; AppFlowy's existing personal profile name remains user-controlled |
+| Change Alice's AD display name | The connector and SCIM User record update; optional workspace name sync updates the workspace profile while the personal profile stays independent |
 | Create another test group in the imported Groups OU | It reaches Authentik; select it in the SCIM provider's group filter before expecting it in AppFlowy |
 
 For the rename, change the group object's name used by the selected source mapping,

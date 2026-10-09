@@ -1,5 +1,7 @@
 # Connections: Google Drive and Google Calendar
 
+[Documentation](README.md)
+
 Use **Admin → Settings → Connections** to enable Google Drive and Google Calendar on your self-hosted instance. Users then authorize their own Google accounts from **AppFlowy → Settings → Connections**. A connection belongs to the AppFlowy user and workspace where it was created.
 
 This guide covers provider setup, connecting from AppFlowy Web, and the desktop callback. Google sign-in to AppFlowy is configured separately; see [Authentication](AUTHENTICATION.md) and [OIDC / OAuth Sign-In](OIDC.md).

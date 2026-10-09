@@ -1,5 +1,7 @@
 # Docker Compose
 
+[Documentation](README.md)
+
 With Docker and Docker Compose **2.30 or newer** installed, first copy the environment template from the repository root:
 
 ```bash

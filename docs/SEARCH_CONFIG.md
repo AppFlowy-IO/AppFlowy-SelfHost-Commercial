@@ -1,5 +1,7 @@
 # Configure AppFlowy Search
 
+[Documentation](README.md)
+
 `appflowy_search` provides keyword and semantic search. It is included in the supplied [Docker Compose configuration](../docker-compose.yml).
 
 ## Setup
