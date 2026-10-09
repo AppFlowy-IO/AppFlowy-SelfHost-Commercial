@@ -105,6 +105,9 @@ changes the global personal name or another workspace's profile.
 Changing only the name policy preserves manually assigned workspace roles, even
 when **Save changes** resubmits the existing default role and group mappings.
 Changing a role policy or mapping does recalculate the affected users' roles.
+An attribute-only User update also preserves a manual role when the user is
+already active and has no direct SCIM role. A full `PUT` that omits a previously
+assigned direct role clears that assignment and recalculates the baseline.
 
 The direct role belongs to this optional User extension:
 
