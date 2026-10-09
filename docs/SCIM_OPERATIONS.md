@@ -102,6 +102,9 @@ The name preference is `displayName`, then `name.formatted`, then the joined
 workspace override and falls back to the personal profile. This policy never
 changes the global personal name or another workspace's profile.
 
+Users can still edit their workspace profile locally. A later directory update
+or reconciliation can overwrite a local name edit while this policy is enabled.
+
 Changing only the name policy preserves manually assigned workspace roles, even
 when **Save changes** resubmits the existing default role and group mappings.
 Changing a role policy or mapping does recalculate the affected users' roles.
