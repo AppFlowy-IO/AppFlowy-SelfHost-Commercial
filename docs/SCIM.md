@@ -179,6 +179,12 @@ verification checklist, see the [Entra walkthrough](AD_SCIM_AUTO_SYNC.md#using-m
 4. Under **Attribute mapping** / **Mappings**, keep `userName` as the matching attribute (mapped from `userPrincipalName` or `mail`, whichever is the AppFlowy sign-in email), map `displayName`, `active`, and `externalId`, and delete unsupported or read-only mappings. Enable Group provisioning with `displayName`, `members`, and `externalId`.
 5. Keep **Scope** at **Sync only assigned users and groups**, assign the test users and groups, then **Start provisioning** (or set **Provisioning Status** to **On** in the legacy view). Group-based application assignment requires Entra ID P1/P2 and uses direct memberships.
 
+For Microsoft's SCIM-compatible PATCH behavior, including member removal and
+boolean `active` updates, use
+`https://your-domain/scim/v2?aadOptscim062020` as the Tenant URL. This flag does not
+apply to **Provision on demand**; verify those changes through scheduled
+provisioning. See [Microsoft's compatibility guidance](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/application-provisioning-config-problem-scim-compatibility).
+
 ### Okta
 
 1. In your Okta app integration, open the **Provisioning** tab and click **Configure API Integration**.

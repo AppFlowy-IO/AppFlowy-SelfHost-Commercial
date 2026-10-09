@@ -12,9 +12,10 @@ For groups managed directly in Authentik, follow
 
 > **What the media demonstrates:** The Windows AD route reuses clearly labeled
 > Authentik → AppFlowy screenshots and videos. The [Entra route](#using-microsoft-entra-id-instead)
-> includes four real portal setup screenshots, captured on October 9, 2026. Its
-> test tenant could not assign groups because of its plan, so these show setup,
-> not a completed Entra sync. Windows AD configuration still needs verification
+> includes real portal and AppFlowy screenshots and a captioned video of verified
+> automatic group provisioning, captured on October 9, 2026.
+> Follow the captions to distinguish configuration, delivery, and applied state.
+> Windows AD configuration still needs verification
 > against a Windows test domain; no ADUC screenshots or AD-to-AppFlowy recording
 > are claimed.
 
@@ -366,6 +367,12 @@ Authentik is unnecessary for this route. Follow the steps below for a dedicated
 Entra test application. For groups mastered in Windows AD, make membership changes
 in AD and wait for both stages; for cloud-managed groups, make them in Entra.
 
+**[Watch the Entra walkthrough (2 min 42 sec)](assets/ad-scim-auto-sync/entra-auto-sync.mp4)**
+and [read its transcript](assets/ad-scim-auto-sync/entra-auto-sync-transcript.txt).
+It combines real setup/source screenshots with recordings of starting provisioning
+and AppFlowy's resulting sync status. Waiting time is omitted. The groups are
+cloud-managed Entra groups; the recording does not demonstrate a Windows AD import.
+
 ### Entra step 1: Check the license and network requirements
 
 Group-based application assignment requires **Entra ID P1 or P2**; the **Entra
@@ -376,9 +383,10 @@ requirements are separate from the AppFlowy license.
 
 ![Entra warning that the current plan does not allow groups to be assigned to the application](assets/ad-scim-auto-sync/03-entra-group-license-required.png)
 
-*Real warning under **Enterprise apps → application → Users and groups → Add
-user/group**. This stopped the group-sync demonstration. Individual-user
-assignment does not demonstrate group provisioning.*
+*Troubleshooting reference: this warning appeared in the original Free tenant.
+The walkthrough below uses a separate work/school tenant with P2 licenses and
+group assignment available. Individual-user assignment alone does not demonstrate
+group provisioning.*
 
 To prepare an eligible test tenant:
 
@@ -403,9 +411,20 @@ and its separate Windows/network prerequisites instead; that route was not teste
 for this guide. Do not expose LDAP or a domain controller to make SCIM reachable.
 
 Prepare the AppFlowy connection, workspace, and licensed seats from
-[step 4](#step-4-connect-the-scim-provider-to-appflowy), using **Entra — SCIM Demo**
+[step 4](#step-4-connect-the-scim-provider-to-appflowy), using **Microsoft Entra — SCIM Demo**
 as the connection label. Only its AppFlowy connection/token steps apply to this
 route. Keep the token private.
+
+The demonstration uses **three AppFlowy seats**: one existing workspace owner and
+two ordinary users, **Alice Demo** and **Bob Demo**. Only Alice and Bob are assigned
+to provisioning. The owner is excluded. The local instance uses a three-seat
+commercial test license; Microsoft P2 licenses are a separate requirement.
+
+![AppFlowy Admin before Entra sends any groups: zero groups received](assets/ad-scim-auto-sync/06-admin-before-provisioning.png)
+
+*Starting point: open the connection's **SCIM groups** monitor. Zero groups is
+expected before the first delivery. This panel will show the received count and
+the state of each group without creating groups manually in AppFlowy.*
 
 ### Entra step 2: Create a dedicated enterprise application
 
@@ -416,12 +435,10 @@ route. Keep the token private.
 4. Create the application and open it. Use this dedicated test application so
    existing sign-in assignments do not enter the provisioning scope.
 
-![Entra non-gallery application form filled with the example name AppFlowy SCIM Demo](assets/ad-scim-auto-sync/04-entra-non-gallery-application.png)
+![Create the dedicated non-gallery application AppFlowy SCIM Demo](assets/ad-scim-auto-sync/05-entra-create-application.png)
 
-*Real form with an example name; captured before submission and then canceled.
-The following setup screens were inspected in an existing application labeled
-**AppFlowy SSO**, with no configuration saved. Your dedicated application's name
-will appear in their place. SSO and SCIM remain separate settings.*
+*The dedicated application used for this walkthrough. Select the non-gallery
+option, then **Create**. SSO and SCIM remain separate settings.*
 
 ### Entra step 3: Connect the AppFlowy SCIM endpoint
 
@@ -435,13 +452,13 @@ In the new configuration form:
 | Field | Enter |
 | --- | --- |
 | Authentication method | **Bearer authentication** |
-| Tenant URL | The AppFlowy connection's HTTPS URL ending in `/scim/v2` |
+| Tenant URL | The AppFlowy connection's HTTPS URL, with the Microsoft compatibility flag: `https://your-domain/scim/v2?aadOptscim062020` |
 | Secret token | The one-time token generated by AppFlowy Admin |
 
 ![Entra provisioning configuration with empty Tenant URL and Secret token fields and the Test connection button](assets/ad-scim-auto-sync/02-entra-credentials.png)
 
-*Real setup screen; endpoint and token are intentionally empty. No successful
-connection is implied by this image.*
+*Setup reference from the earlier application. The fields are intentionally empty
+to protect the endpoint and token; enter your dedicated connection's values.*
 
 Select **Test connection**. After it succeeds, create/save the configuration.
 In the legacy view, choose **Provisioning Mode → Automatic → Admin Credentials**;
@@ -449,26 +466,87 @@ if those credentials have moved, follow the link to the new configuration form.
 The connection test checks connectivity and authentication. It is not proof that a
 group or its members have synchronized.
 
+![Microsoft Entra notifications confirm successful connection tests](assets/ad-scim-auto-sync/07-entra-connection-success.png)
+
+*Expected result: a successful connection notification. Continue with mappings and
+assignments; AppFlowy can still correctly report zero groups at this point.*
+
+The `aadOptscim062020` flag enables Microsoft's SCIM-compatible PATCH behavior,
+including member removals and boolean `active` values. Microsoft documents that
+this flag does not apply to **Provision on demand**. Use the scheduled job to
+verify those operations with this configuration.
+[Microsoft's SCIM compatibility guidance](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/application-provisioning-config-problem-scim-compatibility)
+
 ### Entra step 4: Limit mappings and assignment scope
 
-The remaining steps are the verification procedure to run after resolving the
-license/network prerequisites; their successful results were not captured in
-this tenant.
+#### Map users
 
-1. Open **Attribute mapping** (or **Mappings** in the legacy view) and enable both
-   User and Group provisioning.
-2. Keep only AppFlowy's supported writable attributes. Map the user's sign-in
-   email to `userName` and use it as the matching attribute; map `displayName`,
-   `active`, and a stable `externalId`. Remove writable `emails` and enterprise
-   attributes such as `department` and `manager`. Use `displayName` directly
-   instead of separate `name` mappings. See the
-   [attribute contract](SCIM.md#attribute-mapping).
-3. For groups, map `displayName`, `members`, and `externalId`. Give the test group
-   a distinct name, such as **Engineering — Entra Demo**.
-4. Set **Scope → Sync only assigned users and groups**. Under the enterprise
-   application's **Users and groups**, assign the test security group and two
-   ordinary test users. Use direct group memberships. Exclude the system
-   administrator and workspace owner.
+Open **Attribute mapping → Users**. Keep only the supported writable attributes
+below, then **Save** and confirm. Leave User and Group provisioning enabled.
+
+| Source | AppFlowy target | Purpose |
+| --- | --- | --- |
+| Stable sign-in email, such as a suitable `userPrincipalName` or populated `mail` | `userName` | Required email identity; matching precedence 1 |
+| `displayName` | `displayName` | Directory display name |
+| `objectId` | `externalId` | Stable source identifier |
+| `Switch([IsSoftDeleted], , "False", "True", "True", "False")` | `active` | Entra's default deprovisioning mapping |
+
+Remove writable `emails`, separate `name` mappings, and enterprise attributes
+such as `department` and `manager`. See the [attribute contract](SCIM.md#attribute-mapping).
+Do not change an existing user's `userName`; AppFlowy treats this identity as immutable.
+
+![The four supported user mappings in Microsoft Entra](assets/ad-scim-auto-sync/09-entra-user-mappings.png)
+
+*Demo-specific privacy choice: the screenshot uses
+`Join("@", [mailNickname], "example.com")` for `userName`. It creates
+`alice.scim.demo@example.com` and `bob.scim.demo@example.com` without publishing
+the test tenant's domain. Use your users' actual stable sign-in emails in a real
+deployment; do not copy this example-domain expression into production.*
+
+#### Map groups
+
+Select **Groups**. Keep `displayName → displayName`, `members → members`, and
+`objectId → externalId`. Use `displayName` as matching precedence 1. Leave group
+creation, update, and deletion enabled.
+
+![Group mappings include displayName, members, and the stable externalId](assets/ad-scim-auto-sync/10-entra-group-mappings.png)
+
+*The `members` mapping is required to synchronize membership; mapping the group
+name alone is insufficient. AppFlowy supports direct User members, not nested groups.*
+
+#### Create the demo groups
+
+Under **Entra ID → Groups → New group**, create **Engineering — Entra Demo** with
+**Group type: Security** and **Membership type: Assigned**. Add **Alice Demo** as a
+direct member. Leave Microsoft Entra role assignment disabled.
+
+![Security group creation with Assigned membership and one selected member](assets/ad-scim-auto-sync/08-entra-create-group.png)
+
+*Select the member before choosing **Create**. This is an ordinary security group;
+it does not need an administrator role.*
+
+Create a second empty security group, **Design — Entra Demo**, for the group
+creation and deletion demonstration.
+
+![Two cloud-managed Security groups in Entra](assets/ad-scim-auto-sync/13-entra-two-groups.png)
+
+*Both groups use Assigned membership and show **Source: Cloud**. These are Entra
+groups created for the demonstration, not imported Windows AD groups.*
+
+Open **Engineering — Entra Demo → Members → Direct members** and verify Alice.
+
+![Engineering initially contains Alice Demo as its one direct member](assets/ad-scim-auto-sync/14-entra-initial-member.png)
+
+*Baseline for the membership comparison: Alice only. The portal's **Manage view →
+Edit columns** control hides identifiers and email columns in the published captures.*
+
+#### Assign only the demonstration objects
+
+Return to **Enterprise apps → AppFlowy SCIM Demo → Users and groups → Add
+user/group**. Assign Alice, Bob, Engineering, and Design. Exclude the system
+administrator and workspace owner.
+
+![The enterprise application has two demo users and two demo groups assigned](assets/ad-scim-auto-sync/11-entra-assign-users-groups.png)
 
 Keep the two users independently assigned while demonstrating changes to the
 Engineering permission group. This allows group-member removal without also
@@ -476,12 +554,183 @@ removing that user's application assignment. Follow
 [Microsoft's SCIM configuration procedure](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups#integrate-your-scim-endpoint-with-the-microsoft-entra-provisioning-service)
 for the portal's mapping and assignment controls.
 
+In **Provisioning → Overview → Properties**, confirm **Provisioning scope: Sync
+only assigned users and groups**. In other portal versions, this appears under
+**Settings → Scope**.
+
+![Provisioning settings restrict synchronization to assigned users and groups](assets/ad-scim-auto-sync/12-entra-assigned-scope.png)
+
+*Check the scope before starting. The demonstration keeps **Skip out of scope
+deletions: Disabled**, so removing all application assignments can deprovision a
+user. Group-member removal and user offboarding are separate exercises.*
+
 ### Entra step 5: Start provisioning and verify automatic changes
 
 Start provisioning (or set **Provisioning Status → On** and save in the legacy
 view). Check **Provisioning logs** for delivery and AppFlowy Admin for the applied
 state. Initial on-demand user provisioning can help diagnose setup; demonstrate
 ongoing synchronization by letting later changes arrive on the scheduled cycles.
+
+The test job's **Overview → Provisioning details** reports a configured
+**40-minute** interval. Actual delivery timing varies; this run's first incremental
+cycle completed sooner. An initial cycle can also spend time waiting to start.
+Keep the endpoint reachable while waiting and check the last completed cycle and
+provisioning logs. Refreshing a portal page does not advance Microsoft's schedule.
+[Microsoft's provisioning-status guide](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/application-provisioning-when-will-provisioning-finish-specific-user)
+
+| Control | What it confirms or does |
+| --- | --- |
+| Entra **Test connection** | Checks endpoint authentication/connectivity; does not demonstrate group sync |
+| Entra **Start provisioning** | Enables the scheduled provisioning job |
+| Entra **Provision on demand** | Runs a manual diagnostic for selected objects; label it separately from automatic delivery |
+| Entra **Refresh** | Reloads the displayed job/log state |
+| AppFlowy **Refresh status** | Reloads the received/applied comparison; does not query Entra |
+| AppFlowy **Retry sync** | Reapplies group data already received by AppFlowy; does not start an Entra cycle |
+
+During setup, a single on-demand check for Alice succeeded and consumed one of
+the two available AppFlowy seats. The group exercise is separate: no groups were
+created through that user-only check.
+
+#### Compare the first automatic delivery
+
+In the recorded run, the first scheduled cycle delivered both groups about
+20 minutes after **Start provisioning**. It also provisioned Bob. This timing is
+an observation from one run, not a delivery guarantee. Neither group was created
+with **Provision on demand**, AppFlowy **Retry sync**, or AppFlowy's group editor.
+
+![The Admin monitor shows two received groups, both Synced](assets/ad-scim-auto-sync/15-admin-groups-synced.png)
+
+*Engineering has one received and one eligible member; Design is empty. Both
+groups show **Synced** because their latest received names and eligible memberships
+are applied. An empty group can be fully synchronized.*
+
+Open **AppFlowy → workspace menu → Settings → People → Groups**. Reload the Web
+page if an already-open settings panel still shows the previous list.
+
+![The two Entra groups appear in AppFlowy workspace settings](assets/ad-scim-auto-sync/16-web-groups-synced.png)
+
+*The workspace has three members: its owner, Alice, and Bob. Only Alice belongs to
+Engineering. A workspace member does not automatically belong to every group.*
+
+Select the edit icon beside Engineering to inspect its read-only directory roster.
+
+![Engineering's AppFlowy roster contains Alice's demo identity](assets/ad-scim-auto-sync/17-web-alice-member.png)
+
+*Compare this with Alice's Entra membership above. Check the actual identity,
+not just the count. The example-domain email comes from the documented demo mapping.*
+
+### Entra step 6: Change the source and compare the next cycle
+
+Use only disposable demonstration groups for the deletion exercise. Keep Alice
+and Bob individually assigned to the application throughout these steps.
+
+1. Open **Engineering — Entra Demo → Properties**. Change **Group name** to
+   **Platform — Entra Demo** and **Save**. This renames the existing group.
+2. Open **Members → Add members**, select **Bob Demo**, and choose **Select**.
+   Refresh the member list after the operation completes.
+
+![The renamed Platform group has Alice and Bob after adding Bob in Entra](assets/ad-scim-auto-sync/19-entra-add-bob.png)
+
+*Source change: the name is now Platform and its direct-members list contains two
+users. The scheduled SCIM cycle has not delivered these edits yet.*
+
+3. Select Alice's row, choose **Remove**, and confirm. Refresh the list to verify
+   that Bob is now the only direct member.
+
+![Platform has only Bob after Alice is removed from the Entra group](assets/ad-scim-auto-sync/20-entra-remove-alice.png)
+
+*Alice was removed from this group, not deleted or unassigned from the application.
+The source membership is now Bob instead of Alice. The initial and final counts
+are both one, so the downstream check must compare the member's identity.*
+
+4. Return to **Groups → All groups**. Select only **Design — Entra Demo**, choose
+   **Delete**, and confirm. Leave Platform unselected.
+
+![Only the disposable Design group is selected in Entra's deletion confirmation](assets/ad-scim-auto-sync/21-entra-delete-design.png)
+
+*Deleting a directory group removes its corresponding AppFlowy permission group
+after delivery. It does not delete independently assigned users or their pages.*
+
+5. Create **Quality — Entra Demo**, an Assigned Security group with Alice as its
+   direct member. Keep role assignment disabled and choose **Create**.
+
+![Create the new Quality security group with one selected member](assets/ad-scim-auto-sync/22-entra-create-quality.png)
+
+6. Open the application's **Users and groups → Add user/group**. Select Quality
+   and **Assign**. Refresh to confirm Alice, Bob, Platform, and Quality are in scope.
+
+![The updated application assignments include Quality and both independent users](assets/ad-scim-auto-sync/23-entra-updated-assignments.png)
+
+*Creating a group in the directory is not enough when the job uses assigned-only
+scope. Assign it to this enterprise application so the scheduled job can provision it.*
+
+
+These source edits were made between scheduled cycles. Entra can combine several
+edits into the next delivery; do not expect AppFlowy to show every intermediate
+source state. In particular, the brief two-member state above is a source
+screenshot, not a claim that AppFlowy displayed two members during this run.
+
+#### Confirm the automatic group updates
+
+The next incremental cycle delivered Quality, renamed Engineering, replaced its
+membership, and deleted Design. No **Provision on demand**, **Restart provisioning**,
+or AppFlowy **Retry sync** action was used for these group changes.
+
+![Entra reports that an incremental provisioning cycle completed](assets/ad-scim-auto-sync/18-entra-incremental-complete.png)
+
+*Check the completed cycle and object-level provisioning logs. This summary alone
+does not establish that every current group has the correct roster; verify AppFlowy too.*
+
+![The AppFlowy Admin monitor shows Platform and Quality Synced after automatic delivery](assets/ad-scim-auto-sync/25-admin-updated-groups.png)
+
+*Design is gone. Platform and Quality each have one eligible member and show
+**Synced**. The received group count remains two because one group was added and
+one deleted. The rename retained the original group's identity.*
+
+Reload AppFlowy and open **Settings → People → Groups** again.
+
+![AppFlowy's group list now contains Platform and Quality with one member each](assets/ad-scim-auto-sync/26-web-updated-groups.png)
+
+Open Platform's roster and compare it with the initial Engineering roster.
+
+![Platform now contains Bob instead of Alice](assets/ad-scim-auto-sync/27-web-platform-bob.png)
+
+*The same group has a new name and a different member. The member count stayed
+at one; this roster proves the replacement.*
+
+Open Quality to check both the newly created group and its initial membership.
+
+![The newly provisioned Quality group contains Alice](assets/ad-scim-auto-sync/28-web-quality-alice.png)
+
+*Alice remains in the workspace and now belongs to Quality. Group removal,
+group deletion, and removing a user's workspace access are distinct operations.*
+
+### Optional: Diagnose a user display-name update
+
+To test user-attribute changes, open **Bob Demo → Edit properties → Identity**.
+Search for **Display name**, change it to **Bob Demo Updated**, and **Save**.
+Keep the sign-in identity unchanged.
+
+![Edit only Bob's display name in the Entra user properties](assets/ad-scim-auto-sync/24-entra-user-display-name.png)
+
+*The property search makes the field easy to find. A delivered `displayName`
+change updates AppFlowy's SCIM directory record; it does not overwrite an existing
+AppFlowy personal profile name. The group roster can therefore still show Bob's
+example-domain email.*
+
+
+For this separate user-only diagnostic, choose **Provision on demand** in the
+application, select Bob, and run the check. This is a manual troubleshooting action,
+not part of the automatic group-cycle evidence above. To test scheduled user
+updates instead, wait for a later cycle and inspect its provisioning logs.
+
+![The on-demand user's successful attribute update changes displayName from Bob Demo to Bob Demo Updated](assets/ad-scim-auto-sync/29-entra-user-update-result.png)
+
+*Manual diagnostic result: Entra reports the `displayName` update. A read-only
+SCIM check confirmed **Bob Demo Updated**, while AppFlowy's existing personal
+profile and group roster continued to use `bob.scim.demo@example.com`.*
+
+### Additional lifecycle checks
 
 | Change at the source | Check in Entra | Check in AppFlowy |
 | --- | --- | --- |
@@ -501,6 +750,18 @@ each operation. **Synced** confirms the latest data AppFlowy received;
 
 An Entra-only demonstration verifies Entra → AppFlowy. It does not verify a
 customer's Windows AD import, nested groups, or cross-domain configuration.
+
+### After a temporary test
+
+Pause the dedicated Entra provisioning job before closing a temporary endpoint.
+Disable the demo connection in AppFlowy Admin and retire its credential when the
+test is complete. Keep production provisioning enabled when ongoing sync is required.
+
+If you enrolled in a Microsoft trial, cancel it or turn off recurring billing
+before the renewal date shown under **Microsoft 365 admin center → Billing →
+Your products**. Confirm the subscription's ending/renewal status. Pausing SCIM
+provisioning does not cancel the subscription.
+[Microsoft's cancellation instructions](https://learn.microsoft.com/en-us/microsoft-365/commerce/subscriptions/cancel-your-subscription?view=o365-worldwide)
 
 ## Watch the AppFlowy side
 
