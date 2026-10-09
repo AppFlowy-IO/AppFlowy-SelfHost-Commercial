@@ -672,6 +672,12 @@ grants you configured earlier.
 > automatic seat recovery. An older server's rejected `409` create request was not
 > saved for replay; let the directory retry that request once after upgrading.
 
+> **Changing server versions:** Pause directory provisioning while SCIM-serving
+> replicas run different versions. Before rolling back to an older server, finish
+> or cancel all waiting activations using the updated server and confirm every
+> connection's waiting count is zero. Older versions cannot cancel the new waiting
+> intent safely.
+
 ## Check your result
 
 | Checkpoint | Expected result in AppFlowy |
