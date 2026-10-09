@@ -25,6 +25,7 @@ the expected result and screenshots from the demonstration.
 8. [Give the group access to a space](#step-7-give-the-group-access-to-a-space)
 9. [Create, rename, change, and delete a second group](#step-8-demonstrate-the-complete-group-lifecycle)
 10. [Recover a group with Retry sync](#f-recover-a-group-with-retry-sync)
+11. [Recover automatically after adding licensed seats](#when-your-license-runs-out-of-seats)
 
 For endpoint routing, other identity providers, token rotation, and the SCIM API,
 see the [SCIM provisioning reference](SCIM.md).
@@ -300,11 +301,13 @@ with the expected name.
 | **Synced** | The latest received group name and eligible membership are applied. | Continue; configure a space grant separately if needed. |
 | **Pending** | Related member updates are queued or being processed. | Leave the dialog open and allow the background worker to finish. |
 | **Retrying** | A member update failed and AppFlowy will retry automatically. | Check the next scheduled retry. After resolving the cause, use **Retry sync** to request another attempt now. |
+| **Waiting for seats** | A user was received, but their activation needs more license capacity. | Add seats and apply the updated license. Provisioning resumes automatically. |
 | **Needs attention** | The managed group is missing, its name differs, or membership differs without a related queued update. | Read the explanation, then use **Retry sync** to reapply the received data. If it persists, inspect AppFlowy logs. |
 
-The following screenshot shows all four states side by side. These are **test
-fixtures** captured from the real Admin UI to illustrate the labels and retry
-details; they are separate from the live Authentik demonstration above.
+The following screenshot compares Synced, Pending, Retrying and Needs attention.
+These are **test fixtures** captured from the real Admin UI to illustrate the labels
+and retry details; they are separate from the live Authentik demonstration above.
+The [license recovery example](#when-your-license-runs-out-of-seats) shows Waiting for seats.
 
 ![Illustrative test-fixture groups showing Synced, Pending, Retrying with a scheduled retry time, and Needs attention with a membership-drift explanation](assets/scim-auto-sync/17-admin-sync-state-examples.png)
 
@@ -602,6 +605,73 @@ or direct AppFlowy membership edit is used. Video 6 shows the separate recovery 
 This walkthrough demonstrates the first two actions. For user deprovisioning,
 follow [Deactivate, reactivate, delete](SCIM.md#6-deactivate-reactivate-delete).
 
+## When your license runs out of seats
+
+Suppose your license allows **three active users** and all three seats are occupied.
+The directory assigns a fourth person to AppFlowy. AppFlowy keeps that person's
+SCIM record and waits for capacity. **The fourth person receives no new workspace
+access while waiting.** The directory can still update, deactivate or delete the
+record.
+
+### 1. Find the waiting user count
+
+Open **Authentication → SCIM Provisioning**. The connection shows **1 user waiting
+for seats** and explains that you need to apply an updated license. This count
+includes waiting users who are not in any group.
+
+![Illustrative Admin connection showing one user waiting for seats and the Review license link](assets/scim-auto-sync/36-admin-seat-warning.png)
+
+### 2. Inspect the affected group
+
+Select the connection's **SCIM groups** count. The group displays **Waiting for
+seats**. In this example, **3 received from directory** means all three group
+members are known, while **2 / 2 eligible** means the two currently eligible
+members have been applied. The waiting person is not counted as eligible yet.
+
+![Illustrative group monitor showing one waiting user and two applied members](assets/scim-auto-sync/37-admin-waiting-for-seats.png)
+
+Select **Review license** to open the plan page. Purchase enough seats, then
+install or refresh the updated license on this self-hosted instance. Confirm that
+its displayed seat allowance has increased. A completed purchase alone does not
+change an instance that still has its old license installed.
+
+### 3. Leave the monitor open
+
+AppFlowy detects the installed-license change and automatically retries the waiting
+activation. It rechecks capacity, adds the workspace membership, and applies the
+latest directory group membership. The Admin dialog refreshes every five seconds.
+No **Retry sync** click or new directory change is required. Allow background
+processing time; a busy instance can take longer.
+
+![Illustrative monitor after license recovery, showing three eligible members applied and Synced](assets/scim-auto-sync/38-admin-seat-recovery-synced.png)
+
+The connection's waiting count clears, the example group reaches **3 / 3 eligible**,
+and its badge becomes **Synced**. Group space/page permissions still come from the
+grants you configured earlier.
+
+### 4. Know what cancels or delays recovery
+
+- Deactivate or delete a waiting user in the directory: once AppFlowy receives that
+  change, it cancels activation. Adding seats later does not restore that request.
+- Change their name or group membership while waiting: recovery uses the latest
+  received values. Removing them from a group does not cancel workspace activation;
+  deactivate the user or remove their application assignment to revoke it.
+- Pause the SCIM connection: recovery waits until you enable it again. Keep the
+  connection and paid authentication entitlement enabled for recovery.
+- Free a seat instead of buying one: the regular background retry can use it, with
+  retry delays capped at five minutes. If several users are waiting, only those
+  that fit the available capacity are admitted.
+
+> **Evidence:** Screenshots 36–38 are UI test fixtures illustrating the warning and
+> recovery display. They are not a recording of a purchase. Separate server
+> regressions use a running self-hosted instance and signed licenses to verify
+> automatic recovery, cancellation and final-seat enforcement. The existing six
+> videos demonstrate group synchronization and manual group repair.
+
+> **Upgrading an older instance:** Install Cloud and Admin versions containing
+> automatic seat recovery. An older server's rejected `409` create request was not
+> saved for replay; let the directory retry that request once after upgrading.
+
 ## Check your result
 
 | Checkpoint | Expected result in AppFlowy |
@@ -627,6 +697,7 @@ follow [Deactivate, reactivate, delete](SCIM.md#6-deactivate-reactivate-delete).
 | No group appears | Confirm the target workspace, enabled connection, reachable SCIM URL, valid token, Authentik group filter, and successful initial provisioning. |
 | Group exists, but a member is missing | Confirm the user is assigned to the Authentik application, active, and an AppFlowy workspace Member or Owner. Guests and inactive users are not projected into these permission groups. Check licensed seats and provider task errors. |
 | The old member count remains on screen | Allow the background tasks to finish, then reopen **People → Groups**. A fixed sync delay is not guaranteed. |
+| Admin shows Waiting for seats | Add seats and apply the updated license, or free a seat. The waiting activation retries automatically; see [seat recovery](#when-your-license-runs-out-of-seats). |
 | Admin shows Pending or Retrying | Allow background processing to finish. After fixing a persistent worker error, use **Retry sync** to request another attempt. **Refresh status** only reloads the view. |
 | Admin shows Needs attention | Read the issue beneath the badge and use **Retry sync** to reapply received data. Equal counts alone do not establish sync. If the issue persists, inspect worker logs. |
 | Retry sync is disabled | Enable the connection; a request already in progress also temporarily disables the buttons. |
@@ -658,12 +729,13 @@ self-hosted prerequisites above for your deployment. User sign-in is outside the
 recording's scope.
 
 The media contains demonstration identities and no SCIM auth key. There are now
-**35 screenshots and 6 captioned videos**, with a text transcript for each video.
+**38 screenshots and 6 captioned videos**, with a text transcript for each video.
 The twelve original screenshots and three original videos remain available. The
 Admin monitor adds six screenshots and one video; the complete lifecycle and
-recovery exercises add seventeen screenshots and two videos.
+recovery exercises add seventeen screenshots and two videos. Three additional UI-fixture
+screenshots explain waiting for seats and automatic recovery.
 
-Screenshots 16–18 are explicitly labeled UI test fixtures. The lifecycle screenshots
+Screenshots 16–18 and 36–38 are explicitly labeled UI test fixtures. The lifecycle screenshots
 come from the live local demo. Screenshots 31–33 and video 6 show an actual retry
 against a deliberately stale local group name, not a naturally occurring provider
 failure. The lifecycle video labels its still captures and trims idle waits. The
