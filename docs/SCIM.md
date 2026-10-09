@@ -4,6 +4,11 @@ AppFlowy Self-Hosted implements SCIM 2.0 so that your identity provider (IdP) ca
 
 SCIM provisions accounts; it does not sign users in. Pair it with [OIDC / OAuth](OIDC.md) or [LDAP](LDAP.md) so that provisioned users can authenticate. [SAML](OKTA_SAML.md) can also be paired, subject to the account-matching behaviour described in [Sign-in for provisioned users](#sign-in-for-provisioned-users).
 
+For a step-by-step example with screenshots and videos, follow
+[Automatic group sync with SCIM](SCIM_AUTO_SYNC.md). It demonstrates adding and
+removing members in Authentik, seeing the matching AppFlowy group update, and
+assigning that group to a space.
+
 ## What SCIM provisioning does
 
 - **Users.** Creates AppFlowy accounts from the IdP, adds them to one workspace with a default role, and removes workspace access when the IdP deactivates or deletes them.

@@ -1,0 +1,19 @@
+0–6s
+Before: Engineering contains Alice and Bob.
+We will remove Alice in the directory.
+
+6–11s
+Remove Alice from the Authentik group.
+This confirmation removes group membership, not her account.
+
+11–22s
+Authentik sends the removal through SCIM automatically.
+Reopen the AppFlowy group list to see the updated state.
+
+22–28s
+The group count changes from 2 members to 1.
+Open the group to check who remains.
+
+28–36s
+After: only Bob remains in Engineering.
+Alice is still a workspace member in this example.

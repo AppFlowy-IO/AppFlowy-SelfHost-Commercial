@@ -15,6 +15,10 @@ These features are configured through the Admin console under **Authentication**
 
 The SCIM, OIDC, and LDAP guides each include a **Verify the setup** section followed by troubleshooting. Run the verification after configuring the method and again after upgrades.
 
+To see group membership sync in action, use the illustrated
+[SCIM auto-sync walkthrough](SCIM_AUTO_SYNC.md), including videos of member
+addition, member removal, and assigning the synced group to a space.
+
 ### Example identity provider: Authentik
 
 The guides use [Authentik](https://goauthentik.io/) as the worked example because it offers OIDC, SAML, and SCIM from one self-hosted product. For SAML, create a **SAML Provider** whose **ACS URL** is `https://your-domain/gotrue/sso/saml/acs` and whose **Audience** is `https://your-domain/gotrue/sso/saml/metadata`, assign it to an application, and register the provider's metadata URL in the console under **Authentication → SAML SSO**.

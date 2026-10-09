@@ -1,0 +1,15 @@
+0–7s
+An owner assigns the synced group to a space once.
+Engineering Hub uses Custom access: members can edit.
+
+7–14s
+Open Manage Space > Members.
+Choose Add people or groups and search for Engineering.
+
+14–21s
+Select the group created by SCIM.
+It currently contains Bob, the remaining member.
+
+21–32s
+Engineering is now a Space member.
+Future group membership changes update this access path.
