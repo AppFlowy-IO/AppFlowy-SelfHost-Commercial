@@ -11,7 +11,8 @@ behavior, sync status and **Retry sync**, and assigning a group to a space.
 
 For on-premises Windows Server AD, use
 [Automatic Windows AD group sync with SCIM](AD_SCIM_AUTO_SYNC.md). It explains the
-connector, AD group changes, and how the Microsoft Entra ID route differs.
+connector and AD group changes. For Microsoft Entra ID, use the dedicated
+[Entra auto-sync walkthrough](ENTRA_SCIM_AUTO_SYNC.md).
 
 ## What SCIM provisioning does
 
@@ -171,7 +172,7 @@ The Enterprise User extension (`urn:ietf:params:scim:schemas:extension:enterpris
 ### Microsoft Entra ID
 
 For current portal screenshots, group-assignment requirements, and a lifecycle
-verification checklist, see the [Entra walkthrough](AD_SCIM_AUTO_SYNC.md#using-microsoft-entra-id-instead).
+verification checklist, see the [Entra walkthrough](ENTRA_SCIM_AUTO_SYNC.md).
 
 1. In **Enterprise applications**, open your AppFlowy application and go to **Provisioning**.
 2. Select **New configuration**. In the legacy view, set **Provisioning Mode** to **Automatic** and expand **Admin Credentials**; follow the new-experience link if shown.
@@ -203,9 +204,10 @@ provisioning. See [Microsoft's compatibility guidance](https://learn.microsoft.c
 
 - **New users** receive an AppFlowy account and join the connection's workspace at the effective role. An existing account with the same email address is reused rather than duplicated.
 - **Seat limits apply.** When activation would exceed licensed capacity, AppFlowy accepts a visible SCIM User record but grants no new access. Admin shows **Waiting for seats**. Apply the upgraded license and activation retries automatically; freeing a seat also allows a background retry. Deactivating or deleting the waiting User cancels the request. See the [illustrated seat-recovery walkthrough](AUTHENTIK_AUTO_SYNC.md#when-your-license-runs-out-of-seats).
-- **Deactivating a user** (`active: false`) removes the user from the workspace and releases the seat. If the user has no other workspace, the account is also banned in the authentication service: new sign-ins are refused and the session can no longer be refreshed, so the user is signed out when the current access token expires (up to `GOTRUE_JWT_EXP`, 7 days in the template). Until then the user remains signed in but no longer sees the workspace. A user who keeps another workspace is not banned. To end sessions immediately, delete the user in the Admin console. Reactivation restores membership at the strongest role among the default and the user's remaining mapped groups.
+- **Deactivating a user** (`active: false`) removes the user from the workspace and releases the seat. If the user has no other workspace, the account is also banned in the authentication service: new sign-ins are refused and the session can no longer be refreshed, so the user is signed out when the current access token expires (up to `GOTRUE_JWT_EXP`, 7 days in the template). Until then the user remains signed in but no longer sees the workspace. A user who keeps another workspace is not banned. Reactivation restores membership at the strongest role among the default and the user's remaining mapped groups. Direct shares and space ownership removed during offboarding are not promised to return. Admin account deletion is a separate workflow; do not use it to move a user between groups.
 - **Deleting a user** removes workspace access and the SCIM record, and blocks new sign-ins if the user has no other workspace. The AppFlowy account itself is retained. A later re-provision creates a new SCIM resource ID.
 - **Group membership** in a mapped group grants at least the mapped role. Removing a user from a mapped group, renaming or deleting a mapped group, or changing the connection's mappings recomputes the user's role. Unmapped groups do not change roles but remain available as workspace groups for space and page permissions. A background worker applies role changes within a few seconds.
+- **Moving between groups** retains the user account and existing documents. Change the two memberships, keep the user in provisioning scope, and verify the old and new space grants. The connection default participates in role resolution: a Member default cannot be downgraded by a Guest group mapping. See [Entra roles, group moves, and data retention](ENTRA_SCIM_AUTO_SYNC.md#step-7-understand-the-role-and-permission-mapping).
 - **Display names** set through SCIM are stored on the connection's SCIM user record and returned to the IdP. They do not rename the user's AppFlowy profile, and the workspace member list continues to show the profile name.
 - **System administrators** and the workspace owner cannot be managed through SCIM.
 - **Email addresses** are trimmed and lowercased before matching.

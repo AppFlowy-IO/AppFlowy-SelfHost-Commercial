@@ -21,7 +21,9 @@ addition, member removal, and assigning the synced group to a space.
 
 For an on-premises Windows Server directory, follow the
 [AD-to-SCIM walkthrough](AD_SCIM_AUTO_SYNC.md), which also distinguishes Microsoft
-Entra ID and explains when a separate connector is needed.
+Entra ID and explains when a separate connector is needed. For Entra as the SCIM
+provider, use the [Entra automatic-sync walkthrough](ENTRA_SCIM_AUTO_SYNC.md),
+including group moves, workspace-role mappings, and space-permission checks.
 
 ### Example identity provider: Authentik
 
