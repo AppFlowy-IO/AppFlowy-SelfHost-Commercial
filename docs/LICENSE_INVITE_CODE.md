@@ -1,5 +1,7 @@
 ## Redeem an Invitation Code
 
+[Documentation](README.md)
+
 1. Go to Upgrade Plan and sign in.
 
 ![img.png](../asset/sign_in.png)

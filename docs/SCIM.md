@@ -1,5 +1,7 @@
 # SCIM Provisioning
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md)
+
 AppFlowy Self-Hosted implements SCIM 2.0 so that your identity provider (IdP) can create, update, and deactivate users, and synchronize groups, in an AppFlowy workspace. Microsoft Entra ID, Okta, Authentik, and any other SCIM 2.0 client that authenticates with a bearer token are supported.
 
 SCIM provisions accounts; it does not sign users in. Pair it with [OIDC / OAuth](OIDC.md) or [LDAP](LDAP.md) so that provisioned users can authenticate. [SAML](OKTA_SAML.md) can also be paired, subject to the account-matching behaviour described in [Sign-in for provisioned users](#sign-in-for-provisioned-users).
@@ -13,6 +15,21 @@ For on-premises Windows Server AD, use
 [Automatic Windows AD group sync with SCIM](AD_SCIM_AUTO_SYNC.md). It explains the
 connector and AD group changes. For Microsoft Entra ID, use the dedicated
 [Entra auto-sync walkthrough](ENTRA_SCIM_AUTO_SYNC.md).
+
+## In this guide
+
+- [Prerequisites](#before-you-begin)
+- [Expose the endpoint](#step-1-expose-the-scim-endpoint)
+- [Create a connection](#step-2-create-a-scim-connection)
+- [Configure provider mappings](#step-3-configure-the-identity-provider)
+- [Sign-in for provisioned users](#sign-in-for-provisioned-users)
+- [Supported API](#supported-scim-20-surface)
+- [Manage connections](#managing-connections)
+- [Verify the setup](#verify-the-setup)
+- [Troubleshooting](#troubleshooting)
+
+For everyday administration, use [SCIM operations](SCIM_OPERATIONS.md): roles and
+permissions, group moves, offboarding, sync status, and seat recovery.
 
 ## What SCIM provisioning does
 
@@ -122,7 +139,9 @@ curl --include -H 'Authorization: Bearer not-a-real-token' \
    | --- | --- |
    | **Name** | Optional label that distinguishes connections, for example `Entra Production`. Up to 255 bytes. |
    | **Workspace** | The workspace that provisioned users join. Each workspace can have only one SCIM connection. |
-   | **Default role** | Workspace role for every provisioned user: **Member** (default) or **Guest**. Owner is not offered as a default; grant it through a group mapping instead. |
+   | **Default role** | Baseline when no direct SCIM role is accepted: **Member** (default) or **Guest**. Owner is not offered as a default; grant it through a group mapping instead. |
+   | **Sync workspace profile names** | Off by default. Apply received names to this workspace's member profiles, without changing personal profiles or other workspaces. |
+   | **Accept roles from SCIM** | Off by default. Accept the AppFlowy User extension's Member/Guest role as the baseline; mapped groups can grant stronger roles. |
    | **Group role mappings** | Optional. Map a SCIM group `displayName` (matched case-insensitively) or `externalId` (matched exactly) to Owner, Member, or Guest. A user in several mapped groups receives the strongest role. If a group matches both a display-name mapping and an external-ID mapping, the display-name mapping wins. |
 
    ![Add SCIM Connection form with a workspace, default role, and one group mapping](../asset/scim_add_connection.png)
@@ -133,7 +152,7 @@ curl --include -H 'Authorization: Bearer not-a-real-token' \
 
 > **The token is shown only once.** Copy it into the IdP now. AppFlowy stores only a hash of it, and the token expires 90 days after it is issued. Rotate it before then to avoid a provisioning outage.
 
-The new connection appears in the **SCIM Connections** table with its default role, mapping count, and status. The **Token expires** and **Created** columns are further right; scroll the table if the window is narrow.
+The new connection appears in the **SCIM Connections** table with its default role, mapping count, managed-user settings, and status. See [managed names and direct roles](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles) for the current controls and precedence. The **Token expires** and **Created** columns are further right; scroll the table if the window is narrow.
 
 ![SCIM Connections table with one enabled connection](../asset/scim_connections_table.png)
 
@@ -154,20 +173,47 @@ Enable creating users, updating user attributes, deactivating users, and pushing
 
 ### Attribute mapping
 
-AppFlowy stores a deliberately small set of attributes. Map only the attributes below and remove every other mapping from the IdP, otherwise provisioning fails on the unsupported attribute.
+Map only the supported attributes below. Unsupported attributes return a SCIM
+error; remove them from the provider mapping. Deploy matching Cloud and Admin
+versions before enabling the optional managed-user policies.
 
 | SCIM attribute | Notes |
 | --- | --- |
-| `userName` | Required. The user's email address. It identifies the account and cannot be changed after creation, so map it from a stable IdP attribute. |
-| `displayName` | Stored on the SCIM user record for this connection and returned to the IdP. AppFlowy continues to show the user's own profile name. Map this attribute directly; `name.givenName` and `name.familyName` are accepted only as a fallback source and are not stored separately. |
-| `active` | `true` grants workspace access; `false` removes it. |
+| `userName` | Required email address. Immutable after creation; keep the sign-in identity stable. |
+| `displayName` | Stored independently of structured `name`. Optionally applied to this workspace's member profile through **Sync workspace profile names**. |
+| `name` | Stores `formatted`, `givenName`, `middleName`, `familyName`, `honorificPrefix`, and `honorificSuffix`. Used as the display-name fallback when workspace name sync is enabled. |
+| `active` | `true` requests workspace activation; `false` removes workspace access. License capacity can delay activation. |
 | `externalId` | Optional IdP identifier used for matching. |
-| `emails` | Read-only. AppFlowy derives it from `userName`. |
-| Group `displayName` | The group name. Used for role mappings. |
-| Group `members` | Users only. Nested groups are not supported. |
-| Group `externalId` | Optional. Can also serve as a role-mapping key. |
+| `emails` | Read-only projection of `userName`; `emails.value` can be used in an equality filter. |
+| `title`, `locale`, `preferredLanguage`, `userType` | Stored and returned as directory attributes; they do not select workspace permissions. |
+| `phoneNumbers` | Stores up to 32 entries with a nonempty `value`, optional `type`, and optional `primary`; at most one entry is primary. |
+| Enterprise User extension | Stores `employeeNumber`, `department`, `division`, `organization`, `costCenter`, and `manager.value`. |
+| AppFlowy workspace User extension | Optional `role` of `member` or `guest`, accepted only when **Accept roles from SCIM** is enabled. |
+| Group `displayName` | The group name, also usable as a role-mapping key. |
+| Group `members` | User resource IDs from this connection. Nested groups are not supported. |
+| Group `externalId` | Optional stable identifier, also usable as a role-mapping key. |
 
-The Enterprise User extension (`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`) may be listed in `schemas`, but none of its attributes are accepted. A request that carries any enterprise attribute, such as `department` or `manager`, fails with `400 invalidValue`, so remove those mappings from the IdP. The advertised schema is available at `https://your-domain/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User`.
+The Enterprise User extension is
+`urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`. Its `manager.value`
+must refer to another SCIM User in the same connection; it is not an email address
+or an Entra object ID. The response derives `manager.$ref`; supplied read-only
+`$ref` and `displayName` fields do not establish a manager relationship.
+
+The new employee/profile string fields are limited to 1,024 UTF-8 bytes each.
+These attributes round-trip through SCIM; they do not create an AppFlowy employee
+People Directory or change access. `userType` does not map to AppFlowy Guest.
+
+`PUT` replaces the supported profile attributes and clears omitted values,
+including an omitted direct role. Use `PATCH` for individual changes. For a complex value, both `add` and
+`replace` update the supplied subattributes and preserve omitted siblings.
+`remove` or `null` clears the selected attribute or parent object. Phone arrays support whole-array
+add/replace/remove and removal filtered by `value eq` or `type eq`; filtered phone
+replacement is unsupported.
+
+For the AppFlowy role extension, name-policy behavior, and role precedence, see
+[managed names and direct roles](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles).
+Inspect your installed server's discovery output at
+`https://your-domain/scim/v2/Schemas` before configuring a provider.
 
 ### Microsoft Entra ID
 
@@ -204,11 +250,11 @@ provisioning. See [Microsoft's compatibility guidance](https://learn.microsoft.c
 
 - **New users** receive an AppFlowy account and join the connection's workspace at the effective role. An existing account with the same email address is reused rather than duplicated.
 - **Seat limits apply.** When activation would exceed licensed capacity, AppFlowy accepts a visible SCIM User record but grants no new access. Admin shows **Waiting for seats**. Apply the upgraded license and activation retries automatically; freeing a seat also allows a background retry. Deactivating or deleting the waiting User cancels the request. See the [illustrated seat-recovery walkthrough](AUTHENTIK_AUTO_SYNC.md#when-your-license-runs-out-of-seats).
-- **Deactivating a user** (`active: false`) removes the user from the workspace and releases the seat. If the user has no other workspace, the account is also banned in the authentication service: new sign-ins are refused and the session can no longer be refreshed, so the user is signed out when the current access token expires (up to `GOTRUE_JWT_EXP`, 7 days in the template). Until then the user remains signed in but no longer sees the workspace. A user who keeps another workspace is not banned. Reactivation restores membership at the strongest role among the default and the user's remaining mapped groups. Direct shares and space ownership removed during offboarding are not promised to return. Admin account deletion is a separate workflow; do not use it to move a user between groups.
+- **Deactivating a user** (`active: false`) removes workspace access and releases any licensed capacity no longer needed by the user's other memberships. If no other workspace remains, a durable authentication update bans the account; after it completes, new sign-ins and session refresh are refused. An existing access token can remain valid until expiry (up to `GOTRUE_JWT_EXP`, 7 days in the template), but cannot restore removed workspace permissions. A user who keeps another workspace is not banned. Reactivation restores membership at the current effective role, using an accepted direct role or the default as the baseline and applying the remaining group mappings. Direct shares and space ownership removed during offboarding are not promised to return. Admin account deletion is a separate workflow; do not use it to move a user between groups.
 - **Deleting a user** removes workspace access and the SCIM record, and blocks new sign-ins if the user has no other workspace. The AppFlowy account itself is retained. A later re-provision creates a new SCIM resource ID.
 - **Group membership** in a mapped group grants at least the mapped role. Removing a user from a mapped group, renaming or deleting a mapped group, or changing the connection's mappings recomputes the user's role. Unmapped groups do not change roles but remain available as workspace groups for space and page permissions. A background worker applies role changes within a few seconds.
-- **Moving between groups** retains the user account and existing documents. Change the two memberships, keep the user in provisioning scope, and verify the old and new space grants. The connection default participates in role resolution: a Member default cannot be downgraded by a Guest group mapping. See [Entra roles, group moves, and data retention](ENTRA_SCIM_AUTO_SYNC.md#step-7-understand-the-role-and-permission-mapping).
-- **Display names** set through SCIM are stored on the connection's SCIM user record and returned to the IdP. They do not rename the user's AppFlowy profile, and the workspace member list continues to show the profile name.
+- **Moving between groups** retains the user account and existing documents. Change the two memberships, keep the user in provisioning scope, and verify the old and new space grants. By default, a Member connection default cannot be downgraded by a Guest group mapping. When direct SCIM roles are enabled, an explicit Member/Guest role replaces that baseline; mapped groups can still elevate it. See [Entra roles, group moves, and data retention](ENTRA_SCIM_AUTO_SYNC.md#step-7-understand-the-role-and-permission-mapping).
+- **Display names** are stored on the connection's SCIM user record. Enable **Sync workspace profile names** to also apply them to this workspace's member profile. The global personal profile remains independent. See [managed-name behavior](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles).
 - **System administrators** and the workspace owner cannot be managed through SCIM.
 - **Email addresses** are trimmed and lowercased before matching.
 
@@ -228,7 +274,7 @@ SCIM does not authenticate. A provisioned user signs in with the same email addr
 | `/Groups` | `GET` (list), `POST`, `GET /{id}`, `PUT /{id}`, `PATCH /{id}`, `DELETE /{id}` |
 | `/ServiceProviderConfig`, `/ResourceTypes`, `/Schemas` | `GET` (anonymous discovery) |
 
-- Filters support a single `eq` comparison: `userName` or `externalId` for users, `displayName` for groups. Other operators return `400 invalidFilter`.
+- Filters support one `eq` comparison: `userName`, `externalId`, `name.givenName`, `name.familyName`, or `emails.value` for users; `displayName` for groups. User names/emails compare case-insensitively; `externalId` compares exactly. Other operators return `400 invalidFilter`. Results remain scoped to SCIM-managed users in this connection.
 - Lists paginate with `startIndex` and `count` (default 100, maximum 200). Pass `excludedAttributes=members` when listing groups without membership data.
 - Request bodies use `Content-Type: application/scim+json` and are limited to 256 KiB.
 - `/Bulk`, ETags, and nested groups are not implemented.
@@ -239,8 +285,8 @@ Use the **Actions** menu on the **SCIM Connections** table.
 
 ![Actions menu on a SCIM connection row](../asset/scim_actions_menu.png)
 
-- **Disable / Enable** pauses or resumes the connection. While the connection is disabled, the IdP receives `401` and existing users keep their access. Disable a connection only before the IdP holds the token or during planned maintenance, because Entra and Okta record the `401` responses as credential failures.
-- **Edit connection** changes the name, default role, or group mappings. Role changes are applied to existing users automatically.
+- **Disable / Enable** pauses or resumes incoming provisioning. While disabled, the IdP receives `401`; disabling alone does not revoke existing users' access. Reconciliation of previously accepted changes continues. Disable a connection only before the IdP holds the token or during planned maintenance, because Entra and Okta record the `401` responses as credential failures.
+- **Edit connection** changes the label, default role, group mappings, or managed-user policies. Role changes are applied to existing users automatically. Enabling workspace name sync queues existing users; disabling it retains their current name overrides and stops future directory writes.
 - **Rotate token** issues a new token and shows it once. The old token stops working immediately, so update the IdP straight away. In Authentik, update the existing provider's token rather than recreating the provider; a recreated provider forgets its remote IDs and attempts to create duplicates.
 - **Delete connection** succeeds only after the IdP has deleted every SCIM user and group for the connection and the background role reconciliation for it has finished. Deactivating users is not sufficient. A successful deletion permanently revokes the token.
 
@@ -397,7 +443,7 @@ Provision the test identity again through the IdP, then sign in at `https://your
 | IdP test reports an SSL or connection error | The certificate is not publicly trusted, or the host is not reachable from the internet. | Install a CA-issued certificate and check DNS and firewall rules. |
 | `409` when creating a user | Duplicate `userName`, or a license conflict on an older server. | Find the existing User by `userName`; upgrade the server for automatic seat recovery. |
 | Admin shows Waiting for seats | An accepted activation needs license capacity. | Apply an upgraded license or free a seat. Background retries use the latest received directory state. |
-| `400 invalidFilter` | The IdP used an unsupported filter. | Match users on `userName` or `externalId` and groups on `displayName`, using `eq`. |
+| `400 invalidFilter` | The IdP used an unsupported filter. | Use one of the [supported equality filters](#supported-scim-20-surface); compound filters are not supported. |
 | Provisioning fails on an attribute | The IdP maps an attribute that AppFlowy does not store. | Remove the attribute from the IdP mapping. |
 | Users are provisioned but cannot sign in | SCIM does not authenticate. | Configure [OIDC](OIDC.md), [SAML](OKTA_SAML.md), or [LDAP](LDAP.md), and make sure the sign-in email matches `userName`. |
 | Group roles are not applied | Groups are not pushed, or the mapping key does not match. | Enable group push in the IdP and check that the mapping uses the exact `externalId` or the group's display name. |

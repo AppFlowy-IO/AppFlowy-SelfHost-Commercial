@@ -1,5 +1,7 @@
 # Audit Logging
 
+[Documentation](README.md)
+
 AppFlowy Self-Hosted can record the [supported actions listed below](#what-is-recorded), including authentication, workspace and space changes, permissions, directory sync, form sharing, administration, and MCP tool activity. Use **Audit Log** in the Admin console to enable recording, search events across the deployment or within a workspace, inspect recorded changes, and export results.
 
 Audit logging is disabled by default. Enabling it applies to the whole deployment. Once enabled, the page shows the latest 50 recorded events across all workspaces. Every search filter is optional.

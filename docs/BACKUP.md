@@ -1,5 +1,7 @@
 # Server Backup
 
+[Documentation](README.md)
+
 `appflowy-backup` is an optional service that creates recovery backups of your AppFlowy server. Administrators use **Tools → Backup** to create backups, schedule them, download portable exports, and restore the server.
 
 Users can continue editing while a backup is created. A restore briefly pauses the application during the final switch.

@@ -1,5 +1,7 @@
 # Configure AI models
 
+[Documentation](README.md)
+
 Use **Admin → Settings → AI Settings** to configure AI providers and models. Changes are saved in the database and normally do not require a redeployment.
 
 > **Important:** Changing the embedding provider, model, model revision, or dimensions requires regenerating embeddings for every existing document. This is required even when the old and new models return the same number of dimensions.

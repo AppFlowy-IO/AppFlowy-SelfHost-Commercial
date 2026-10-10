@@ -1,9 +1,26 @@
 # Automatic Microsoft Entra ID sync with SCIM
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md) / [SCIM setup](SCIM.md) / [Operations](SCIM_OPERATIONS.md)
+
 This guide covers cloud-managed Entra users and groups. SCIM manages workspace
 membership, directory groups, and their downstream permissions. Sign-in through
 OIDC or SAML is configured separately. For an on-premises Windows AD source, start
 with [the AD connector guide](AD_SCIM_AUTO_SYNC.md) and validate that import stage.
+
+## In this guide
+
+- [License and network requirements](#step-1-check-the-license-and-network-requirements)
+- [Create the Entra application](#step-2-create-a-dedicated-enterprise-application)
+- [Connect AppFlowy](#step-3-connect-the-appflowy-scim-endpoint)
+- [Mappings and assignment scope](#step-4-limit-mappings-and-assignment-scope)
+- [First automatic delivery](#step-5-start-provisioning-and-verify-automatic-changes)
+- [Change groups and members](#step-6-change-the-source-and-compare-the-next-cycle)
+- [Role and permission mapping](#step-7-understand-the-role-and-permission-mapping)
+- [Move a user between groups](#step-8-move-a-user-without-deleting-their-account-or-work)
+- [Seats, offboarding, and reactivation](#step-9-test-seat-capacity-offboarding-and-recovery)
+- [Rotate the token](#step-10-recover-after-rotating-the-scim-token)
+- [Repeatable tests](#repeatable-checks-after-the-microsoft-trial)
+- [Finish a temporary test](#after-a-temporary-test)
 
 ## What to verify
 
@@ -383,6 +400,11 @@ group deletion, and removing a user's workspace access are distinct operations.*
 
 ## Optional: Diagnose a user display-name update
 
+The recorded run used the default with workspace name sync disabled. To apply
+received names to workspace member profiles on a current deployment, enable
+[Sync workspace profile names](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles).
+The personal profile remains unchanged in either mode.
+
 To test user-attribute changes, open **Bob Demo → Edit properties → Identity**.
 Search for **Display name**, change it to **Bob Demo Updated**, and **Save**.
 Keep the sign-in identity unchanged.
@@ -432,8 +454,11 @@ Entra and AppFlowy use similar role names for different purposes:
 
 Microsoft describes directory roles in its [Entra RBAC overview](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/custom-overview)
 and application roles in its [application-assignment guide](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal).
-AppFlowy's supported User mappings do not import Entra administrator roles or a
-SCIM `roles` attribute. Configure workspace role mappings in AppFlowy Admin.
+AppFlowy never imports Entra administrator roles. The example uses workspace
+role mappings in AppFlowy Admin. New deployments can optionally accept explicit
+Member/Guest roles through the [AppFlowy User extension](SCIM_OPERATIONS.md#enable-managed-names-and-direct-roles);
+this requires deliberate provider mapping and is separate from Entra's generic
+`roles` field or the **User** assignment shown below.
 
 ![Entra application assignments use the User app role](assets/entra-scim-auto-sync/32-entra-app-role-assignment.png)
 
@@ -450,7 +475,8 @@ For a test that demonstrates fallback, choose **Guest** as the connection defaul
 | `Quality — Entra Demo` | Guest |
 | No remaining mapped group | Guest, from the connection default |
 
-The strongest role among the default and all matching groups wins:
+With **Accept roles from SCIM** off, as in this recording, the strongest role
+among the default and all matching groups wins:
 **Owner → Member → Guest**. With the configuration above, someone in both groups
 is a Member. Removing Platform leaves a Guest. Adding Platform again restores
 Member. With **Member** as the default, a Guest mapping cannot downgrade anyone
@@ -754,7 +780,7 @@ does not imply the former member still has permission to read it.
 | Remove Alice | Removal delivered; Alice remains independently assigned | Bob remains; Alice keeps workspace membership |
 | Replace Bob with Alice | Both membership changes delivered | Count remains 1, but the member is now Alice |
 | Rename the group | Existing group's update delivered | Same group has the new name |
-| Modify the user's display name | User update delivered | SCIM record changes; existing AppFlowy personal profile stays user-controlled |
+| Modify the user's display name | User update delivered | SCIM record changes; workspace name also changes when name sync is enabled; personal profile stays independent |
 | Delete a disposable group | Group deletion delivered | Group disappears; independently assigned users remain |
 | Disable/unassign a disposable user from all application assignments | Deactivation delivered | User loses the provisioned workspace access |
 
