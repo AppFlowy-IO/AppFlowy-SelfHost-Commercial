@@ -252,6 +252,11 @@ provider's provisioning log when a recent source change is absent.
 does not fetch new changes from the provider. Wait for Synced after Sync requested.
 If retry recreates a missing group, review and reassign its space/page grants.
 
+The open monitor refreshes the connection's enabled state. Pausing the connection
+disables **Retry sync** on the next refresh; resuming it makes the action available
+again. A successful retry request means the work was accepted. Keep the monitor
+open until the received group name and eligible membership show **Synced**.
+
 See [status screenshots](AUTHENTIK_AUTO_SYNC.md#watch-group-sync-status-in-admin)
 and the [retry walkthrough](AUTHENTIK_AUTO_SYNC.md#f-recover-a-group-with-retry-sync).
 
