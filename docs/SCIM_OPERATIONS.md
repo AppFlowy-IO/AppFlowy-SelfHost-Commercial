@@ -102,6 +102,13 @@ The name preference is `displayName`, then `name.formatted`, then the joined
 workspace override and falls back to the personal profile. This policy never
 changes the global personal name or another workspace's profile.
 
+SCIM keeps the full `displayName` and structured `name` in its stored data and
+responses. Only the selected workspace display name is shortened to fit the
+72-byte UTF-8 limit, without splitting a character. This limit can mean fewer
+than 72 characters for some languages. A long directory name does not prevent
+provisioning or offboarding: deactivating the user still removes their managed
+workspace access.
+
 Users can still edit their workspace profile locally. A later directory update
 or reconciliation can overwrite a local name edit while this policy is enabled.
 
