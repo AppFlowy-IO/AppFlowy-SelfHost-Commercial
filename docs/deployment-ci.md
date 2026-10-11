@@ -36,6 +36,19 @@ Tests fail on timeouts and failed assertions. Registry download failures also fa
 
 CI starts with `deploy.env`, generates temporary credentials, disables external AI/semantic indexing and SMTP, and applies settings sized for a test runner. It preserves each source deployment's storage configuration. Keyword search remains enabled. Helm's checked-in test settings are in [ci/helm-values.yaml](../ci/helm-values.yaml).
 
+Render contracts also verify that Compose and Swarm preserve an explicitly blank Search URL while
+retaining the default when it is absent, and that disabling Search in Helm clears Cloud's URL.
+The same render checks assert a fixed legacy bootstrap value (`true` for bundled Compose/Swarm,
+derived from `appflowy-search.enabled` for Helm), including immunity to retired flags in the
+operator environment. These checks do not start services or validate automatic health admission.
+
+Deployment CI resolves the images currently published for the tags in `deploy.env`; it does not
+build the companion server source change. A passing render or ordinary deployment journey cannot
+establish empty-URL suppression, the 60-second outage pause, or two-check recovery in those images.
+Qualify those runtime behaviors against a release containing the Search health coordinator before
+claiming compatibility; no numbered minimum server release has yet been qualified for this change.
+See [server rollout requirements](docker-compose.md#server-compatibility-and-rollout).
+
 Compose and Swarm do not explicitly configure Redis AOF or a named Redis data volume. Helm retains its existing chart-specific Redis configuration. CI checks application recovery after service replacement, but does not require a Redis marker to survive or claim that Redis-backed queues and pending work are durable.
 
 Each run uploads an image lock and separate sanitized evidence for Compose, Swarm, and Helm. Review the application checks, browser results, recovery results, running-image evidence, and diagnostic logs in those artifacts. `core-acceptance.json` records the completed functional and recovery checks; `fixture-cleanup.json` records the verified fixture removal. The final registration journey produces `registration-results.json` and `registration.log`; available results and logs are collected even if it fails. Final `acceptance.json` is written only after registration passes. Resolved environment files, generated account credentials, and Kubernetes secrets stay in the runner's temporary directory and are not uploaded.

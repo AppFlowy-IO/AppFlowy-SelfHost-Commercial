@@ -243,7 +243,7 @@ class Deployment:
             service['image'] = self.images[name]['image']
             service['logging'] = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '2'}}
             if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
-                service['environment'].update({'AI_ENABLED': 'false', 'APPFLOWY_INDEXER_ENABLED': 'false',
+                service['environment'].update({'AI_ENABLED': 'false',
                                                'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false'})
             if name == 'appflowy_cloud':
                 service['healthcheck']['start_period'] = '180s'

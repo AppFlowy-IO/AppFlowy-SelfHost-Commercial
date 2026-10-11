@@ -46,9 +46,18 @@ Optional but common:
 - `gotrue.config.smtp.*` / `gotrue.config.oauth.*`: set only if you enable SMTP or OAuth providers.
 - `appflowy-ai.secrets.*`: set only if you enable AI providers.
 - `appflowy-ai.enabled=false`: runs the core services without a paid AI provider. For keyword search without semantic embedding workers, also set `appflowy-search.config.backgroundIndexerEnabled=false`.
-- `appflowy-search.enabled`: controls deployment of Search and supplies Cloud's initial/reset `APPFLOWY_SEARCH_ENABLED` default. A stored **Admin → Environment → Search** override takes precedence, including after restarts; changing the chart default does not replace that override.
+- `appflowy-search.enabled`: controls deployment of Search and Cloud's service URL. When `false`, the chart explicitly clears `APPFLOWY_SEARCH_SERVICE_URL`. With automatic Search admission in the server image, an empty URL stops new work; configured Search is checked every 10 seconds, pauses after 60 seconds of observed unhealthiness, and resumes after two consecutive healthy checks. Existing queued work is retained subject to Redis storage and queue retention; recovery reconciles changes made while paused. There is no Admin enable/disable switch; Admin reports health and admission state.
 - `*.image.digest`: pins an application or infrastructure image to an immutable registry digest; when set, it takes precedence over `image.tag`.
 - `ingress.scim.enabled`: defaults to `true` and adds the `/scim` route for SCIM provisioning; set it to `false` when SCIM is unused or must use a separate edge (see below).
+
+**Server compatibility:** Empty-URL suppression and automatic health pause/recovery require a server
+release with URL-derived Search admission and the health coordinator. No numbered published release
+has yet been qualified for this deployment change. Upgrade all Cloud replicas and companion services
+together before relying on those behaviors; see [the staged rollout requirements](../../docs/docker-compose.md#server-compatibility-and-rollout).
+For older-image bootstrap compatibility, the chart also passes a fixed `APPFLOWY_SEARCH_ENABLED`
+value derived only from `appflowy-search.enabled`. New Cloud ignores this retired variable; it is
+not a separate user-controlled setting. New configured installations wait for two healthy checks;
+upgrades preserve existing enabled admission while the initial checks run.
 
 Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the chart derives the release's Service names. Leave them empty when using bundled infrastructure. Init containers wait for PostgreSQL, GoTrue and Cloud migrations before background workers start. Search uses one replica, a PVC and `Recreate` updates so two processes never write its keyword index concurrently. Redis persists its AOF on its PVC.
 
