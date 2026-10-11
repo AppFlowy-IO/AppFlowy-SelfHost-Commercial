@@ -4,12 +4,24 @@
 
 [Deployment integration](../.github/workflows/deployment-test.yml) runs on pull requests, pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions.
 
-Use **Deployment tests** as the required pull-request status check. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check. Adding the workflow does not configure repository branch protection automatically.
+**Deployment tests** is the aggregate result for a deployment run. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check.
 
 Backup is disabled in the default installation and all three standard CI deployments. The separate
 [AppFlowy Backup integration](../.github/workflows/backup-test.yml) workflow runs on pull requests,
 pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions. Only that
 workflow enables Backup with `APPFLOWY_BACKUP_PROFILE=backup`.
+
+Both integration workflows skip automatic runs when **all changed files are under
+`docs/`**, including nested guides and screenshot assets. A change outside `docs/`
+still triggers CI, even when documentation changes are included. Pushes retain
+the branch filters above. Manual runs remain available, and the separate release
+image build on release-branch creation is unchanged.
+
+Do not require these path-filtered checks unconditionally for every pull request:
+[GitHub leaves required checks pending when their workflow is skipped by a path filter](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#using-filters-to-target-specific-paths-for-pull-request-or-push-events).
+If mandatory checks are added later, use an always-running status gate that
+accepts documentation-only changes and requires successful integration checks
+for other changes. These workflow files do not configure branch protection.
 
 ## What a passing run verifies
 

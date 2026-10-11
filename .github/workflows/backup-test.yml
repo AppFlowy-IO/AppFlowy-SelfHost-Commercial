@@ -2,8 +2,12 @@ name: AppFlowy Backup integration
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
   push:
     branches: [main, master, 'release/public/**']
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       backup_image:
