@@ -20,19 +20,27 @@ workspace roles and the content-access recipe below are separate from the missin
 space/workspace creation controls. Read [what remains unsupported](#what-remains-unsupported)
 before using this example in a real installation.
 
-Navigation: [permission matrix](#the-permission-matrix) ·
-[workspace setup](#1-prepare-three-workspaces-and-two-test-users) ·
-[Entra setup](#3-create-and-assign-the-eight-entra-groups) ·
-[space permissions](#6-configure-content-access-in-appflowy-web) ·
-[group moves](#8-move-a-member-without-deleting-the-user) ·
-[results](#verified-results).
+## In this guide
 
-Recorded examples: [viewer and denied access](#recorded-baseline-view-does-not-mean-edit-or-cross-workspace-access) ·
-[Super_Users editor](#recorded-super_users-addition-source-delivery-applied-state-saved-edit) ·
-[HR viewer/editor change](#bobs-hr-editor-and-restored-viewer-phases) ·
-[workspace offboarding](#remove-only-executive-committee-access) ·
-[Admin role](#add-and-remove-workspace-administration) ·
-[group lifecycle](#10-test-group-creation-rename-and-deletion).
+- [Permission matrix](#the-permission-matrix)
+- [Current limitations](#what-remains-unsupported)
+- [Prepare workspaces and test users](#1-prepare-three-workspaces-and-two-test-users)
+- [Create the AppFlowy SCIM connections](#2-create-one-appflowy-scim-connection-per-workspace)
+- [Create and assign the Entra groups](#3-create-and-assign-the-eight-entra-groups)
+- [Check mappings and start provisioning](#4-check-mappings-and-start-provisioning)
+- [Confirm synced groups in AppFlowy Admin](#5-confirm-the-received-groups-in-appflowy-admin)
+- [Configure space permissions in AppFlowy Web](#6-configure-content-access-in-appflowy-web)
+- [Verify access as Alice and Bob](#7-verify-the-matrix-as-alice-and-bob)
+  - [Viewer and denied access](#recorded-baseline-view-does-not-mean-edit-or-cross-workspace-access)
+  - [Super_Users editor](#recorded-super_users-addition-source-delivery-applied-state-saved-edit)
+- [Move a member between groups](#8-move-a-member-without-deleting-the-user)
+  - [HR viewer/editor changes](#bobs-hr-editor-and-restored-viewer-phases)
+- [Test offboarding and administrator demotion](#9-test-workspace-offboarding-and-administrator-demotion)
+  - [Remove access to one workspace](#remove-only-executive-committee-access)
+  - [Add and remove the Admin role](#add-and-remove-workspace-administration)
+- [Create, rename and delete a group](#10-test-group-creation-rename-and-deletion)
+- [Verified results](#verified-results)
+- [Finish the temporary demo](#finish-the-temporary-demo)
 
 ## The permission matrix
 
