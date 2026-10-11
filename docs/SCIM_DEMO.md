@@ -59,10 +59,13 @@ The tables below show the groups and requested permissions used in this example.
 | `W_RH_edit` | Individual with Edit access to the team's dedicated confidential workspace |
 | `Product` | Business team group for the Product team |
 
-The `Users` description is an organization rule to configure in the directory.
-AppFlowy does not automatically add employees because a group is named `Users`.
-Keep HR-only users out of any automatic `Users` rule: otherwise that rule would
-intentionally provision them into Demo Workspace.
+`Users` is a regular group managed in AD or Entra ID. In this example, its members
+receive access to Demo Workspace. You add people to this group manually or through
+a directory rule; its name and description do not add anyone automatically.
+
+People who should access only HR Workspace should belong to `W_RH_view` or
+`W_RH_edit` and stay out of `Users`. If someone belongs to both `Users` and an HR
+workspace group, they receive access to both workspaces.
 
 ### Requested content and administration permissions
 
