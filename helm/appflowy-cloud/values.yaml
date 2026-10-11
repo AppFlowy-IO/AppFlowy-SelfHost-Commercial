@@ -279,6 +279,34 @@ gotrue:
   tolerations: []
   affinity: {}
 
+# Backup and restore coordinator. Requires an image containing the Kubernetes adapter.
+# Support is limited to one replica per managed writer, without writer autoscalers or GitOps
+# reconciliation during restore. See README.md before enabling on an existing installation.
+appflowy-backup:
+  enabled: false
+  image:
+    repository: appflowyinc/appflowy_backup
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  # Exact kubernetes.io/hostname shared with Search's local LMDB volume.
+  nodeName: ""
+  # API endpoint/Service CIDR as enforced by the cluster's NetworkPolicy provider.
+  # Required when networkPolicy.enabled=true; use the actual IPv4 /32 or IPv6 /128.
+  apiServerCIDR: ""
+  persistence:
+    size: 50Gi
+    storageClass: ""
+    existingClaim: ""
+  artifacts:
+    # Empty derives <source-bucket>-backups; this stays fixed across restores.
+    bucket: ""
+    prefix: server-backups/
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "2", memory: 2Gi}
+  tolerations: []
+
 # AppFlowy Cloud Main Backend Service
 appflowy-cloud:
   enabled: true

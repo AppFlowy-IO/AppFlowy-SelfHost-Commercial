@@ -1,0 +1,35 @@
+0–10s
+Authentik is the source of group membership.
+Engineering starts with no members.
+
+10–28.5s
+Add Alice in Authentik.
+Choose Add Existing User, select Alice, then Assign.
+
+28.5–41s
+Saving the membership triggers an automatic SCIM update.
+No manual full sync is started.
+
+41–56s
+Reopen AppFlowy Settings > People > Groups.
+The group now contains Alice.
+
+56–63.3s
+Authentik also shows Alice in the group.
+Refresh reloads this table; it does not start SCIM sync.
+
+63.3–78s
+Add Bob to the same group in Authentik.
+Select Bob, confirm, then choose Assign.
+
+78–86s
+Authentik now has Alice and Bob.
+The membership change is sent to AppFlowy automatically.
+
+86–97s
+Reopen People > Groups to load the latest list.
+The background sync has already updated the group.
+
+97–103s
+AppFlowy now shows both Alice and Bob.
+The group was updated entirely through SCIM.

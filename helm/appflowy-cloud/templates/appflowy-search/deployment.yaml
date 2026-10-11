@@ -32,7 +32,14 @@ spec:
       {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
+        {{- if index .Values "appflowy-backup" "enabled" }}
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        {{- else }}
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- end }}
       {{- include "appflowy.waitForCloud" . | nindent 6 }}
       containers:
         - name: appflowy-search
@@ -44,6 +51,7 @@ spec:
             - name: http
               containerPort: {{ $search.service.port }}
           env:
+            {{- include "appflowy.backup.redisSelection" . | nindent 12 }}
             - name: RUST_LOG
               value: {{ $search.config.rustLog | quote }}
             - name: APPFLOWY_SEARCH_HOST
@@ -78,7 +86,7 @@ spec:
             - name: APPFLOWY_S3_MINIO_URL
               value: {{ include "appflowy.s3.endpoint" . | quote }}
             - name: APPFLOWY_S3_BUCKET
-              value: {{ include "appflowy.s3.bucket" . | quote }}
+              {{- include "appflowy.backup.bucketSelection" . | nindent 14 }}
             - name: APPFLOWY_S3_REGION
               value: {{ include "appflowy.s3.region" . | quote }}
             - name: APPFLOWY_S3_ACCESS_KEY
@@ -100,7 +108,14 @@ spec:
             - name: APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES
               value: {{ $search.config.keywordIndexMapSizeBytes | int64 | quote }}
             - name: APPFLOWY_KEYWORD_INDEX_DIR
+              {{- if index .Values "appflowy-backup" "enabled" }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "appflowy.backup.runtime" . }}
+                  key: search-directory
+              {{- else }}
               value: /var/lib/appflowy/keyword_index
+              {{- end }}
             {{- $ai := index .Values "appflowy-ai" }}
             {{- if and $ai.enabled $ai.secrets.openaiApiKey }}
             - name: AI_OPENAI_API_KEY
@@ -149,9 +164,14 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+      {{- if index .Values "appflowy-backup" "enabled" }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ index .Values "appflowy-backup" "nodeName" | quote }}
+      {{- else }}
       {{- with $search.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- end }}
       {{- with $search.affinity }}
       affinity:

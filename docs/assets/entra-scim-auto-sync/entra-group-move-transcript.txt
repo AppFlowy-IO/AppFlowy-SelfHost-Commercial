@@ -1,0 +1,31 @@
+0.0–8.0s
+Move a user between groups without deleting their account or work.
+Before: Bob can edit his page in Platform Demo Space.
+
+8.0–18.0s
+Bob created these project notes before the move.
+Platform and Shared are available; Quality is not.
+
+18.0–26.0s
+In Entra: Groups > Quality > Members > Add members.
+Add Bob; keep Alice. Bob remains directly assigned to the application.
+
+26.0–34.0s
+Then remove Bob from Platform's membership.
+This removes a group relationship; it does not delete the user.
+
+34.0–44.0s
+The scheduled cycle delivered Platform = 0 and Quality = 2, both Synced.
+No on-demand provisioning or Retry sync was used. Waiting time is omitted.
+
+44.0–74.0s
+After delivery: Bob loses Platform and gains Quality.
+Shared remains available through the Quality group.
+
+74.0–82.0s
+The workspace owner opens Bob's original page at the same URL.
+The page and its text remain. Bob's account was not recreated.
+
+82.0–92.0s
+Workspace roles are configured separately in AppFlowy Admin.
+Entra's User app assignment is not an AppFlowy workspace role.

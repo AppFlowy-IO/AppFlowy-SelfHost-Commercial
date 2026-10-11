@@ -1,0 +1,23 @@
+0.0–8.0s
+Three regular seats are occupied by the owner, Alice, and Bob.
+The fourth user, Charlie, is retained but inactive: Waiting for seats.
+
+8.0–16.0s
+For this separate recovery test, remove Alice's final app assignment.
+This is intentional offboarding, unlike Bob's group move.
+
+16.0–24.0s
+Manual diagnostic: Provision on demand sets Alice active = False.
+Her identity remains; releasing her workspace seat makes capacity available.
+
+24.0–69.0s
+Live recording: wait for AppFlowy's scheduled retry to activate Charlie.
+No new Entra request or manual retry. Earlier waiting time is omitted.
+
+69.0–77.0s
+Capacity reaches Synced, with 1 eligible and applied member.
+Charlie uses the same SCIM identity. No license purchase was made in this demo.
+
+77.0–85.0s
+After offboarding Charlie, reassign and reactivate Alice.
+Manual diagnostic: active = True, same identity; group delivery restores access.

@@ -12,6 +12,18 @@ For audit configuration, event review, and CSV export in the Admin console, see 
 
 For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
 
+For optional server backups, set `APPFLOWY_BACKUP_PROFILE=backup` in `.env` and run
+`docker compose up -d` (Compose 2.30 or newer). Once Backup is ready, open **Tools → Backup**.
+See the [Backup guide](docs/BACKUP.md) and [Compose details](docs/docker-compose.md#backup).
+Existing installations must retain their Compose project name, override files, and
+`backup-ops/runtime/` restore selections. Upgrade Cloud, Worker, Search, GoTrue, Admin, and Backup
+as a compatible set; follow the [backup upgrade procedure](docs/docker-compose.md#upgrade-with-existing-backups)
+for the v0.19.2 storage migration. Swarm and Helm use their own deployment guides and activation
+adapters; the [Compose Backup acceptance lane](docs/deployment-ci.md#backup-acceptance) does not
+qualify those platforms.
+
+To browse and test your installation's business APIs in Swagger UI, see the [OpenAPI guide](docs/OPENAPI.md).
+
 ## Deployment Options
 
 AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
@@ -54,7 +66,18 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.2 (Latest)
+### 🚀 v0.19.5 (Latest)
+
+#### Bug Fixes
+
+- Fixed missed sidebar updates for connected viewers and stale database row synchronization after deletions and restores.
+- Fixed document import retries that could discard pages and attachments already saved before a temporary conflict.
+- Fixed stale attachment access checks after unpublishing.
+
+
+**Baseline:** [`d55254037786da52456dfab1ccbf931e8e3a9772`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/d55254037786da52456dfab1ccbf931e8e3a9772)
+
+### 🚀 v0.19.2
 
 #### New Features
 

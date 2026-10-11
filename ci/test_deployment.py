@@ -17,6 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
 from images import CORE, ROOT, clean_environment
+from configuration import source_fingerprint
 
 
 class RuntimeSafetyTests(unittest.TestCase):
@@ -28,7 +29,8 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.lock = self.root / 'images.json'
         self.payload = {'services': {name: {'source': name + ':latest', 'image': name + '@' + digest,
                                           'digest': digest, 'config_digest': digest} for name in CORE},
-                        'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest()}
+                        'compose_sha256': hashlib.sha256((ROOT / 'docker-compose.yml').read_bytes()).hexdigest(),
+                        'source_sha256': source_fingerprint()}
         self.lock.write_text(json.dumps(self.payload))
 
     def deployment(self, mode='compose'):
@@ -105,6 +107,43 @@ class RuntimeSafetyTests(unittest.TestCase):
                         instance.render()
                 self.assertFalse((instance.runtime / 'helm-overrides.yaml').exists())
                 self.assertFalse((instance.runtime / 'credentials.json').exists())
+
+    def test_ci_server_tag_preserves_helm_source_validation(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        documents = self.helm_source_documents()
+        cloud = self.payload['services']['appflowy_cloud']
+        cloud['configured_source'] = cloud['source']
+        cloud['source'] = 'appflowy_cloud:0.19.4_test'
+        self.lock.write_text(json.dumps(self.payload))
+        instance = self.deployment('helm')
+        with patch.object(instance, 'run', return_value=yaml.safe_dump_all(documents)):
+            instance.validate_helm_source_images()
+
+        name = HELM_WORKLOADS['appflowy_cloud'].split('/', 1)[1]
+        document = next(item for item in documents if item['metadata']['name'] == name)
+        for bad_image in ('wrong.example/appflowy_cloud:latest', 'appflowy_cloud:wrong-version'):
+            with self.subTest(image=bad_image):
+                document['spec']['template']['spec']['containers'][0]['image'] = bad_image
+                with patch.object(instance, 'run', return_value=yaml.safe_dump_all(documents)):
+                    with self.assertRaisesRegex(RuntimeError, 'chart source image differs'):
+                        instance.validate_helm_source_images()
+
+    def test_helm_and_kubectl_receive_the_runner_kubeconfig(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        self.lock.write_text(json.dumps(self.payload))
+        kubeconfig = str(self.root / 'appflowy-ci.kubeconfig')
+        with patch.dict(os.environ, {'KUBECONFIG': kubeconfig,
+                                     'APPFLOWY_DATABASE_URL': 'postgres://private'}):
+            instance = self.deployment('helm')
+        result = subprocess.CompletedProcess([], 0, stdout='', stderr='')
+        with patch.object(instance, 'guard'), patch.object(instance, 'render'), \
+                patch.object(instance, 'wait_http'), patch.object(instance, 'check_images'), \
+                patch('deployment.subprocess.run', return_value=result) as run:
+            instance.up()
+            self.assertEqual([call.args[0][0] for call in run.call_args_list], ['helm', 'kubectl'])
+            for call in run.call_args_list:
+                self.assertEqual(call.kwargs['env']['KUBECONFIG'], kubeconfig)
+                self.assertNotIn('APPFLOWY_DATABASE_URL', call.kwargs['env'])
 
     def test_image_reference_normalization_preserves_versions(self):
         self.assertEqual(normalized_image_reference('redis'), 'docker.io/library/redis:latest')

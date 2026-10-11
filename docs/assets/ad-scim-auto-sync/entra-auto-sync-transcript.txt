@@ -1,0 +1,100 @@
+Microsoft Entra → AppFlowy automatic group sync
+Duration: approximately 2 minutes 42 seconds. Silent, with captions.
+
+Real setup/source screenshots are combined with window recordings. Waiting time and unrelated navigation are omitted. The Entra source groups are cloud-managed; no Windows AD import is demonstrated. Group delivery is automatic. Separate on-demand user diagnostics for Alice (setup) and Bob (optional display-name check) are disclosed in the guide.
+
+0.0–5.0s
+Microsoft Entra → SCIM → AppFlowy
+Real cloud-managed demo groups; this is not a Windows AD recording.
+
+5.0–11.0s
+Create an Assigned Security group in Entra (still capture).
+Engineering starts with Alice as a direct member.
+
+11.0–17.0s
+Assign the two users and two groups to AppFlowy SCIM Demo (still).
+Independent user assignments separate group removal from offboarding.
+
+17.0–24.0s
+Keep only supported User mappings (still capture).
+The example.com expression is for this private demo, not production sign-in.
+
+24.0–30.0s
+Map displayName, members, and externalId for Groups (still).
+The members mapping sends direct user membership to AppFlowy.
+
+30.0–36.0s
+Confirm: Sync only assigned users and groups (still capture).
+The administrator and AppFlowy workspace owner are excluded.
+
+36.0–41.0s
+Test connection succeeds (still capture).
+This proves connectivity and authentication, not group delivery.
+
+41.0–49.6s
+Start provisioning and confirm Yes in Entra.
+The scheduled job remains enabled while Microsoft processes the changes.
+
+49.6–55.6s
+AppFlowy starts with zero groups received.
+Refreshing this monitor only reads status; it does not trigger SCIM.
+
+55.6–63.6s
+About 20 minutes later, the scheduled job delivers both groups.
+AppFlowy applies them automatically; both show Synced. Waiting time is omitted.
+
+63.6–70.6s
+Open AppFlowy Settings → People → Groups.
+Engineering has one member; Design is empty.
+
+70.6–77.6s
+Inspect Engineering’s roster: Alice is the actual member.
+Compare identities as well as member counts.
+
+77.6–84.6s
+In Entra, rename Engineering to Platform and add Bob.
+This screenshot shows the source before the next scheduled delivery.
+
+84.6–91.6s
+Remove Alice from Platform, leaving Bob.
+Alice remains individually assigned to the app and retains workspace membership.
+
+91.6–98.6s
+Delete only the disposable Design group in Entra.
+Keep Platform and both user assignments.
+
+98.6–105.6s
+Create Quality with Alice as its direct member.
+Assign the new group to the dedicated application.
+
+105.6–111.6s
+Check the assigned-only scope after adding Quality.
+Alice and Bob keep their independent user assignments.
+
+111.6–117.6s
+Entra reports the next incremental cycle completed.
+The group changes were delivered automatically.
+
+117.6–125.6s
+AppFlowy shows Platform and Quality as Synced.
+Design is gone. No Retry sync or on-demand group provisioning was used.
+
+125.6–132.6s
+The AppFlowy group list now matches the source.
+The group count stays at two: Quality was added and Design was deleted.
+
+132.6–139.6s
+Platform is the original Engineering group, now renamed.
+Bob replaced Alice. Its member count stayed at one.
+
+139.6–146.6s
+Quality was created automatically with Alice as its member.
+Both users retain workspace access through their independent assignments.
+
+146.6–153.6s
+Optional: edit Bob’s display name and save, then provision Bob on demand.
+This manual user-only diagnostic is separate from the automatic group test.
+
+153.6–161.6s
+Synced means AppFlowy applied the latest group data it received.
+If an Entra change is missing, check its provisioning job before using Retry sync.

@@ -1,0 +1,284 @@
+{{- $backup := index .Values "appflowy-backup" }}
+{{- if $backup.enabled }}
+{{- if not (or $backup.image.tag $backup.image.digest) }}
+{{- fail "appflowy-backup requires an explicitly selected image containing the Kubernetes restore adapter" }}
+{{- end }}
+{{- if not $backup.nodeName }}
+{{- fail "appflowy-backup.nodeName must select the node shared with Search's local LMDB PVC" }}
+{{- end }}
+{{- if and .Values.networkPolicy.enabled (not $backup.apiServerCIDR) }}
+{{- fail "appflowy-backup.apiServerCIDR is required for Kubernetes API egress" }}
+{{- end }}
+{{- if not (and .Values.postgresql.enabled .Values.postgresql.primary.persistence.enabled (index .Values "appflowy-search" "enabled") (index .Values "appflowy-search" "persistence" "enabled") .Values.gotrue.enabled (index .Values "appflowy-cloud" "enabled")) }}
+{{- fail "Kubernetes backup requires managed PostgreSQL and Search with persistent storage, Cloud and GoTrue" }}
+{{- end }}
+{{- if or .Values.gotrue.autoscaling.enabled (index .Values "appflowy-cloud" "autoscaling" "enabled") }}
+{{- fail "Disable Cloud and GoTrue autoscaling before enabling Kubernetes backup" }}
+{{- end }}
+{{- range $name := list "gotrue" "appflowy-cloud" "appflowy-worker" "appflowy-search" "appflowy-ai" }}
+{{- $component := index $.Values $name }}
+{{- if and $component.enabled (ne (int $component.replicaCount) 1) }}
+{{- fail (printf "%s.replicaCount must be 1 when Kubernetes backup is enabled" $name) }}
+{{- end }}
+{{- end }}
+{{- $writers := dict "appflowy_cloud" (include "appflowy.cloud.fullname" .) "gotrue" (include "appflowy.gotrue.fullname" .) "appflowy_search" (include "appflowy.search.fullname" .) }}
+{{- if index .Values "appflowy-worker" "enabled" }}{{- $_ := set $writers "appflowy_worker" (include "appflowy.worker.fullname" .) }}{{- end }}
+{{- if index .Values "appflowy-ai" "enabled" }}{{- $_ := set $writers "ai" (include "appflowy.ai.fullname" .) }}{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames:
+      {{- range $service, $deployment := $writers }}
+      - {{ $deployment }}
+      {{- end }}
+    verbs: [get, update]
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [{{ include "appflowy.backup.fullname" . }}]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [statefulsets]
+    resourceNames: [{{ include "appflowy.postgresql.host" . }}]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [{{ include "appflowy.backup.runtime" . }}]
+    verbs: [get, update]
+  # Kubernetes RBAC cannot restrict create by resourceName. This namespace-local
+  # permission bootstraps the independent runtime map; it grants no Secret access.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "appflowy.backup.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "appflowy.backup.fullname" . }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-backup
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-backup
+  template:
+    metadata:
+      labels:
+        {{- include "appflowy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: appflowy-backup
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-global.yaml") . | sha256sum }}
+    spec:
+      {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "appflowy.backup.fullname" . }}
+      terminationGracePeriodSeconds: 1500
+      nodeSelector:
+        kubernetes.io/hostname: {{ $backup.nodeName | quote }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      initContainers:
+        - name: prepare-private-storage
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $backup.image) | quote }}
+          command: [sh, -ec]
+          args:
+            - |
+              test -z "$(find /var/lib/appflowy/keyword_index -mindepth 1 ! -user 999 -print -quit)" || {
+                echo 'Search files need offline ownership migration to UID 999 before enabling Backup' >&2
+                exit 1
+              }
+              mkdir -p /var/lib/appflowy-backup/work /var/lib/appflowy-backup/restore
+              chown 999:999 /var/lib/appflowy-backup /var/lib/appflowy-backup/work /var/lib/appflowy-backup/restore /var/lib/appflowy/keyword_index
+              chmod 700 /var/lib/appflowy-backup /var/lib/appflowy-backup/work /var/lib/appflowy-backup/restore
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [CHOWN, FOWNER, DAC_OVERRIDE]
+          volumeMounts:
+            - {name: backup-state, mountPath: /var/lib/appflowy-backup}
+            - {name: keyword-index, mountPath: /var/lib/appflowy/keyword_index}
+      containers:
+        - name: appflowy-backup
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $backup.image) | quote }}
+          imagePullPolicy: {{ $backup.image.pullPolicy }}
+          command: [appflowy_backup, service]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            - {name: APPFLOWY_BACKUP_DEPLOYMENT, value: kubernetes}
+            - {name: APPFLOWY_BACKUP_RESTORE_DIRECTORY, value: /var/lib/appflowy-backup/restore}
+            - {name: APPFLOWY_BACKUP_WORK_DIR, value: /var/lib/appflowy-backup/work}
+            - {name: APPFLOWY_BACKUP_COORDINATOR_STATE, value: /var/lib/appflowy-backup/maintenance.json}
+            - {name: APPFLOWY_BACKUP_COORDINATOR_SOCKET, value: /var/run/appflowy-backup/coordinator.sock}
+            - {name: APPFLOWY_BACKUP_SERVICE_SOCKET, value: /var/run/appflowy-backup/service.sock}
+            - {name: APPFLOWY_BACKUP_SEARCH_INDEX_DIR, value: /var/lib/appflowy/keyword_index}
+            - name: APPFLOWY_BACKUP_MAINTENANCE_COMMAND
+              value: '["appflowy_backup","maintenance"]'
+            - name: APPFLOWY_BACKUP_KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
+            - name: APPFLOWY_BACKUP_KUBERNETES_POD_UID
+              valueFrom:
+                fieldRef: {fieldPath: metadata.uid}
+            - name: APPFLOWY_BACKUP_KUBERNETES_RELEASE
+              value: {{ .Release.Name | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_NODE
+              value: {{ $backup.nodeName | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_WRITERS
+              value: {{ $writers | toJson | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_POSTGRES_STATEFULSET
+              value: {{ include "appflowy.postgresql.host" . | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_CONFIG_MAP
+              value: {{ include "appflowy.backup.runtime" . | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_BACKUP_DEPLOYMENT
+              value: {{ include "appflowy.backup.fullname" . | quote }}
+            - name: APPFLOWY_BACKUP_KUBERNETES_SOURCE_BUCKET
+              value: {{ include "appflowy.s3.bucket" . | quote }}
+            - name: POSTGRES_USER
+              value: {{ include "appflowy.postgresql.username" . | quote }}
+            - name: POSTGRES_DB
+              value: {{ include "appflowy.postgresql.database" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.postgresql.secretName" . }}
+                  key: {{ include "appflowy.postgresql.secretKey" . }}
+            - name: APPFLOWY_BACKUP_DATABASE_URL
+              value: {{ include "appflowy.postgresql.url" . | quote }}
+            {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.redis.secretName" . }}
+                  key: {{ include "appflowy.redis.secretKey" . }}
+            {{- end }}
+            - {name: APPFLOWY_ACTIVE_REDIS_DATABASE, value: "0"}
+            - name: APPFLOWY_BACKUP_REDIS_URL
+              value: {{ include "appflowy.redis.url" . | quote }}
+            - name: APPFLOWY_S3_USE_MINIO
+              value: {{ .Values.global.s3.useMinio | quote }}
+            - name: APPFLOWY_S3_MINIO_URL
+              value: {{ include "appflowy.s3.endpoint" . | quote }}
+            - name: APPFLOWY_S3_BUCKET
+              value: {{ include "appflowy.s3.bucket" . | quote }}
+            - name: APPFLOWY_S3_REGION
+              value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.accessKey | default "root-user" }}
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
+            - name: APPFLOWY_BACKUP_BUCKET
+              value: {{ include "appflowy.backup.bucket" . | quote }}
+            - name: APPFLOWY_BACKUP_PREFIX
+              value: {{ $backup.artifacts.prefix | quote }}
+          resources:
+            {{- toYaml $backup.resources | nindent 12 }}
+          volumeMounts:
+            - {name: backup-state, mountPath: /var/lib/appflowy-backup}
+            - {name: keyword-index, mountPath: /var/lib/appflowy/keyword_index}
+            - {name: coordinator-socket, mountPath: /var/run/appflowy-backup}
+      volumes:
+        - name: backup-state
+          persistentVolumeClaim:
+            claimName: {{ $backup.persistence.existingClaim | default (include "appflowy.backup.fullname" .) }}
+        - name: keyword-index
+          persistentVolumeClaim:
+            claimName: {{ include "appflowy.search.fullname" . }}
+        - name: coordinator-socket
+          emptyDir: {}
+      {{- with $backup.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if not $backup.persistence.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if $backup.persistence.storageClass }}
+  storageClassName: {{ $backup.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $backup.persistence.size }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "appflowy.backup.fullname" . }}-api
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-backup
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: {{ $backup.apiServerCIDR | quote }}
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 6443}
+{{- end }}
+{{- end }}

@@ -1,0 +1,29 @@
+Real Authentik membership changes and the AppFlowy Admin sync monitor. Silent video with captions; one idle confirmation pause is trimmed. No manual full-sync action or direct AppFlowy membership edit is used.
+
+0–22s
+Add Alice to Engineering in Authentik.
+Choose Add Existing User, select Alice, then Assign.
+
+22–29s
+Saving in Authentik sends the SCIM update automatically.
+Return to the open Admin monitor; no manual sync is started.
+
+29–47s
+Admin now shows 2 / 2 eligible members and Synced.
+The monitor checks received group data every 5 seconds.
+
+47–65s
+Refresh the Authentik member list to see Alice and Bob.
+This Refresh reloads the table; it does not trigger SCIM.
+
+65–78s
+Remove Alice from the directory group.
+The confirmation removes membership, not her account.
+
+78–87s
+Return to Admin and let its automatic refresh run.
+AppFlowy applies the received membership removal.
+
+87–100s
+The monitor returns to 1 / 1 eligible and Synced.
+Synced covers received data; check the IdP for unsent changes.

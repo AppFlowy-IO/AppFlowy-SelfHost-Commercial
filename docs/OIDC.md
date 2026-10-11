@@ -1,5 +1,7 @@
 # OIDC / OAuth Sign-In
 
+[Documentation](README.md) / [Authentication](AUTHENTICATION.md)
+
 AppFlowy Self-Hosted lets you register any OpenID Connect (OIDC) or OAuth 2.0 identity provider (IdP) at runtime through the Admin console. No environment variables or restarts are required, and users see a **Continue with &lt;provider name&gt;** button on the sign-in page.
 
 This is separate from the built-in Google, GitHub, and Discord providers, which are configured through environment variables (see [OAuth providers](docker-compose.md#oauth-providers); `deploy.env` also lists Apple settings, but the bundled `docker-compose.yml` does not pass them to the `gotrue` service), and from [SAML](OKTA_SAML.md).
