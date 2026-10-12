@@ -1,45 +1,46 @@
-# SCIM group synchronization and permissions: a complete example
+# SCIM groups and permissions: an eight-person example
 
 [Documentation](README.md) / [SCIM setup](SCIM.md) / [Entra setup](ENTRA_SCIM_AUTO_SYNC.md)
 
-This guide shows how a change in Microsoft Entra ID reaches AppFlowy and changes
-what a person can access. It uses eight groups, three workspaces, and two test users.
+This example uses eight people, eight directory groups and three workspaces.
+Each person starts in a different group, making their permissions easy to compare.
 
-| Where | What you configure |
+| Configure in | Purpose |
 | --- | --- |
-| Microsoft Entra ID | Users, groups, and group membership |
-| AppFlowy Admin | The workspace that receives each group and its workspace role |
-| AppFlowy Web | The spaces that each group can view or edit |
+| Microsoft Entra ID | Choose each person's groups and application assignments |
+| AppFlowy Admin | Receive groups in the correct workspace and map workspace roles |
+| AppFlowy Web | Set each space's access and verify it as the affected person |
 
-After setup, SCIM keeps group names and membership in sync. Moving someone between
-groups changes their access without deleting their account or saved content.
+SCIM synchronizes users, group names and membership. Space permissions are
+configured separately; creating a group does not create a space.
 
-**Some requested permissions still need implementation.** Check the
-[current limitations](#what-remains-unsupported) before using this configuration.
-Click any screenshot to view it at full size; expand the supporting screenshots
-when you need more detail.
+Some requested creation controls and group permissions still need implementation;
+see [current limitations](#current-limitations).
 
-## In this guide
+**Baseline verified on October 12, 2026:** all eight people and nine workspace
+groups are provisioned. All 72 Web access checks passed, with saved edits checked
+independently. Charlie’s group move and restoration also passed, with his
+account and saved notes retained.
 
-- [Permission matrix](#the-permission-matrix)
-- [Current limitations](#what-remains-unsupported)
-- [1. Prepare workspaces and test users](#1-prepare-three-workspaces-and-two-test-users)
-- [2. Create the AppFlowy connections](#2-create-one-appflowy-scim-connection-per-workspace)
-- [3. Create and assign the Entra groups](#3-create-and-assign-the-eight-entra-groups)
-- [4. Check mappings and start provisioning](#4-check-mappings-and-start-provisioning)
-- [5. Check synced groups](#5-confirm-the-received-groups-in-appflowy-admin)
-- [6. Set space permissions](#6-configure-content-access-in-appflowy-web)
-- [7. Test viewer and editor access](#7-verify-the-matrix-as-alice-and-bob)
-- [8. Move people between groups](#8-move-a-member-without-deleting-the-user)
-  - [Change Bob between HR viewer and editor](#bobs-hr-editor-and-restored-viewer-phases)
-- [9. Remove workspace access or an Admin role](#9-test-workspace-offboarding-and-administrator-demotion)
-- [10. Create, rename and delete a group](#10-test-group-creation-rename-and-deletion)
-- [Verified results](#verified-results)
-- [Finish the demo](#finish-the-temporary-demo)
+## Contents
 
-## The permission matrix
+| Section | What you will do |
+| --- | --- |
+| [People and permissions](#people-and-permissions) | Understand the requested access |
+| [1. Prepare the demo](#1-prepare-the-demo) | Check seats, sign-in and workspaces |
+| [2. Connect Entra](#2-connect-entra) | Assign the eight groups to three applications |
+| [3. Check synchronization](#3-check-synchronization) | Compare received groups and members |
+| [4. Set space access](#4-set-space-access) | Give editor groups access to the right spaces |
+| [5. Verify access](#5-verify-access) | Test View, Edit and denied direct links |
+| [6. Move Charlie to another group](#6-move-charlie-to-another-group) | Change access without deleting the person |
+| [Current limitations](#current-limitations) | Separate supported access from missing controls |
 
-### Groups and their purpose
+Click any screenshot to view it at full size.
+
+## People and permissions
+
+<details>
+<summary>Group purposes</summary>
 
 | Group name | Details |
 | --- | --- |
@@ -52,43 +53,63 @@ when you need more detail.
 | `W_RH_edit` | Individual with Edit access to the team's dedicated confidential workspace |
 | `Product` | Business team group for the Product team |
 
-`Users` is a regular group in AD or Entra ID. In this example, its members receive
-access to Demo Workspace. Add people manually or through a directory rule; the
-group's name and description do not add anyone automatically.
+These are the intended directory-group descriptions. AppFlowy does not
+add employees automatically because a group is named Users. Database-specific
+rights mentioned for Super_Users were not tested in this document example.
 
-For someone who should access only HR Workspace, use `W_RH_view` or `W_RH_edit`.
-Keep them out of `Users` and other Demo Workspace assignments. Membership in both
-grants access to both workspaces.
+</details>
 
-### Requested content and administration permissions
+### Workspace roles
 
-| Group | Admin | DEMO WORKSPACE | General | Demo Intelligence | Internal IT | HR | Product | HR WORKSPACE | EXECUTIVE COMMITTEE WORKSPACE |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Admin | Edit | Edit | Edit | Edit | Edit | Edit | Edit | No Access | No Access |
-| Users | No Access | View | View | View | View | View | View | No Access | No Access |
-| Super_Users | No Access | View | Edit | Edit | View | View | View | No Access | No Access |
-| Codir | No Access | View | View | View | View | View | View | No Access | Edit |
-| HR | No Access | View | View | View | View | Edit | View | No Access | No Access |
-| W_RH_view | No Access | No Access | No Access | No Access | No Access | No Access | No Access | View | No Access |
-| W_RH_edit | No Access | No Access | No Access | No Access | No Access | No Access | No Access | Edit | No Access |
-| Product | No Access | View | View | View | View | View | Edit | No Access | No Access |
+| Person | Group | Demo Workspace | HR Workspace | Executive Committee Workspace |
+| --- | --- | --- | --- | --- |
+| Alice Demo | Users | Member | No membership | No membership |
+| Bob Demo Updated | W_RH_view | No membership | Member | No membership |
+| Charlie Demo | Super_Users | Member | No membership | No membership |
+| Dana Demo | Admin | Owner | No membership | No membership |
+| Eve Demo | Codir | Member | No membership | Member |
+| Farah Demo | HR | Member | No membership | No membership |
+| Grace Demo | W_RH_edit | No membership | Member | No membership |
+| Hugo Demo | Product | Member | No membership | No membership |
 
-Read the table as follows:
+`Users` is an ordinary directory group: its members receive Demo Workspace
+membership. Its name does not automatically enroll employees. HR-only people
+belong to `W_RH_view` or `W_RH_edit` and have no separate Demo assignment or invitation.
 
-- **Admin** means administration of Demo Workspace, not the instance Admin frontend.
-- **HR** is a space inside Demo Workspace. **HR WORKSPACE** is a separate workspace.
-- **View/Edit** describes content access. Most people remain workspace **Members**.
-- Here, **No Access** means this group grants no access. Another group or direct
-  invitation can still grant it. If you need a rule that overrides other grants,
-  that requires a separate deny feature.
+### Content access
 
-### Requested creation rules
+The first five columns are spaces inside **Demo Workspace**. **HR Workspace**
+is separate from Demo's **HR** space.
 
-These are the requested rules, not a list of completed features. The current UI
-cannot fully enforce them; see the limitations below.
+| Group | General | Demo Intelligence | Internal IT | HR | Product | HR Workspace: General + Shared | Executive: General + Shared |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Admin | Edit | Edit | Edit | Edit | Edit | No access | No access |
+| Users | View | View | View | View | View | No access | No access |
+| Super_Users | Edit | Edit | View | View | View | No access | No access |
+| Codir | View | View | View | View | View | No access | Edit |
+| HR | View | View | View | Edit | View | No access | No access |
+| W_RH_view | No access | No access | No access | No access | No access | View | No access |
+| W_RH_edit | No access | No access | No access | No access | No access | Edit | No access |
+| Product | View | View | View | View | Edit | No access | No access |
+
+**No access** means this group grants nothing. Another group, invitation or
+explicit share can still grant access; it is not a rule that overrides other grants.
+
+### Which role means what?
+
+| Role | Meaning in this example |
+| --- | --- |
+| Entra application User | Assigned to the application; does not choose AppFlowy permissions |
+| AppFlowy workspace Member | Belongs to that workspace; content access still depends on space settings |
+| AppFlowy workspace Owner | Can administer that workspace; broader authority than editing content |
+| Space member | Receives the access configured for members of that particular space |
+
+Dana administers **Demo Workspace**, not the instance Admin frontend. SCIM can
+assign Owner to ordinary users. The workspace's primary owner and instance
+administrators remain protected from SCIM management.
 
 <details>
-<summary>Show the requested creation rules for each group</summary>
+<summary>Requested creation rules — not fully implemented</summary>
 
 | Group | Creation rule |
 | --- | --- |
@@ -101,759 +122,371 @@ cannot fully enforce them; see the limitations below.
 | W_RH_edit | With Edit rights, users can create spaces and pages |
 | Product | With Edit rights, users can create pages but not spaces |
 
+These are requested rules, not completed features. Editing a page, creating a
+page, creating a space and creating a workspace are separate permissions.
+View-only access does not gain creation rights from the wording “With Edit rights.”
+Whole-workspace creation should be restricted to selected people separately.
+
+**This demo does not enforce “edit but cannot create spaces.”** The inspected
+clients cannot fully configure these per-person/group creation rules.
+
 </details>
 
-Editing an existing page, creating a page, creating a space, and creating a whole
-workspace are separate permissions. A View-only user does not gain creation rights
-from the wording “With Edit rights.” Whole-workspace creation should be limited
-to selected people; this is separate from membership in the `Admin` group.
+## 1. Prepare the demo
 
-## What remains unsupported
+Use eight test people and a separate setup owner outside SCIM. This run uses
+**9 of 10 AppFlowy seats**; Eve's two workspace memberships count as one person.
+All eight directory users have Entra ID P2. Microsoft licenses and AppFlowy seats
+are separate.
 
-| Requirement | Current behavior |
+<a href="assets/scim-demo-expanded/02-eight-licensed-demo-users.png">
+  <img src="assets/scim-demo-expanded/02-eight-licensed-demo-users.png" alt="Eight demo users have Microsoft Entra ID P2 licenses" width="720">
+</a>
+
+*The directory user list confirms Microsoft licensing, not AppFlowy access.*
+
+| Workspace | Spaces to prepare |
 | --- | --- |
-| Editor groups edit; other workspace members view | Supported by the Custom-space setup in this guide |
-| Give different groups View/Edit while denying everyone else | Ordinary Space members share one permission level; independent group levels need implementation |
-| Edit pages but prevent space creation | The backend has a workspace policy, but its controls are missing from the inspected clients |
-| Only selected members or groups create spaces | Needs implementation |
-| Only selected people create workspaces | Needs implementation |
-| Automatically grant access to every future space | Not provided by the explicit space grants used here |
-| Immediately refresh access in an already-open page | The page can keep old content and allow local typing; fresh sessions enforce the new access |
+| Demo Workspace | General, Demo Intelligence, Internal IT, HR, Product |
+| HR Workspace | General, Shared |
+| Executive Committee Workspace | General, Shared |
 
-In this demo, all three workspaces allowed **Members and Owners** to create spaces.
-Do not treat this setup as enforcing “edit but cannot create spaces.”
+Create a test page in each space and confirm the setup owner can open all nine.
+Configure [sign-in](AUTHENTICATION.md) separately: SCIM provisions accounts but
+does not sign people in. Login emails must match the provisioned identities.
+Use a separate Web session for each person.
 
-After access was reduced, test text typed in an old browser tab did **not** save
-to the server. This is still a client limitation: the old page did not immediately
-clear or become read-only.
+This example uses a local self-hosted build and cloud-managed Entra groups. It
+does not certify a published Docker release, Entra SSO, AD import or nested groups.
+For on-premises AD, first configure an [AD-to-SCIM route](AD_SCIM_AUTO_SYNC.md).
 
-## 1. Prepare three workspaces and two test users
+## 2. Connect Entra
 
-Use a test installation with three available seats: a setup owner, **Alice Demo**,
-and **Bob Demo**. Keep the setup owner outside SCIM and use Alice and Bob for the
-permission tests.
+In AppFlowy Admin, open **Authentication → SCIM Provisioning**. Create one
+connection per workspace, defaulting to **Member**. On the Demo connection only,
+map **Admin → Owner**.
 
-| Workspace | Spaces used in this example | Purpose |
-| --- | --- | --- |
-| Demo Workspace | General, Demo Intelligence, Internal IT, HR, Product | Shared company content |
-| HR Workspace | General and Shared | Confidential team content |
-| Executive Committee Workspace | General and Shared | Executive content |
-
-The two spaces named **Shared** belong to different workspaces. They are test
-spaces used to check HR and Executive Committee access.
-
-Before continuing:
-
-1. Check the [Entra license and network requirements](ENTRA_SCIM_AUTO_SYNC.md#step-1-check-the-license-and-network-requirements).
-2. Configure [sign-in](AUTHENTICATION.md). SCIM manages accounts and membership;
-   it does not sign people in. Their SCIM email must match their AppFlowy login.
-3. Create a test page in each space. Confirm the setup owner can open every page.
-4. Use separate Web sessions for the owner, Alice, and Bob.
-
-This demo uses groups managed in Entra. For on-premises Windows AD, configure
-and verify the [AD connector](AD_SCIM_AUTO_SYNC.md) first. AD import and nested
-groups were not tested here. Existing memberships outside these three workspaces
-must be reviewed separately.
-
-## 2. Create one AppFlowy SCIM connection per workspace
-
-In AppFlowy Admin, open **Authentication → SCIM Provisioning** and
-[create a connection](SCIM.md#step-2-create-a-scim-connection) for each workspace.
-
-| Target workspace | Default role | Group-role mapping |
-| --- | --- | --- |
-| Demo Workspace | Member | `Admin` → Owner |
-| HR Workspace | Member | None; `W_RH_view` and `W_RH_edit` stay Members |
-| Executive Committee Workspace | Member | None; `Codir` stays Member |
-
-The `Admin` mapping makes eligible group members **Demo Workspace Owners**.
-It does not make them instance administrators or grant access to other workspaces.
-The workspace's primary owner and instance administrators remain protected from
-SCIM management.
-
-<a href="assets/scim-demo/new-03-admin-connections.png">
-  <img src="assets/scim-demo/new-03-admin-connections.png" alt="Three enabled AppFlowy SCIM connections, each scoped to its intended workspace" width="720">
+<a href="assets/scim-demo-expanded/09-admin-owner-role-mapping.png">
+  <img src="assets/scim-demo-expanded/09-admin-owner-role-mapping.png" alt="The Demo connection maps Admin to workspace Owner" width="720">
 </a>
 
-*The three demo connections are enabled. The fourth connection belongs to an older demo.*
+*This mapping grants Demo workspace administration, not instance administration.*
 
-<details>
-<summary>Show the Admin-to-Owner mapping</summary>
+In Entra, create the eight **Security** groups with **Assigned** membership.
+Add each person to the group in the opening table. Leave Microsoft administrative
+role assignment off.
 
-<a href="assets/scim-demo/new-02-admin-owner-mapping.png">
-  <img src="assets/scim-demo/new-02-admin-owner-mapping.png" alt="Demo Workspace connection maps Admin to Owner and otherwise defaults to Member" width="720">
+<a href="assets/scim-demo-expanded/01-entra-eight-groups.png">
+  <img src="assets/scim-demo-expanded/01-entra-eight-groups.png" alt="Entra lists the eight assigned security groups" width="720">
 </a>
 
-*Only Demo Workspace maps Admin to Owner; all three connections default to Member.*
+Create one enterprise application per connection. Copy its matching SCIM endpoint
+and bearer token privately, test the connection, then use **Sync only assigned
+users and groups**. Entra requires a reachable HTTPS endpoint.
 
-</details>
-
-Copy each connection's endpoint and bearer token into its matching Entra
-application. Keep tokens private. Entra needs a reachable **HTTPS** endpoint;
-the localhost addresses in the screenshots are local demo addresses.
-
-If a role mapping matches a group by name, update the mapping when that group is renamed.
-
-## 3. Create and assign the eight Entra groups
-
-Create the eight groups listed above as **Security** groups with **Assigned**
-membership. Add their descriptions. Leave Entra administrative-role assignment off.
-
-<a href="assets/scim-demo/new-01-entra-eight-groups.png">
-  <img src="assets/scim-demo/new-01-entra-eight-groups.png" alt="Entra lists all eight approved groups with Security and Assigned membership" width="720">
-</a>
-
-*The eight source groups in Entra.*
-
-Create one enterprise application for each AppFlowy connection, then assign:
-
-| Application target | Assigned groups |
+| Application | Assigned groups |
 | --- | --- |
-| Demo Workspace | `Admin`, `Users`, `Super_Users`, `Codir`, `HR`, `Product` |
-| HR Workspace | `W_RH_view`, `W_RH_edit` |
-| Executive Committee Workspace | `Codir` |
+| Demo Workspace | Admin, Users, Super_Users, Codir, HR, Product |
+| HR Workspace | W_RH_view, W_RH_edit |
+| Executive Committee Workspace | Codir |
 
-Choose **Sync only assigned users and groups**. Start Alice in `Users` only and
-Bob in `W_RH_view` only. Give Bob no separate invitation to Demo Workspace.
-
-`Codir` is assigned to two applications, so eight Entra groups become **nine
-workspace groups** in AppFlowy: six in Demo, two in HR, and one in Executive Committee.
+Codir is assigned to two applications, so eight source groups produce nine
+AppFlowy workspace groups. A person in any assigned Demo group already receives
+Demo membership; they do not also need Users.
 
 <details>
-<summary>Show the group description and application assignments</summary>
+<summary>See the three application assignments</summary>
 
-These configuration screenshots were rechecked after the demo, with provisioning paused.
-
-<a href="assets/scim-demo/new-57-entra-users-description.png">
-  <img src="assets/scim-demo/new-57-entra-users-description.png" alt="Entra Users overview shows its approved description and Assigned membership" width="720">
+<a href="assets/scim-demo-expanded/03-entra-demo-workspace-assignments.png">
+  <img src="assets/scim-demo-expanded/03-entra-demo-workspace-assignments.png" alt="Six groups assigned to the Demo application" width="720">
 </a>
 
-*Users has Assigned membership. Its description does not automatically enroll employees.*
+*Demo receives six groups.*
 
-<a href="assets/scim-demo/new-05-entra-demo-assignments.png">
-  <img src="assets/scim-demo/new-05-entra-demo-assignments.png" alt="Demo Workspace application has Admin, Codir, HR, Product, Super_Users and Users assigned" width="720">
+<a href="assets/scim-demo-expanded/04-entra-hr-workspace-assignments.png">
+  <img src="assets/scim-demo-expanded/04-entra-hr-workspace-assignments.png" alt="W_RH_view and W_RH_edit assigned to the HR application" width="720">
 </a>
 
-*Demo Workspace: six assigned groups.*
+*HR receives its viewer and editor groups.*
 
-<a href="assets/scim-demo/new-10-entra-hr-assignments.png">
-  <img src="assets/scim-demo/new-10-entra-hr-assignments.png" alt="HR Workspace application has only W_RH_edit and W_RH_view assigned" width="720">
+<a href="assets/scim-demo-expanded/05-entra-executive-workspace-assignments.png">
+  <img src="assets/scim-demo-expanded/05-entra-executive-workspace-assignments.png" alt="Codir assigned to the Executive application" width="720">
 </a>
 
-*HR Workspace: W_RH_view and W_RH_edit.*
-
-<a href="assets/scim-demo/new-13-entra-executive-assignment.png">
-  <img src="assets/scim-demo/new-13-entra-executive-assignment.png" alt="Executive Committee Workspace application has only Codir assigned" width="720">
-</a>
-
-*Executive Committee Workspace: Codir. It is also assigned to Demo Workspace.*
+*Executive receives Codir.*
 
 </details>
 
-The Entra application role named **User** is separate from AppFlowy's Member/Owner
-roles. AppFlowy connection settings and space grants determine AppFlowy permissions.
+Follow the [Entra attribute-mapping steps](ENTRA_SCIM_AUTO_SYNC.md), including
+group names and members. Enable the required Create, Update and Delete actions,
+then start provisioning.
 
-## 4. Check mappings and start provisioning
+## 3. Check synchronization
 
-Configure each application using the [Entra setup guide](ENTRA_SCIM_AUTO_SYNC.md).
-Use these SCIM fields:
+Open each connection's **SCIM groups** monitor in AppFlowy Admin. The baseline
+has **six Demo groups, two HR groups and one Executive group**, each with one
+eligible member. Compare the actual member with the opening table.
 
-| Resource | Fields |
+Demo’s expanded baseline arrived through normal provisioning. The HR and
+Executive baselines were delivered with **Provision on demand**.
+
+<a href="assets/scim-demo-expanded/06-admin-demo-six-groups-synced.png">
+  <img src="assets/scim-demo-expanded/06-admin-demo-six-groups-synced.png" alt="Six Demo groups each show one eligible member and Synced" width="720">
+</a>
+
+**Synced** means AppFlowy applied the data received so far. A newer Entra change
+can still be waiting for delivery. **Refresh status** reads AppFlowy's state;
+**Retry sync** reapplies received data. Neither asks Entra to send pending changes.
+See [SCIM operations](SCIM_OPERATIONS.md) for errors and seat recovery.
+
+<details>
+<summary>See the HR and Executive sync monitors</summary>
+
+<a href="assets/scim-demo-expanded/07-admin-hr-two-groups-synced.png">
+  <img src="assets/scim-demo-expanded/07-admin-hr-two-groups-synced.png" alt="HR has two Synced groups with one eligible member each" width="720">
+</a>
+
+*HR has one viewer and one editor, in separate groups.*
+
+<a href="assets/scim-demo-expanded/08-admin-executive-group-synced.png">
+  <img src="assets/scim-demo-expanded/08-admin-executive-group-synced.png" alt="Executive has one Synced Codir group with one eligible member" width="720">
+</a>
+
+*Codir is also received by Executive, with Eve as its member.*
+
+</details>
+
+## 4. Set space access
+
+In each test space, open **Manage Space → General**, select **Custom**, then set
+**Space members → Can edit** and **Everyone else → Can view**. In **Members**, add
+these editor groups as ordinary Space members:
+
+| Workspace | Space | Editor groups |
+| --- | --- | --- |
+| Demo Workspace | General and Demo Intelligence | Admin, Super_Users |
+| Demo Workspace | Internal IT | Admin |
+| Demo Workspace | HR | Admin, HR |
+| Demo Workspace | Product | Admin, Product |
+| HR Workspace | General and Shared | W_RH_edit |
+| Executive Committee Workspace | General and Shared | Codir |
+
+Do not add viewer groups as Space members: that would give them Edit. Other
+members of the same workspace already receive View. People outside that
+workspace receive nothing from Everyone else.
+
+For existing spaces, review owners, direct members and page shares first.
+Public-to-Custom conversion can leave explicit members. Remove unintended demo
+grants; ownership or another grant can otherwise preserve access.
+
+<details>
+<summary>See the Custom policy and editor-group assignment</summary>
+
+<a href="assets/scim-demo-expanded/19-web-custom-space-permissions.png">
+  <img src="assets/scim-demo-expanded/19-web-custom-space-permissions.png" alt="General uses Custom access with Space members Can edit and everyone else in Demo Workspace Can view" width="720">
+</a>
+
+*This policy gives ordinary Space members Edit and other admitted workspace members View.*
+
+<a href="assets/scim-demo-expanded/20-web-super-users-space-grant.png">
+  <img src="assets/scim-demo-expanded/20-web-super-users-space-grant.png" alt="Super_Users is assigned as an ordinary Space member in General" width="720">
+</a>
+
+*Super_Users receives Edit through the space’s member policy.*
+
+</details>
+
+## 5. Verify access
+
+Test a document in every space as each person: **72 cases — 13 Edit, 23 View
+and 36 No access**. Confirm the setup owner can open each target first.
+
+| Expected access | What to check |
 | --- | --- |
-| User | `userName`, `active`, `displayName`, `externalId` |
-| Group | `displayName`, `externalId`, `members` |
+| Edit | Save a unique note, reload, and confirm it independently from the owner session |
+| View | Try input and confirm saved content is unchanged |
+| No access | Open the direct page URL and confirm denial without document content |
 
-Map `userName` to the person's AppFlowy login email. The screenshots use test
-addresses ending in `example.com`; do not copy that transformation for real users.
+**All 72 Web checks passed:** 13 Edit, 23 View and 36 denied direct links.
+Independent saved-content reads confirmed all 13 editor notes were saved and
+none of the 23 attempted viewer notes were saved. API checks also confirmed
+workspace roles, group membership and configured space grants.
+
+Earlier test notes remain on these pages; use the person/group table for current access.
 
 <details>
-<summary>Show the user and group mappings</summary>
+<summary>View access and denied direct links: Alice and Bob</summary>
 
-These saved settings were rechecked after the demo.
-
-<a href="assets/scim-demo/new-06-entra-user-mappings.png">
-  <img src="assets/scim-demo/new-06-entra-user-mappings.png" alt="Entra User mappings show userName, displayName, externalId and active" width="720">
+<a href="assets/scim-demo-expanded/10-web-alice-general-view.png">
+  <img src="assets/scim-demo-expanded/10-web-alice-general-view.png" alt="Alice views General Notes in Demo Workspace" width="720">
 </a>
 
-*User mappings, including the demo-only email expression.*
+*Alice can read Demo pages but cannot save edits.*
 
-<a href="assets/scim-demo/new-07-entra-group-mappings.png">
-  <img src="assets/scim-demo/new-07-entra-group-mappings.png" alt="Entra Group mappings show displayName, members and externalId" width="720">
+<a href="assets/scim-demo-expanded/11-web-bob-hr-view.png">
+  <img src="assets/scim-demo-expanded/11-web-bob-hr-view.png" alt="Bob views General Notes in HR Workspace" width="720">
 </a>
 
-*Group name, member, and external identity mappings.*
+*Bob can read HR Workspace pages.*
+
+<a href="assets/scim-demo-expanded/12-web-bob-demo-denied.png">
+  <img src="assets/scim-demo-expanded/12-web-bob-demo-denied.png" alt="Bob receives No access to this page when opening a Demo page directly" width="720">
+</a>
+
+*HR membership does not grant Demo access; a direct Demo page link is denied.*
 
 </details>
 
-Enable the intended group Create, Update, and Delete actions. Run **Test connection**,
-then start provisioning. Check both Entra's result and the received groups in AppFlowy.
-
-**Provision on demand** sends a change manually. To test automatic sync, change
-membership and wait for a normal provisioning cycle without pressing that button.
-This guide labels which method each example used.
-
-## 5. Confirm the received groups in AppFlowy Admin
-
-Open each connection's **SCIM groups** monitor. Expect six Demo groups, two HR
-groups, and one Executive Committee group. Empty groups can also show **Synced**.
-
-<a href="assets/scim-demo/new-08-admin-demo-groups-synced.png">
-  <img src="assets/scim-demo/new-08-admin-demo-groups-synced.png" alt="Demo Workspace monitor shows six groups Synced, with Users containing one eligible member" width="720">
-</a>
-
-*Demo Workspace after an operator-restarted full scan: Users has one member; the other five groups are empty.*
-
 <details>
-<summary>Show the initial HR and Executive Committee groups</summary>
+<summary>Edit access: Charlie, Farah, Hugo, Grace, Eve and Dana</summary>
 
-<a href="assets/scim-demo/new-19-admin-hr-groups-synced.png">
-  <img src="assets/scim-demo/new-19-admin-hr-groups-synced.png" alt="HR Workspace monitor shows W_RH_view and W_RH_edit Synced" width="720">
+<a href="assets/scim-demo-expanded/13-web-charlie-editor.png">
+  <img src="assets/scim-demo-expanded/13-web-charlie-editor.png" alt="Charlie opens his saved edit in Demo Intelligence" width="720">
 </a>
 
-*HR: W_RH_view has Bob; W_RH_edit is empty. These updates were delivered on demand.*
+*Charlie — Super_Users: edits General and Demo Intelligence; views the other Demo spaces.*
 
-<a href="assets/scim-demo/new-26-admin-executive-group-synced.png">
-  <img src="assets/scim-demo/new-26-admin-executive-group-synced.png" alt="Executive Committee monitor shows Codir Synced with no received or eligible members" width="720">
+<a href="assets/scim-demo-expanded/14-web-farah-hr-space-editor.png">
+  <img src="assets/scim-demo-expanded/14-web-farah-hr-space-editor.png" alt="Farah opens her saved edit in the HR space inside Demo Workspace" width="720">
 </a>
 
-*Executive Committee: Codir is empty after on-demand setup and cleanup.*
+*Farah — HR: edits Demo’s HR space. This is separate from HR Workspace.*
+
+<a href="assets/scim-demo-expanded/15-web-hugo-product-editor.png">
+  <img src="assets/scim-demo-expanded/15-web-hugo-product-editor.png" alt="Hugo opens his saved edit in Product" width="720">
+</a>
+
+*Hugo — Product: edits Product and views the other Demo spaces.*
+
+<a href="assets/scim-demo-expanded/16-web-grace-hr-workspace-editor.png">
+  <img src="assets/scim-demo-expanded/16-web-grace-hr-workspace-editor.png" alt="Grace opens her saved edit in HR Workspace Shared" width="720">
+</a>
+
+*Grace — W_RH_edit: edits both HR Workspace spaces, with no Demo membership.*
+
+<a href="assets/scim-demo-expanded/17-web-eve-executive-editor.png">
+  <img src="assets/scim-demo-expanded/17-web-eve-executive-editor.png" alt="Eve opens her saved edit in Executive Committee Workspace" width="720">
+</a>
+
+*Eve — Codir: edits Executive pages while remaining a Member; views Demo pages.*
+
+<a href="assets/scim-demo-expanded/18-web-dana-admin-editor.png">
+  <img src="assets/scim-demo-expanded/18-web-dana-admin-editor.png" alt="Dana opens her saved edit in Internal IT" width="720">
+</a>
+
+*Dana — Admin: edits all five configured Demo spaces. Workspace administration is a separate check.*
 
 </details>
 
-**Synced means AppFlowy applied the data it received.** Entra may still have a newer
-change waiting to be sent. It also does not confirm the person's content permissions.
+Check administration separately: Dana can administer Demo, ordinary Members
+cannot, and none of these people has instance administration. Document editing
+does not prove database or creation permissions.
 
-**Refresh status** checks AppFlowy's state. **Retry sync** reapplies received data;
-neither asks Entra to send a pending change. For errors or seat limits, see
-[sync status and recovery](SCIM_OPERATIONS.md#check-sync-status).
+## 6. Move Charlie to another group
 
-## 6. Configure content access in AppFlowy Web
+Charlie starts in **Super_Users**. Move him to **HR** without deleting his account:
 
-This setup lets **every member of a workspace view its configured spaces**.
-Selected groups can also edit. People outside that workspace receive no access
-from this setting.
+1. In Entra, add Charlie to **HR** and deliver that addition.
+2. Confirm his new membership is applied, then remove him from **Super_Users**.
+3. Deliver the removal and check AppFlowy's group monitor.
+4. Open the same pages as Charlie and compare access below.
 
-For each space:
+For this run, both changes were delivered with **Entra → Provision on demand**.
+The result demonstrates the access change after SCIM delivery; it is not a new
+scheduled-cycle timing test.
 
-1. Open **Manage Space → General** and select **Custom**.
-2. Set **Space members → Can edit** and **Everyone else → Can view**.
-3. Open **Members** and add the editor groups below as **Space members**.
+<details>
+<summary>See the source group changes</summary>
 
-| Workspace | Space | Groups added as ordinary Space members for Edit |
+<a href="assets/scim-demo-expanded/21-entra-charlie-added-to-hr.png">
+  <img src="assets/scim-demo-expanded/21-entra-charlie-added-to-hr.png" alt="HR contains Charlie and Farah after Charlie is added" width="720">
+</a>
+
+*Add Charlie to HR before removing his old assignment.*
+
+<a href="assets/scim-demo-expanded/22-entra-charlie-removed-from-super-users.png">
+  <img src="assets/scim-demo-expanded/22-entra-charlie-removed-from-super-users.png" alt="Super_Users has no members after Charlie is removed" width="720">
+</a>
+
+*The source removal leaves Charlie in HR, still assigned to the Demo application.*
+
+</details>
+
+<a href="assets/scim-demo-expanded/23-admin-charlie-move-synced.png">
+  <img src="assets/scim-demo-expanded/23-admin-charlie-move-synced.png" alt="AppFlowy shows HR with two members and Super_Users with zero, both Synced" width="720">
+</a>
+
+*The received groups match the move: HR has Charlie and Farah; Super_Users is empty.*
+
+| Charlie's access | Before: Super_Users | After: HR |
 | --- | --- | --- |
-| Demo Workspace | General | `Admin`, `Super_Users` |
-| Demo Workspace | Demo Intelligence | `Admin`, `Super_Users` |
-| Demo Workspace | Internal IT | `Admin` |
-| Demo Workspace | HR | `Admin`, `HR` |
-| Demo Workspace | Product | `Admin`, `Product` |
-| HR Workspace | General, Shared | `W_RH_edit` |
-| Executive Committee Workspace | General, Shared | `Codir` |
+| General and Demo Intelligence | Edit | View |
+| HR space inside Demo Workspace | View | Edit |
+| Internal IT and Product | View | View |
+| HR Workspace and Executive Committee Workspace | No access | No access |
 
-<a href="assets/scim-demo/new-04-web-custom-permissions.png">
-  <img src="assets/scim-demo/new-04-web-custom-permissions.png" alt="Demo Intelligence uses Custom access with Space members Can edit and everyone else Can view" width="720">
-</a>
-
-*Demo Intelligence: Space members can edit; other Demo Workspace members can view.*
-
-Do not add `Users` or `W_RH_view` as Space members just to give them View.
-With this setting, adding them to the member list would give them **Edit**.
-Space owners keep Full access.
+All nine fresh-session checks passed after the move. Charlie kept the same
+account and workspace membership. His previous notes remained, and his new HR
+edit was saved. No user was deleted or recreated.
 
 <details>
-<summary>Show the editor groups for Demo Intelligence</summary>
+<summary>See Charlie's access after the move</summary>
 
-<a href="assets/scim-demo/new-15-web-editor-group-grants.png">
-  <img src="assets/scim-demo/new-15-web-editor-group-grants.png" alt="Demo Intelligence roster has Admin and Super_Users as Space members and a separate setup owner" width="720">
+<a href="assets/scim-demo-expanded/24-web-charlie-after-move-view.png">
+  <img src="assets/scim-demo-expanded/24-web-charlie-after-move-view.png" alt="Charlie views Demo Intelligence after losing Super_Users membership" width="720">
 </a>
 
-*Admin and Super_Users have Space member grants. This was rechecked after the demo,
-when both groups were empty; the setup owner remains Space owner.*
+*His earlier note remains. Fresh-session input and saved-content checks confirmed View access.*
+
+<a href="assets/scim-demo-expanded/25-web-charlie-after-move-hr-edit.png">
+  <img src="assets/scim-demo-expanded/25-web-charlie-after-move-hr-edit.png" alt="Charlie opens his saved HR note after joining HR" width="720">
+</a>
+
+*Charlie can now edit the HR space inside Demo Workspace.*
 
 </details>
 
-SCIM syncs groups and membership. You configure these space grants separately;
-SCIM does not create a space for each group.
+**Client limitation:** an already-open editor still allowed local typing after
+access was reduced, and that text could remain after reloading the tab. Independent
+server reads confirmed the forbidden text was not saved. A fresh isolated session
+showed the correct read-only content. Reloading an old tab alone is therefore
+not enough to verify that access has refreshed.
 
-**Existing spaces:** review current owners, members, direct shares, and page grants
-first. Changing Public to Custom can add existing members to the list. Remove
-unintended entries before giving Space members Edit. Other groups, direct grants,
-and ownership can still provide access after one group is removed.
-
-Workspace Owner gives broader administration powers than content Edit, but no
-blanket access to Private spaces. Promotion does not automatically make someone
-an owner of every existing Custom space; explicit space ownership can also remain
-after demotion. Prepare the test spaces before the Admin scenario.
-
-## 7. Verify the matrix as Alice and Bob
-
-Use each person's own Web session. For every scenario, check:
-
-1. The source membership in Entra and received membership in AppFlowy.
-2. The workspace role and which pages the person can open.
-3. **Edit:** save a note, reload, and confirm it from the owner's separate session.
-4. **View:** try editing and confirm no change is saved.
-5. **No access:** open a direct page link, not just the workspace picker.
-
-For denied pages, first confirm the owner can open the same page. After removing
-access, test both the already-open tab and a fresh session.
-
-### Recorded baseline: view does not mean edit or cross-workspace access
-
-With Alice in `Users` and Bob in `W_RH_view`:
-
-| Person | Allowed | Denied |
-| --- | --- | --- |
-| Alice | View the five Demo Workspace spaces | HR and Executive Committee workspaces |
-| Bob | View the two HR Workspace spaces | Demo and Executive Committee workspaces |
-
-<a href="assets/scim-demo/new-09-web-users-view-general.png">
-  <img src="assets/scim-demo/new-09-web-users-view-general.png" alt="Alice can read General Notes as a Users member in Demo Workspace" width="720">
-</a>
-
-*Alice reads General. Separate input and saved-content checks confirmed View-only access.*
-
-<a href="assets/scim-demo/new-11-web-alice-hr-access-denied.png">
-  <img src="assets/scim-demo/new-11-web-alice-hr-access-denied.png" alt="Alice&#x27;s direct link to an HR Workspace page returns No access" width="720">
-</a>
-
-*Alice's direct HR Workspace link is denied. The test session identifies the user and target.*
+To restore the example, add Charlie back to Super_Users and verify delivery
+before removing HR. We completed this restoration: Charlie's nine access checks
+passed again, all nine workspace groups returned to one member each, and seat
+usage stayed at 9/10. His HR note remained after he lost HR editing access.
 
 <details>
-<summary>Show the other baseline access checks</summary>
+<summary>See the restored baseline</summary>
 
-<a href="assets/scim-demo/new-12-web-bob-demo-access-denied.png">
-  <img src="assets/scim-demo/new-12-web-bob-demo-access-denied.png" alt="Bob&#x27;s direct link to a Demo Workspace page returns No access" width="720">
+<a href="assets/scim-demo-expanded/26-admin-baseline-restored.png">
+  <img src="assets/scim-demo-expanded/26-admin-baseline-restored.png" alt="Demo's six groups are restored to one eligible member each and Synced" width="720">
 </a>
 
-*Bob cannot open a Demo Workspace page.*
-
-<a href="assets/scim-demo/new-14-web-alice-executive-access-denied.png">
-  <img src="assets/scim-demo/new-14-web-alice-executive-access-denied.png" alt="Alice&#x27;s direct Executive Committee Workspace link returns No access" width="720">
-</a>
-
-*Alice cannot open an Executive Committee page.*
-
-<a href="assets/scim-demo/new-16-web-hr-viewer.png">
-  <img src="assets/scim-demo/new-16-web-hr-viewer.png" alt="Bob reads HR Workspace reference content as a W_RH_view member" width="720">
-</a>
-
-*Bob can read HR Workspace content; separate checks confirmed it was read-only.*
-
-<a href="assets/scim-demo/new-18-web-workspace-member-role.png">
-  <img src="assets/scim-demo/new-18-web-workspace-member-role.png" alt="People settings shows Alice as Member alongside the separate setup owner" width="720">
-</a>
-
-*People settings after the demo was reset: Alice is Member; the setup owner is Owner.*
+*HR returns to Farah only; Super_Users returns to Charlie only. The other groups are unchanged.*
 
 </details>
 
-### Recorded Super_Users addition: source, delivery, applied state, saved edit
+The [October 11 record](assets/scim-demo/CAPTURE_NOTES.md) separately covers a
+scheduled group move, HR viewer/editor changes, workspace offboarding, Owner
+role demotion, and group creation, renaming and deletion using Alice and Bob.
+Those are earlier results, not additional tests with these eight personas.
 
-Add Alice to `Super_Users` and keep her in `Users`. In this recorded example,
-the addition was delivered **on demand**.
+## Current limitations
 
-Alice could then edit **General** and **Demo Intelligence**, while the other
-three Demo spaces stayed View-only. She remained a workspace Member with no
-workspace administration or access to the other two workspaces.
-
-<a href="assets/scim-demo/new-21-admin-super-users-synced.png">
-  <img src="assets/scim-demo/new-21-admin-super-users-synced.png" alt="AppFlowy monitor shows Super_Users and Users with one eligible member each" width="720">
-</a>
-
-*AppFlowy received one member in Users and one in Super_Users.*
-
-<details>
-<summary>Show the source membership, delivery, and saved note</summary>
-
-<a href="assets/scim-demo/new-17-entra-super-users-member.png">
-  <img src="assets/scim-demo/new-17-entra-super-users-member.png" alt="Super_Users contains Alice Demo as its direct member in Entra" width="720">
-</a>
-
-*Alice appears in Super_Users in Entra.*
-
-<a href="assets/scim-demo/new-20-entra-member-add-delivered.png">
-  <img src="assets/scim-demo/new-20-entra-member-add-delivered.png" alt="Entra on-demand result reports Alice&#x27;s Add member operation succeeded" width="720">
-</a>
-
-*Entra reports a successful on-demand member addition.*
-
-<a href="assets/scim-demo/new-22-web-super-users-edit-persisted.png">
-  <img src="assets/scim-demo/new-22-web-super-users-edit-persisted.png" alt="Alice&#x27;s Demo Intelligence note survives reload after Super_Users membership" width="720">
-</a>
-
-*Alice's Demo Intelligence note remains after reload. An independent server read confirmed it saved.*
-
-</details>
-
-## 8. Move a member without deleting the user
-
-### The scheduled move arrived without manually provisioning Alice
-
-Move Alice from `Super_Users` to `HR`:
-
-1. Save a note in Demo Intelligence as Alice.
-2. In Entra, add her to `HR`, then remove her from `Super_Users`. Keep `Users`.
-3. Wait for a normal provisioning cycle; do not use Provision on demand for this test.
-4. Check AppFlowy's group counts, then test Alice's pages again.
-
-<details>
-<summary>Show the membership change in Entra</summary>
-
-<a href="assets/scim-demo/new-23-entra-move-add-hr.png">
-  <img src="assets/scim-demo/new-23-entra-move-add-hr.png" alt="Entra HR group contains Alice Demo after the target membership addition" width="720">
-</a>
-
-*Alice is added to HR.*
-
-<a href="assets/scim-demo/new-24-entra-move-remove-super-users.png">
-  <img src="assets/scim-demo/new-24-entra-move-remove-super-users.png" alt="Entra Super_Users group has no members after Alice is removed" width="720">
-</a>
-
-*Alice is removed from Super_Users. Her account remains in Users.*
-
-</details>
-
-Before delivery, AppFlowy still showed the old membership even though the groups
-were marked Synced:
-
-<a href="assets/scim-demo/new-33-admin-awaiting-upstream-move.png">
-  <img src="assets/scim-demo/new-33-admin-awaiting-upstream-move.png" alt="AppFlowy still shows the previously received Super_Users membership while the upstream move waits for delivery" width="720">
-</a>
-
-*Waiting: Super_Users has one member; HR is empty.*
-
-The next normal cycle delivered the change:
-
-<a href="assets/scim-demo/new-35-admin-scheduled-member-move-applied.png">
-  <img src="assets/scim-demo/new-35-admin-scheduled-member-move-applied.png" alt="AppFlowy applies Alice to HR, removes her from Super_Users, and retains Users" width="720">
-</a>
-
-*After delivery: HR has one member; Super_Users is empty; Users still has Alice.*
-
-Alice could edit the **HR space inside Demo Workspace** and view its other four
-spaces. She still had no access to the separate HR Workspace. Her earlier note,
-account, and workspace Member role remained intact.
-
-<details>
-<summary>Show the completed cycle and retained content</summary>
-
-<a href="assets/scim-demo/new-36-entra-scheduled-cycle-completed.png">
-  <img src="assets/scim-demo/new-36-entra-scheduled-cycle-completed.png" alt="Entra reports the completed normal incremental provisioning cycle" width="720">
-</a>
-
-*Entra completed the normal cycle. The seventh group is the separate lifecycle test group.*
-
-<a href="assets/scim-demo/new-37-web-move-old-note-now-viewer.png">
-  <img src="assets/scim-demo/new-37-web-move-old-note-now-viewer.png" alt="Alice&#x27;s saved Demo Intelligence note remains visible after the group move" width="720">
-</a>
-
-*The old Demo Intelligence note remains. This content image looks the same as before;
-separate checks confirmed View after reload.*
-
-<a href="assets/scim-demo/new-38-web-hr-team-edit-persisted.png">
-  <img src="assets/scim-demo/new-38-web-hr-team-edit-persisted.png" alt="Alice&#x27;s new HR team note remains after reload following the scheduled move" width="720">
-</a>
-
-*Alice saved a new note in the HR space. Its saved content was independently confirmed.*
-
-</details>
-
-### The next HR → Product move was delivered on demand
-
-Next, add Alice to `Product`, remove her from `HR`, and keep `Users`. This recorded
-move used **Provision on demand**. Product became editable; the other four spaces
-became View-only. Alice stayed a Member and kept her earlier notes.
-
-<details>
-<summary>Show the Product membership and saved edit</summary>
-
-<a href="assets/scim-demo/new-42-admin-product-member-synced.png">
-  <img src="assets/scim-demo/new-42-admin-product-member-synced.png" alt="AppFlowy shows Alice in Product and Users, with HR now empty" width="720">
-</a>
-
-*Product has Alice; HR is empty. The temporary lifecycle group has not yet been deleted.*
-
-<a href="assets/scim-demo/new-43-web-product-edit-persisted.png">
-  <img src="assets/scim-demo/new-43-web-product-edit-persisted.png" alt="Alice&#x27;s Product note remains after reload following the move from HR" width="720">
-</a>
-
-*Alice's new Product note was confirmed saved.*
-
-</details>
-
-### Bob's HR editor and restored-viewer phases
-
-Move Bob from `W_RH_view` to `W_RH_edit`, save a note, then move him back.
-Both changes in this demo used **Provision on demand**.
-
-Bob stayed a Member of HR Workspace throughout. He gained Edit in its two spaces,
-then returned to View. His saved note remained, and the other workspaces stayed denied.
-
-**The already-open page did not immediately become read-only.** It still allowed
-local typing after Edit was removed:
-
-<a href="assets/scim-demo/new-31-web-stale-editor-local-only.png">
-  <img src="assets/scim-demo/new-31-web-stale-editor-local-only.png" alt="Bob&#x27;s stale editor displays a locally typed sentence after Edit was revoked" width="720">
-</a>
-
-*The last sentence was typed after permission was removed. Independent server reads
-confirmed it did not save. A fresh Bob session was read-only.*
-
-<details>
-<summary>Show Bob's editor, viewer, and denied-access checks</summary>
-
-<a href="assets/scim-demo/new-29-admin-hr-editor-synced.png">
-  <img src="assets/scim-demo/new-29-admin-hr-editor-synced.png" alt="HR monitor shows W_RH_edit with Bob and W_RH_view empty during the editor phase" width="720">
-</a>
-
-*Editor phase: W_RH_edit has one member and W_RH_view is empty.*
-
-<a href="assets/scim-demo/new-28-web-hr-editor-persisted.png">
-  <img src="assets/scim-demo/new-28-web-hr-editor-persisted.png" alt="Bob&#x27;s HR Workspace note survives reload while he is an editor" width="720">
-</a>
-
-*Bob saved this note while he had Edit access.*
-
-<a href="assets/scim-demo/new-30-web-restored-viewer-fresh-session.png">
-  <img src="assets/scim-demo/new-30-web-restored-viewer-fresh-session.png" alt="A fresh Bob viewer session retains the authorized note but not the revoked local edit" width="720">
-</a>
-
-*After returning to View, the saved note remains and the later local sentence is absent.
-The image has no read-only badge; input checks confirmed View separately.*
-
-<a href="assets/scim-demo/new-32-web-bob-executive-access-denied.png">
-  <img src="assets/scim-demo/new-32-web-bob-executive-access-denied.png" alt="The restored Bob viewer&#x27;s fresh session is denied a direct Executive Committee page link" width="720">
-</a>
-
-*Bob's fresh session cannot open an Executive Committee page.*
-
-</details>
-
-Keep at least one valid application assignment during a group move. Leaving all
-assignments can cause workspace offboarding, which is the next example.
-
-## 9. Test workspace offboarding and administrator demotion
-
-### Remove only Executive Committee access
-
-1. Remove Alice's previous editor group and add her to `Codir`. Keep `Users`.
-2. Confirm she can view Demo Workspace and edit Executive Committee content.
-3. Save a note there, then remove her from `Codir`.
-4. Confirm Entra sends the Executive application's user deactivation.
-5. Open the Executive page in a fresh Alice session and check the note as the owner.
-
-In this run, Executive admission arrived **automatically**; its user deactivation
-was delivered **on demand**. Demo's Codir changes were also on demand.
-
-<a href="assets/scim-demo/new-49-web-offboarded-user-direct-link-denied.png">
-  <img src="assets/scim-demo/new-49-web-offboarded-user-direct-link-denied.png" alt="A fresh Alice session cannot open the direct Executive Committee page link after offboarding" width="720">
-</a>
-
-*After deactivation, Alice's fresh session cannot open the Executive page.*
-
-Alice kept her active account and Demo Workspace access through `Users`.
-The owner could still read her Executive note. The old Alice tab retained cached
-content and allowed local typing, but that later text did not save.
-
-<details>
-<summary>Show Executive membership, deactivation, and retained content</summary>
-
-<a href="assets/scim-demo/new-46-admin-executive-member-synced.png">
-  <img src="assets/scim-demo/new-46-admin-executive-member-synced.png" alt="Executive Committee monitor shows Codir with one eligible synced member" width="720">
-</a>
-
-*Codir has one member in Executive Committee Workspace.*
-
-<a href="assets/scim-demo/new-45-web-executive-edit-persisted.png">
-  <img src="assets/scim-demo/new-45-web-executive-edit-persisted.png" alt="Alice&#x27;s Executive Committee note remains after reload as a workspace Member" width="720">
-</a>
-
-*Alice saved this Executive note as a workspace Member.*
-
-<a href="assets/scim-demo/new-47-entra-workspace-offboarding.png">
-  <img src="assets/scim-demo/new-47-entra-workspace-offboarding.png" alt="Entra reports a successful connection-scoped active True to False update" width="720">
-</a>
-
-*Entra reports active changing from True to False for the Executive connection.*
-
-<a href="assets/scim-demo/new-48-web-offboarded-user-note-retained.png">
-  <img src="assets/scim-demo/new-48-web-offboarded-user-note-retained.png" alt="The setup owner still reads Alice&#x27;s Executive note after she loses workspace access" width="720">
-</a>
-
-*The setup owner can still read Alice's note after her workspace access is removed.*
-
-</details>
-
-### Add and remove workspace administration
-
-Add Alice to `Admin`, confirm the Owner mapping, then remove her from `Admin`
-while keeping `Users`. Both changes here were delivered **on demand**.
-
-| Membership | Demo Workspace role | Result |
-| --- | --- | --- |
-| Users + Admin | Owner | Workspace administration and Edit in the five configured spaces |
-| Users only | Member | View in those spaces; workspace administration removed |
-
-Neither state grants instance administration or HR/Executive workspace access.
-Do not create spaces during the Owner test; that could add separate ownership
-rights that survive removal from `Admin`.
-
-<a href="assets/scim-demo/new-51-web-admin-workspace-owner-role.png">
-  <img src="assets/scim-demo/new-51-web-admin-workspace-owner-role.png" alt="People settings shows Alice as Owner alongside the separate original setup owner" width="720">
-</a>
-
-*After promotion: Alice is Owner alongside the separate setup owner.*
-
-<a href="assets/scim-demo/new-54-web-demoted-workspace-member-role.png">
-  <img src="assets/scim-demo/new-54-web-demoted-workspace-member-role.png" alt="People settings shows Alice returned to Member while the original setup owner remains Owner" width="720">
-</a>
-
-*After removal: Alice is Member again. The setup owner is unchanged.*
-
-<details>
-<summary>Show the Admin membership and note before and after demotion</summary>
-
-<a href="assets/scim-demo/new-50-admin-owner-group-synced.png">
-  <img src="assets/scim-demo/new-50-admin-owner-group-synced.png" alt="AppFlowy shows Admin and Users each with Alice as an eligible synced member" width="720">
-</a>
-
-*Admin and Users each contain Alice.*
-
-<a href="assets/scim-demo/new-52-web-admin-edit-persisted.png">
-  <img src="assets/scim-demo/new-52-web-admin-edit-persisted.png" alt="Alice&#x27;s Internal IT note remains after reload during the Admin phase" width="720">
-</a>
-
-*Alice saved an Internal IT note while she had Admin access.*
-
-<a href="assets/scim-demo/new-53-web-demoted-member-readonly-note-retained.png">
-  <img src="assets/scim-demo/new-53-web-demoted-member-readonly-note-retained.png" alt="Alice&#x27;s Internal IT note remains visible after workspace-role demotion" width="720">
-</a>
-
-*The note remains after demotion. Separate checks confirmed View after reload.*
-
-</details>
-
-## 10. Test group creation, rename and deletion
-
-Use an empty test group so the eight regular groups stay unchanged:
-
-| Action in Entra | Expected AppFlowy result | Delivery in this demo |
-| --- | --- | --- |
-| Create SCIM_Lifecycle_Demo and assign it to the Demo application | A seventh group appears | Automatic cycle |
-| Rename it to SCIM_Lifecycle_Renamed | The same group gets the new name | On demand |
-| Delete it in Entra | The group disappears; the six regular groups remain | Automatic cycle |
-
-<a href="assets/scim-demo/new-34-admin-temporary-group-created.png">
-  <img src="assets/scim-demo/new-34-admin-temporary-group-created.png" alt="The temporary lifecycle group appears as a seventh Synced Demo Workspace group" width="720">
-</a>
-
-*Created: the temporary group appears as the seventh Demo group.*
-
-<a href="assets/scim-demo/new-44-admin-temporary-group-deleted.png">
-  <img src="assets/scim-demo/new-44-admin-temporary-group-deleted.png" alt="AppFlowy shows only the six regular Demo groups after scheduled temporary-group deletion" width="720">
-</a>
-
-*Deleted: only the six regular groups remain. These counts were captured during
-the separate Codir test, when Alice belonged to Users and Codir.*
-
-The rename kept the same group identity. Deleting this empty group did not delete
-users or saved content. Deleting a populated group was not tested.
-
-<details>
-<summary>Show the source creation, assignment, rename, and deletion</summary>
-
-<a href="assets/scim-demo/new-25-entra-create-temporary-group.png">
-  <img src="assets/scim-demo/new-25-entra-create-temporary-group.png" alt="New Entra group form for the separate SCIM_Lifecycle_Demo group" width="720">
-</a>
-
-*Create the separate test group. This is the form before delivery.*
-
-<a href="assets/scim-demo/new-27-entra-lifecycle-assigned.png">
-  <img src="assets/scim-demo/new-27-entra-lifecycle-assigned.png" alt="The separate SCIM_Lifecycle_Demo group is assigned to the Demo Workspace application" width="720">
-</a>
-
-*Assign it to the Demo application. The application heading is outside this capture.*
-
-<a href="assets/scim-demo/new-39-entra-group-rename-delivered.png">
-  <img src="assets/scim-demo/new-39-entra-group-rename-delivered.png" alt="Entra reports the temporary group&#x27;s displayName change to SCIM_Lifecycle_Renamed" width="720">
-</a>
-
-*Entra reports the name change.*
-
-<a href="assets/scim-demo/new-40-admin-temporary-group-renamed.png">
-  <img src="assets/scim-demo/new-40-admin-temporary-group-renamed.png" alt="AppFlowy shows the same empty group as SCIM_Lifecycle_Renamed and Synced" width="720">
-</a>
-
-*AppFlowy shows the new name on the empty group.*
-
-<a href="assets/scim-demo/new-41-entra-temporary-source-group-deleted.png">
-  <img src="assets/scim-demo/new-41-entra-temporary-source-group-deleted.png" alt="Entra no longer finds the temporary source group after its deletion" width="720">
-</a>
-
-*Entra no longer finds the source group. AppFlowy removes its copy only after the
-deletion is delivered, as shown above.*
-
-</details>
-
-Removing an application assignment and deleting a source group are different
-actions. Always check what Entra sent and whether AppFlowy applied it.
-
-## Verified results
-
-The demo checked all eight groups against the current test spaces:
-
-| Check | Result |
+| Requirement | Current limitation |
 | --- | --- |
-| Group names and membership | Changes arrived in the intended workspace |
-| Group moves | Access changed; accounts and previously saved notes remained |
-| Workspace offboarding | Executive access was removed; Demo access and the account remained |
-| Admin role removal | Owner returned to Member; saved content remained |
-| Fresh-session access | Viewers could not save edits; unauthorized direct links were denied |
-| Already-open pages | Old content and local typing could remain; revoked edits did not save |
+| Different groups get View/Edit while everyone else is denied | Ordinary Space members share one level; this recipe lets other admitted workspace members View |
+| Edit pages but forbid space creation, or let only selected groups create spaces | The inspected clients cannot enforce the requested per-person/group creation rules |
+| Only selected people create workspaces | Requires implementation |
+| Automatic access to all future spaces | Explicit grants do not provide a future-space policy |
+| Owner can open every Private space | Workspace Owner has no blanket Private-space bypass |
+| No access overrides another group's grant | This example uses absence of a grant, not an overriding deny |
+| Immediately refresh a previously open editor after revocation | Old local state can remain editable; the fresh-session and saved-content checks above are required |
 
-The same Alice and Bob accounts remained active, seat use stayed at three of
-three, and all six newly saved notes survived. The primary owners stayed unchanged;
-attempts to change protected owners were not part of this test.
-
-These were **text-document and permission checks**. They do not prove page/space
-creation rules, database operations, access to future or Private spaces, overriding
-denies, or license-expansion retry. See the [current limitations](#what-remains-unsupported).
-
-Screenshots show selected states; separate input and server checks confirmed access
-and saved content. Some before/after images look identical because the content
-was retained. The [evidence index](assets/scim-demo/CAPTURE_NOTES.md#requirement-evidence-index)
-records each check and its limits.
-
-The run used a local development setup on October 11, 2026. Cloud reported
-self-hosted **0.19.0**, and its exact running build was not verified. This is not
-a release certification. Full timings, delivery methods, and build details are in
-the [capture notes](assets/scim-demo/CAPTURE_NOTES.md).
-
-## Finish the temporary demo
-
-1. Return Alice to `Users` only and Bob to `W_RH_view` only.
-2. Check that their original access and saved notes remain.
-3. Pause the three Entra provisioning jobs and disable their AppFlowy connections.
-4. Stop any temporary public tunnel or proxy.
-5. Cancel the Entra trial when finished and verify renewal is disabled.
-
-<a href="assets/scim-demo/new-55-admin-baseline-restored.png">
-  <img src="assets/scim-demo/new-55-admin-baseline-restored.png" alt="The final Demo group monitor shows Users with one member and the other five groups empty" width="720">
-</a>
-
-*Restored Demo groups: Users has one member; the other five groups are empty.*
-
-<a href="assets/scim-demo/new-56-admin-demo-connections-disabled.png">
-  <img src="assets/scim-demo/new-56-admin-demo-connections-disabled.png" alt="All three demo AppFlowy connections show Disabled after the jobs are paused" width="720">
-</a>
-
-*The three demo connections are Disabled. The older fourth connection was already disabled.*
-
-The recorded demo finished in this state. The temporary public connection was
-closed; groups, accounts, workspaces, and notes were kept. Trial cancellation
-remains the account owner's action.
-
-To repeat the demo, provide a reachable HTTPS endpoint, enable and test the
-connections, and restart provisioning.
-
-For troubleshooting, role precedence, or seat recovery, see [SCIM operations](SCIM_OPERATIONS.md).
+Promotion to workspace Owner does not automatically add ownership of existing
+Custom spaces. Demotion does not remove separately assigned space ownership.
+License activation here is not proof of automatic recovery from an earlier seat
+failure. See the [capture notes](assets/scim-demo-expanded/CAPTURE_NOTES.md) for
+build provenance and the exact evidence collected.
