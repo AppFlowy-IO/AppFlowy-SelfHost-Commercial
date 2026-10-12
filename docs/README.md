@@ -29,7 +29,7 @@ keeps workspace users and groups synchronized; sign-in is configured separately.
 | Sign in against Windows AD or another LDAP directory | [LDAP](LDAP.md) |
 | Set up the SCIM endpoint, token, and attribute mappings | [SCIM setup and API reference](SCIM.md) |
 | Understand roles, group moves, offboarding, and recovery | [SCIM operations](SCIM_OPERATIONS.md) |
-| Verify group-based workspace roles and content access with screenshots | [SCIM permission matrix demo](SCIM_DEMO.md) |
+| Verify eight users’ group roles and content access with screenshots | [SCIM permission matrix demo](SCIM_DEMO.md) |
 
 ### Choose an illustrated SCIM walkthrough
 

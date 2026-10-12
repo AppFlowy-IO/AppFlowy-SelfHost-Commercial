@@ -1,9 +1,12 @@
-# SCIM demo capture record
+# SCIM demo capture record — October 11, 2026
 
-[Reader walkthrough](../../SCIM_DEMO.md)
+[Current eight-person walkthrough](../../SCIM_DEMO.md)
+
+This historical record uses Alice, Bob and a setup owner. Its screenshots and
+results describe the October 11 run, not the expanded eight-person example.
 
 **Scenario verification and cleanup complete.** Fifty-seven reviewed screenshots
-use the approved spreadsheet names. The timeline below
+use the configured group names. The timeline below
 records setup, scheduled and manual delivery, content/role checks, reproduced
 stale-client limitations, and restoration of the original viewer baselines.
 The complete spreadsheet is not an all-features pass.
