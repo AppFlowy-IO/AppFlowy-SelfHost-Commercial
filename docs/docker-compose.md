@@ -2,10 +2,9 @@
 
 [Documentation](README.md)
 
-Before choosing a machine, read [Deployment topology and hardware sizing](HARDWARE_SIZING.md).
-It covers single-server and multi-server layouts, with starting profiles for 100, 500, and 1,000
-online users. For the default all-in-one setup, see
-[what Compose starts and how to verify it](HARDWARE_SIZING.md#single-server-deployment-all-services-on-one-machine).
+For CPU, RAM, and storage guidance, see [Hardware requirements and sizing](HARDWARE_SIZING.md).
+The [single-server profiles](HARDWARE_SIZING.md#single-server-sizing) cover the default all-in-one
+Compose installation for 100, 500, and 1,000 peak online users.
 
 With Docker and Docker Compose **2.30 or newer** installed, first copy the environment template from the repository root:
 
