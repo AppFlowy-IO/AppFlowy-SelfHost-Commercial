@@ -8,6 +8,7 @@ operational limits.
 
 | Task | Guide |
 | --- | --- |
+| Size hardware for 100, 500, or 1,000 online users | [Hardware requirements and sizing](HARDWARE_SIZING.md) |
 | Install or upgrade with Docker Compose | [Docker Compose](docker-compose.md) |
 | Deploy with Docker Swarm | [Docker Swarm](docker-swarm.md) |
 | Deploy to Kubernetes | [Helm chart](../helm/appflowy-cloud/README.md) |
