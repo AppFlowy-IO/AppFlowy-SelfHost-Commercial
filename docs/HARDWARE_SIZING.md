@@ -2,24 +2,32 @@
 
 [Documentation](README.md)
 
-Use these starting profiles to size AppFlowy Self-Hosted Commercial for 100, 500, or 1,000 peak
-online users. For installation instructions, see [Docker Compose](docker-compose.md) or
+Use this guide to plan CPU, memory, and storage for AppFlowy Self-Hosted Commercial. The tables
+provide example hardware profiles for single-server and multi-server deployments. **The example
+user counts do not define a maximum deployment size.**
+
+For installation instructions, see [Docker Compose](docker-compose.md) or
 [Kubernetes/Helm](../helm/appflowy-cloud/README.md).
 
 ## Sizing assumptions
 
-User counts mean people online during the busiest period, with a mix of editing, reading,
-searching, and pauses. The figures are **planning estimates**; validate them with your expected
-activity and content before production use.
+**Peak online users** means people using AppFlowy simultaneously during the busiest period, with
+a mix of editing, reading, searching, and normal pauses. Size for this concurrent activity rather
+than the total number of registered accounts.
 
-The profiles assume one instance of each application service and external AI model providers.
-Allow additional resources for large imports, exports, reindexing, backups, monitoring, and
-Kubernetes overhead where applicable. Size local AI inference separately.
+The figures are **planning estimates**. Actual capacity depends on activity, content size, and
+background processing. Validate the selected profile with a representative workload before
+production use.
+
+The profiles assume one instance of each application service and externally hosted AI models.
+Reserve capacity for the operating system and filesystem cache. Allow additional resources for
+large imports, exports, index rebuilds, backups, monitoring, and orchestration. Size additional
+replicas and local AI inference separately.
 
 ## Single-server sizing
 
-All application services, PostgreSQL, Redis, and MinIO share one machine, as in the default Docker
-Compose installation. These figures cover the **whole machine**, including local object storage.
+All application services, PostgreSQL, Redis, and MinIO run on one host, as in the default Docker
+Compose installation. CPU and memory figures apply to the **entire host**, including MinIO.
 
 | Peak online users | CPU | RAM |
 | --- | --- | --- |
@@ -27,13 +35,13 @@ Compose installation. These figures cover the **whole machine**, including local
 | 500 | 8 vCPU | 32 GiB |
 | 1,000 | 16 vCPU | 64 GiB |
 
-Leave capacity for the operating system, filesystem cache, and traffic bursts. All services share
-the same CPU, memory, and disk I/O.
+All services share CPU, memory, and disk I/O. Allow for application traffic and storage operations
+running at the same time.
 
 ## Multi-server sizing
 
-Application services share one host; PostgreSQL and Redis each use a separate host. Object storage
-runs separately on S3-compatible storage.
+Application services share one host; PostgreSQL and Redis each use a dedicated host. S3-compatible
+object storage runs separately from these three hosts.
 
 | Peak online users | Application server | PostgreSQL server | Redis server |
 | --- | --- | --- | --- |
@@ -41,39 +49,44 @@ runs separately on S3-compatible storage.
 | 500 | 4 vCPU / 16 GiB RAM | 2 vCPU / 8 GiB RAM | 2 vCPU / 8 GiB RAM |
 | 1,000 | 8 vCPU / 32 GiB RAM | 4 vCPU / 16 GiB RAM | 2 vCPU / 16 GiB RAM |
 
-Budget object-storage hardware separately when it is self-managed. Each host needs its own
-resource headroom; the application-server figures exclude PostgreSQL, Redis, and object storage.
+Figures are **per host**. Each host needs spare capacity for peak demand. Budget hardware for
+self-managed object storage separately. This layout allows each host to be resized independently.
 
 ## Storage requirements
 
-Use SSD-backed storage for PostgreSQL and Search. Size disk capacity from your data, retention,
-and growth, and check that IOPS and throughput meet peak demand.
+Use SSD-backed storage for PostgreSQL and Search. Size disk capacity for data volume, retention,
+and forecast growth. Check that storage IOPS and throughput meet peak demand.
 
 | Component | Include in the storage budget |
 | --- | --- |
-| PostgreSQL | Data, indexes, history, WAL, and maintenance or restore space. |
+| PostgreSQL | Data, indexes, history, write-ahead logs (WAL), and maintenance or restore space. |
 | Object storage | Attachments, collaboration data, published content, and retained versions. |
 | Search | Persistent indexes and rebuild space. |
 | Redis | Space for the chosen persistence policy, in addition to RAM. |
-| Application host | OS, container images, logs, import extraction, and export staging. |
+| Application host | Operating system, container images, logs, and temporary import/export files. |
 | Backups | Retained archives and restore space, with an independent backup destination. |
 
-As an initial allowance, keep **30% free disk space after forecast growth and maintenance needs**.
-Measure physical storage use: user count and compressed import size alone do not determine it.
+Keep free space for growth and temporary maintenance needs. Estimate capacity from measured
+storage use; user count and compressed import size alone are insufficient.
 
-## When to add capacity
+## Larger deployments and capacity growth
 
-Measure a representative busy period, including background jobs. Track user-visible latency and
-errors alongside resource use, then expand the constrained resource.
+For deployments above 1,000 peak online users, use workload-specific sizing. The multi-server
+layout allows application, database, cache, and storage resources to be assessed independently.
+Do not extrapolate capacity in direct proportion to user count or vCPU count.
+
+Load-test the target concurrency with representative content and background jobs. Measure response
+times, editing synchronization latency, and errors alongside resource use. Add capacity to the
+component that limits performance, then repeat the test.
 
 | Constraint | Resource to assess |
 | --- | --- |
-| Sustained CPU saturation | CPU capacity on the affected host. |
-| Low available memory, swapping, or out-of-memory failures | RAM and peak working-set size. |
+| Sustained high CPU utilization | CPU capacity on the affected host. |
+| Low available memory, swapping, or out-of-memory failures | RAM and peak memory use. |
 | High database or index I/O latency | Storage IOPS and throughput. |
 | Slow uploads, downloads, or object-storage transfers | Network bandwidth and latency. |
 | Insufficient space for growth or maintenance | Disk or object-storage capacity. |
 
-Choose CPUs with enough sustained performance for the workload; equal vCPU counts can perform
-differently across instance families. For separate hosts, keep application-to-database and Redis
-latency low. Resize the affected host or separate a resource-intensive service as demand grows.
+Choose CPUs with sufficient sustained performance; equal vCPU counts can perform differently
+across processor and instance families. For separate hosts, provide low-latency connections between
+the application, PostgreSQL, and Redis, and sufficient bandwidth for object-storage transfers.

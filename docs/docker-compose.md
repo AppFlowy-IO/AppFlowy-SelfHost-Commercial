@@ -3,8 +3,8 @@
 [Documentation](README.md)
 
 For CPU, RAM, and storage guidance, see [Hardware requirements and sizing](HARDWARE_SIZING.md).
-The [single-server profiles](HARDWARE_SIZING.md#single-server-sizing) cover the default all-in-one
-Compose installation for 100, 500, and 1,000 peak online users.
+The [single-server profiles](HARDWARE_SIZING.md#single-server-sizing) provide example hardware sizes
+for the default all-in-one Compose installation.
 
 With Docker and Docker Compose **2.30 or newer** installed, first copy the environment template from the repository root:
 
