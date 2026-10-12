@@ -24,6 +24,9 @@ Reserve capacity for the operating system and filesystem cache. Allow additional
 large imports, exports, index rebuilds, backups, monitoring, and orchestration. Size additional
 replicas and local AI inference separately.
 
+Choose CPUs with sufficient sustained performance; equal vCPU counts can perform differently
+across processor and instance families.
+
 ## Single-server sizing
 
 All application services, PostgreSQL, Redis, and MinIO run on one host, as in the default Docker
@@ -52,6 +55,9 @@ object storage runs separately from these three hosts.
 Figures are **per host**. Each host needs spare capacity for peak demand. Budget hardware for
 self-managed object storage separately. This layout allows each host to be resized independently.
 
+Provide low-latency connections between the application, PostgreSQL, and Redis, and sufficient
+bandwidth for object-storage transfers.
+
 ## Storage requirements
 
 Use SSD-backed storage for PostgreSQL and Search. Size disk capacity for data volume, retention,
@@ -69,24 +75,8 @@ and forecast growth. Check that storage IOPS and throughput meet peak demand.
 Keep free space for growth and temporary maintenance needs. Estimate capacity from measured
 storage use; user count and compressed import size alone are insufficient.
 
-## Larger deployments and capacity growth
+## Larger deployments
 
-For deployments above 1,000 peak online users, use workload-specific sizing. The multi-server
-layout allows application, database, cache, and storage resources to be assessed independently.
-Do not extrapolate capacity in direct proportion to user count or vCPU count.
-
-Load-test the target concurrency with representative content and background jobs. Measure response
-times, editing synchronization latency, and errors alongside resource use. Add capacity to the
-component that limits performance, then repeat the test.
-
-| Constraint | Resource to assess |
-| --- | --- |
-| Sustained high CPU utilization | CPU capacity on the affected host. |
-| Low available memory, swapping, or out-of-memory failures | RAM and peak memory use. |
-| High database or index I/O latency | Storage IOPS and throughput. |
-| Slow uploads, downloads, or object-storage transfers | Network bandwidth and latency. |
-| Insufficient space for growth or maintenance | Disk or object-storage capacity. |
-
-Choose CPUs with sufficient sustained performance; equal vCPU counts can perform differently
-across processor and instance families. For separate hosts, provide low-latency connections between
-the application, PostgreSQL, and Redis, and sufficient bandwidth for object-storage transfers.
+For deployments above 1,000 peak online users, [contact AppFlowy](https://appflowy.com/contact)
+for hardware sizing and capacity planning guidance. Include your expected peak concurrency,
+data volume, and growth plans.
