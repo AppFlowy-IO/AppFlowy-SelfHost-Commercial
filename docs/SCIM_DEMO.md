@@ -34,7 +34,6 @@ account and saved notes retained.
 | [5. Verify access](#5-verify-access) | Test View, Edit and denied direct links |
 | [6. Move Charlie to another group](#6-move-charlie-to-another-group) | Change access without deleting the person |
 | [Current limitations](#current-limitations) | Separate supported access from missing controls |
-| [Finish the demo](#finish-the-demo) | Restore the baseline and close temporary access |
 
 Click any screenshot to view it at full size.
 
@@ -491,10 +490,3 @@ Custom spaces. Demotion does not remove separately assigned space ownership.
 License activation here is not proof of automatic recovery from an earlier seat
 failure. See the [capture notes](assets/scim-demo-expanded/CAPTURE_NOTES.md) for
 build provenance and the exact evidence collected.
-
-## Finish the demo
-
-1. Restore the opening group memberships and verify identities, notes and access.
-2. Pause provisioning, disable the demo connections and close temporary public ingress.
-3. Keep the workspaces and notes for inspection.
-4. Cancel the Microsoft trial when finished and verify renewal is disabled.
