@@ -66,7 +66,36 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.5 (Latest)
+### 🚀 v0.19.6 (Latest)
+
+#### New Features
+
+- **Search monitoring and queue controls** — Added Admin APIs across all license tiers to inspect Search availability, indexing state, storage, queue activity, and recovery progress. Administrators could preview and remove selected queued work in bounded batches; discarded updates could leave results stale until the affected workspaces were rebuilt.
+- **Interactive API documentation** — Added a built-in Swagger console at `/api/docs` to explore business APIs and send requests using a user access token, plus a downloadable OpenAPI specification at `/api/docs/openapi.json`. Documentation assets were bundled with Cloud and required no separate deployment.
+- **SCIM monitoring and recovery (Seed plan or higher)** — Added Admin APIs to inspect group synchronization, identify membership mismatches and users waiting for seats, and retry received group changes.
+- **Managed SCIM profiles and roles (opt-in, Seed plan or higher)** — Added support for structured names and employee attributes, optional synchronization of workspace display names, and explicit Member or Guest roles through the AppFlowy SCIM extension.
+
+#### Improvements
+
+- **Search recovery** — Automatically paused new indexing work after sustained Search health failures, retained queued work, and resumed indexing with catch-up for changes made during the pause. Page and Quick Note writes continued while indexing was paused.
+- **SCIM provisioning** — Queued activations blocked by seat limits without granting workspace access, then retried them automatically after an updated license was installed or seats became available.
+- **Snapshot processing** — Reduced repeated writes of unchanged recovery checkpoints.
+
+#### Bug Fixes
+
+- Fixed navigation for page-only invitations to Custom spaces, and MCP OAuth access and refresh checks after workspace removal or Guest downgrades.
+- Fixed permission-denied errors when opening eligible legacy row documents created separately from their database rows, while preserving database access checks.
+- Fixed loss of quarantined sync recovery data and retry history after Redis expiry or replacement by retaining them in PostgreSQL.
+- Fixed Admin database scans that could stall on large workspaces by limiting work per request, preserving completed progress between pages, and reporting row timeouts explicitly.
+
+#### ⚠️ Action Required
+
+- **SCIM configuration and rollback** — Pause provisioning while Cloud replicas run different versions. Enable `sync_profile_names` and `allow_scim_roles` per connection through the Admin API when needed; both defaulted to off. Before rollback, drain or cancel all waiting activations, disable both policies, and let queued role updates finish. Older builds could not round-trip the new profile attributes.
+- **Custom reverse proxies** — If API routes are restricted, forward `/api/docs` and its subpaths to Cloud for the new console, and `/api/error-messages` for the error catalog. The bundled Nginx configuration already supported these routes.
+
+**Baseline:** [`00887d7d06218a36913b259ad3e40d395a448216`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/00887d7d06218a36913b259ad3e40d395a448216)
+
+### 🚀 v0.19.5
 
 #### Bug Fixes
 
