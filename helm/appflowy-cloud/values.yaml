@@ -44,6 +44,8 @@ global:
   # Redis connection configuration
   redis:
     # Use internal Redis (from dependency) or external
+    # NOTE: Clustered Valkey / Redis / DragonflyDB is not supported due to cross-slot key operations.
+    # Please use a standalone single Valkey/Redis instance or Sentinel mode.
     host: ""  # Empty uses release-name-redis-master
     port: 6379
     password: ""
