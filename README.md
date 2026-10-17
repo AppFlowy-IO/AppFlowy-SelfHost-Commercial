@@ -66,7 +66,21 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.7 (Latest)
+### 🚀 v0.19.8 (Latest)
+
+#### New Features
+
+- **Desktop update policy APIs** — Added server APIs to discover platform-specific desktop installers and configure the minimum desktop version advertised to clients without restarting Cloud.
+
+#### Improvements
+
+- **Permission recovery** — Reduced PostgreSQL work after restarts and cache misses by reusing validated Redis permission snapshots, sharing concurrent loads, and combining recovery queries.
+- **Permission updates** — Preserved unchanged cached workspace structure during page, group, and access changes, reducing unnecessary reloads while refreshing affected permissions.
+
+
+**Baseline:** [`4b077abb51134cf53d0a8d080c921397ea5faa10`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/4b077abb51134cf53d0a8d080c921397ea5faa10)
+
+### 🚀 v0.19.7
 
 #### New Features
 
