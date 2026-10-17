@@ -369,6 +369,17 @@ Service Name Helpers
 {{- printf "%s-gotrue" (include "appflowy.fullname" .) }}
 {{- end }}
 
+{{/*
+GoTrue secret name
+*/}}
+{{- define "appflowy.gotrue.secretName" -}}
+{{- if .Values.gotrue.existingSecret }}
+{{- .Values.gotrue.existingSecret }}
+{{- else }}
+{{- printf "%s-secret" (include "appflowy.gotrue.fullname" .) }}
+{{- end }}
+{{- end }}
+
 {{- define "appflowy.cloud.fullname" -}}
 {{- printf "%s-cloud" (include "appflowy.fullname" .) }}
 {{- end }}
