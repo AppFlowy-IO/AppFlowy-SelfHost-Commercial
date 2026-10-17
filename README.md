@@ -66,7 +66,28 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.6 (Latest)
+### 🚀 v0.19.7 (Latest)
+
+#### New Features
+
+- **Atomic creation APIs** — Added server APIs that saved new pages, spaces, databases, linked views, and rows together with their required content and references. Compatible clients and integrations could retry interrupted requests without creating duplicate or partially saved objects.
+- **PostgreSQL 17 and 18 backups** — Added Backup runtime support for online recovery and redacted exports on PostgreSQL 17 and 18, including preservation of database locale settings.
+
+#### Improvements
+
+- **Realtime database sync** — Added restore identifiers to database and row WebSocket replies so compatible clients could use realtime updates while checking that received data belonged to the expected database restore.
+- **Permission checks** — Reduced repeated database work during concurrent synchronization and reconnects by batching restore checks and sharing short-lived permission-change observations across server replicas.
+
+#### Bug Fixes
+
+- Fixed stale sidebar responses after missed cache invalidation and unnecessary navigation delays while background updates caught up.
+- Fixed database page loads that silently omitted rows after temporary read failures, and page-opening races during row creation.
+- Fixed stale client requests after full-server restores for clients that supplied the restore identifier.
+
+
+**Baseline:** [`6cebfb21c7b4161f2057766c7bf9308d8902173e`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/6cebfb21c7b4161f2057766c7bf9308d8902173e)
+
+### 🚀 v0.19.6
 
 #### New Features
 
