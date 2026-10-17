@@ -6,6 +6,36 @@
 
 Users can continue editing while a backup is created. A restore briefly pauses the application during the final switch.
 
+## Choose the Backup image
+
+All Backup images are published in the single
+[`appflowyinc/appflowy_backup` repository on Docker Hub](https://hub.docker.com/r/appflowyinc/appflowy_backup/tags).
+Open its **Tags** tab to see the PostgreSQL variants. The three Backup build jobs package the same
+service with PostgreSQL 16, 17, or 18 tools, including the matching private PostgreSQL server used
+for restore and export. Each installation needs only one Backup image and container.
+
+Choose the tag for your existing PostgreSQL major version and the same AppFlowy release as Cloud:
+
+| PostgreSQL version | `APPFLOWY_BACKUP_VERSION` | Moving tag |
+| --- | --- | --- |
+| 16 (supplied Compose default) | `<release>` | `latest` |
+| 17 | `<release>-pg17` | `latest-pg17` |
+| 18 | `<release>-pg18` | `latest-pg18` |
+
+Replace `<release>` with the published AppFlowy release you are deploying. For example, a PG17
+installation uses `appflowyinc/appflowy_backup:<release>-pg17`; the `-pg17` suffix is part of the
+tag, not the repository name. Pin the release tag so Backup stays aligned with Cloud.
+
+Compose selects the tag from `APPFLOWY_BACKUP_VERSION` in the root `.env`. If it is unset,
+Compose uses `latest`, which contains PostgreSQL 16 tools. It does not detect your database version
+and choose a variant automatically. Changing the Backup tag does not upgrade PostgreSQL;
+backup and restore require matching PostgreSQL majors and extensions.
+
+The variants publish independently, so a release's PG16 tag may appear before its PG17 or PG18
+tags. Confirm that your chosen tag exists in Docker Hub before pulling it. If its build is still
+running, wait for publication; earlier releases may not include every variant. The moving tags
+can temporarily point to different AppFlowy releases while publishing is in progress.
+
 ## Enable Backup
 
 Use Docker Compose **2.30 or newer** and matching releases of Cloud, Worker, Search, GoTrue, Admin,
@@ -13,15 +43,20 @@ and Backup. These instructions use the supplied Compose deployment. Platform-spe
 restrictions are documented separately in the [Swarm guide](docker-swarm.md) and
 [Helm guide](../helm/appflowy-cloud/README.md#backup-and-restore).
 
-1. In your deployment's root `.env`, set:
+1. In your deployment's root `.env`, enable Backup and select the tag from the table above.
+   For the supplied PostgreSQL 16 deployment, replace `<release>` with your AppFlowy release:
 
    ```dotenv
    APPFLOWY_BACKUP_PROFILE=backup
+   APPFLOWY_BACKUP_VERSION=<release>
    ```
 
-2. Start the deployment as usual:
+   For PostgreSQL 17 or 18, use `<release>-pg17` or `<release>-pg18` instead.
+
+2. Pull the selected Backup image and start the deployment:
 
    ```bash
+   docker compose pull appflowy_backup
    docker compose up -d
    ```
 
@@ -99,6 +134,9 @@ runtime checks pass; rendering configuration or passing unit tests alone does no
 
 | Symptom | What to do |
 | --- | --- |
+| Only one Backup repository appears in Docker Hub | Open `appflowyinc/appflowy_backup` → **Tags**. PostgreSQL variants are tags in this repository. See [image selection](#choose-the-backup-image). |
+| Pull fails because the selected tag is missing | Verify the release and PostgreSQL suffix in Docker Hub. The variant's build may still be running, or that release may not publish it. |
+| Backup reports the wrong PostgreSQL major version | Set `APPFLOWY_BACKUP_VERSION` to the tag matching your existing database, then pull the image and run `docker compose up -d`. |
 | Backup controls are unavailable | Check that `APPFLOWY_BACKUP_PROFILE=backup` is set and `appflowy_backup` is running. Read the readiness message and container logs. |
 | Backup cannot create its bucket | Allow the existing storage credentials to create a private backup bucket, or create that bucket beforehand. |
 | A job finishes with warnings or fails | Open **View report**. The report explains the affected items; include its ZIP when requesting support. |
