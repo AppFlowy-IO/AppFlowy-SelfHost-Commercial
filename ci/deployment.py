@@ -296,7 +296,7 @@ class Deployment:
             service['image'] = self.images[name]['image']
             service['logging'] = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '2'}}
             if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
-                service['environment'].update({'AI_ENABLED': 'false', 'APPFLOWY_INDEXER_ENABLED': 'true',
+                service['environment'].update({'AI_ENABLED': 'false',
                                                'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false'})
             if name == 'appflowy_cloud':
                 service['healthcheck']['start_period'] = '180s'
@@ -332,7 +332,7 @@ class Deployment:
                 overlay = {'image': service['image'], 'logging': service['logging']}
                 if name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
                     overlay['environment'] = {key: service['environment'][key] for key in
-                        ('AI_ENABLED', 'APPFLOWY_INDEXER_ENABLED', 'APPFLOWY_BACKGROUND_INDEXER_ENABLED')}
+                        ('AI_ENABLED', 'APPFLOWY_BACKGROUND_INDEXER_ENABLED')}
                 if name == 'appflowy_cloud':
                     overlay['healthcheck'] = {'start_period': '180s'}
                 if name == 'appflowy_backup':

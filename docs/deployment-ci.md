@@ -193,6 +193,19 @@ an explicit list of versioned source files to an isolated directory, excluding t
 covering both Compose files, source environment files, Nginx inputs, and generated Swarm source;
 changing any recorded deployment input requires a new lock. Rendered secrets remain private.
 
+Render contracts also verify that Compose and Swarm preserve an explicitly blank Search URL while
+retaining the default when it is absent, and that disabling Search in Helm clears Cloud's URL.
+The same render checks assert a fixed legacy bootstrap value (`true` for bundled Compose/Swarm,
+derived from `appflowy-search.enabled` for Helm), including immunity to retired flags in the
+operator environment. These checks do not start services or validate automatic health admission.
+
+Deployment CI resolves the images currently published for the tags in `deploy.env`; it does not
+build the companion server source change. A passing render or ordinary deployment journey cannot
+establish empty-URL suppression, the 60-second outage pause, or two-check recovery in those images.
+Qualify those runtime behaviors against a release containing the Search health coordinator before
+claiming compatibility; no numbered minimum server release has yet been qualified for this change.
+See [server rollout requirements](docker-compose.md#server-compatibility-and-rollout).
+
 Compose and Swarm do not explicitly configure Redis AOF or a named Redis data volume. Helm retains its existing chart-specific Redis configuration. CI checks application recovery after service replacement, but does not require a Redis marker to survive or claim that Redis-backed queues and pending work are durable.
 
 The standard workflow uploads an image lock and separate sanitized evidence for Compose, Swarm,
