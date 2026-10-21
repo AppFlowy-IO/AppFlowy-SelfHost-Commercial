@@ -66,7 +66,48 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.8 (Latest)
+### 🚀 v0.19.11 (Latest)
+
+#### New Features
+
+- **Creation API diagnostics** — Added metrics and a Grafana dashboard to identify delays in page, database, linked-view, and row creation.
+
+#### Improvements
+
+- **Page and database creation** — Reduced database round trips and contention in atomic creation APIs, and batched row uploads during database duplication.
+- **Workspace navigation** — Reduced data loaded for Recent, Favorites, and Trash, and avoided waiting for unrelated sidebar updates when opening saved pages.
+- **Realtime sync** — Reduced contention during full sync and improved permission recovery under load.
+
+#### Bug Fixes
+
+- Fixed incomplete synchronization metadata in stored database reads that could prevent row or linked-view creation.
+- Fixed AI provider refreshes that could block shared server work or apply stale configuration.
+- Strengthened deleted-account checks when the deletion cache was unavailable or contained invalid data.
+- Limited Search retry batches to reduce Redis stalls and bounded retries for missing database content.
+
+**Baseline:** [`c0bb51bc5038ca87b83a9d6ffb95e6fdeb847d6f`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/c0bb51bc5038ca87b83a9d6ffb95e6fdeb847d6f)
+
+### 🚀 v0.19.9
+
+#### New Features
+
+- **Search activity APIs** — Added process-level visibility into active indexing and embedding work, workspace maintenance, and deferred recovery through the Admin Search overview API.
+- **Search and database health monitoring** — Added Grafana dashboards and metrics for search latency, indexing progress, database generation, isolated corrupt rows, and download readiness.
+
+#### Improvements
+
+- **Realtime sync** — Reduced repeated permission and restore checks, retained verified caches during permission renewal, and shared concurrent database loads to reduce contention during busy periods.
+- **Search indexing** — Improved keyword batching on servers with limited CPU capacity, isolated workspace rebuild failures, and preserved queued indexing work during temporary dependency failures.
+
+#### Bug Fixes
+
+- Fixed linked-database creation that could remain stuck after Notion imports with inconsistent embedded/sidebar metadata.
+- Fixed malformed database row lists disrupting snapshot processing and restore notifications missed during permission recovery or reconnects.
+- Fixed cases where slightly oversized creation uploads produced proxy errors instead of HTTP 413 responses.
+
+**Baseline:** [`9d8008d4a02d1ed2f9f3819ceb2c82993562390d`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/9d8008d4a02d1ed2f9f3819ceb2c82993562390d)
+
+### 🚀 v0.19.8
 
 #### New Features
 
