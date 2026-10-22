@@ -32,7 +32,7 @@ override file or existing Kubernetes Secrets):
 | --- | --- | --- |
 | `global.domain` | Always | Public hostname used for ingress routing and redirect URLs. |
 | `global.jwt.secret` (or `global.jwt.existingSecret`) | Always | Shared JWT signing secret for GoTrue + AppFlowy Cloud. |
-| `gotrue.config.adminPassword` | Always | Default admin login password for the console. |
+| `gotrue.config.adminPassword` (or `gotrue.existingSecret`) | Initial deployment | Initial admin login password for the console (defaults to "password" if unset). When `gotrue.existingSecret` is set, credentials are read from that secret. Can later be changed independently. |
 | `postgresql.auth.postgresPassword` | When `postgresql.enabled=true` | Sets the Bitnami Postgres password used by the app. |
 | `global.postgresql.host` + `global.postgresql.password` (or `existingSecret`) | When using an external Postgres | Tells AppFlowy where to connect. Also set `postgresql.enabled=false`. |
 | `minio.auth.rootPassword` | When `minio.enabled=true` | Sets MinIO credentials used by the app. |
