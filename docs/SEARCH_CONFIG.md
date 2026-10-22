@@ -14,6 +14,15 @@ For a new installation, follow the [Docker Compose guide](docker-compose.md). Fo
 
 Use compatible Cloud, Worker, and Search releases. When upgrading, allow Cloud to finish its database migrations before starting the updated Worker and Search services.
 
+With the matching server release, indexing follows the configured Search URL and observed health.
+An explicitly blank `APPFLOWY_SEARCH_SERVICE_URL` stops new indexing work. Sustained health
+failures pause new work after a grace period; recovery resumes indexing and reconciles content
+changed during the pause. Existing queued work is retained. Admin's Search overview shows these
+states and storage observations; there is no installation-wide enable/disable switch.
+See [Search admission and server compatibility](docker-compose.md#search-admission) for timing,
+configuration, and the required service upgrade. Older images do not gain this behavior from
+deployment configuration alone.
+
 ## Configure the index path
 
 Set `APPFLOWY_KEYWORD_INDEX_DIR` in `.env` to the directory **inside the Search container**. For example:
