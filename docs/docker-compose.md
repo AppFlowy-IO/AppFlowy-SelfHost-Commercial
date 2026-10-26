@@ -33,6 +33,21 @@ With the default localhost settings, open [AppFlowy Web](http://localhost) or th
 
 If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing named data volumes and the default network. Containers whose definition changed are recreated in place: `nginx` and `appflowy_cloud` leave the old `cloud_proxy` network, and `minio`, `appflowy_cloud`, and `appflowy_worker` move to new image references. Unchanged service definitions are reused. The old `<project>_cloud_proxy` network is left behind and can be removed with `docker network rm` after the upgrade.
 
+## Redis
+
+The bundled Redis service uses Redis's default `maxmemory=0`: no configured memory cap.
+AppFlowy permits background task publication in this mode, so indexing and other queue-backed
+features do not require an extra Redis memory setting. Host or container memory limits still apply.
+
+If you explicitly configure a positive `maxmemory`, AppFlowy applies its percentage-based memory
+admission check (80% by default). Use `noeviction` to retain queue and collaboration keys, and
+allow `INFO memory` so the publisher can observe the configured limit. An unavailable memory
+sample or actual Redis write refusal still defers publication. Changes to the sampled limit or
+usage can take up to five minutes to become visible.
+
+The same behavior applies to external Redis. AppFlowy honors the server's configuration and does
+not change it at runtime.
+
 ## Backup
 
 Backup is optional. Use Docker Compose **2.30 or newer**, set this value in the root `.env`,
@@ -179,7 +194,7 @@ not stop an already running container.
 
 PostgreSQL, MinIO, and Search use the named volumes `postgres_data`, `minio_data`, and `keyword_index_data`. Retain the Compose project name when recreating containers so they select the same volumes. `docker compose down -v` removes deployment data volumes; it is not an upgrade command.
 
-Redis uses the image's default command. The root Compose file does not configure AOF, an explicit named Redis data volume, or a Redis health check. It does not guarantee that Redis-backed queues or pending work survive container replacement. Retaining PostgreSQL and MinIO data does not establish Redis queue durability.
+Redis uses the image's default command and the [memory behavior](#redis) above. The root Compose file does not configure AOF, an explicit named Redis data volume, or a Redis health check. It does not guarantee that Redis-backed queues or pending work survive container replacement. Retaining PostgreSQL and MinIO data does not establish Redis queue durability.
 
 For a local Swarm installation, follow the [Docker Swarm guide](docker-swarm.md). It uses a separate stack and direct Docker commands; the [deployment CI guide](deployment-ci.md) describes the automated checks and their limits.
 
