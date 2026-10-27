@@ -156,7 +156,10 @@ services:
       - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
       - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
       - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
-      - APPFLOWY_SEARCH_SERVICE_URL=${APPFLOWY_SEARCH_SERVICE_URL:-http://appflowy_search:4002}
+      # Fixed bootstrap compatibility for older Cloud images; current Cloud uses URL and health.
+      - APPFLOWY_SEARCH_ENABLED=true
+      # Preserve an explicitly empty URL when Search is deliberately unconfigured.
+      - APPFLOWY_SEARCH_SERVICE_URL=${APPFLOWY_SEARCH_SERVICE_URL-http://appflowy_search:4002}
       - APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS=${APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS:-10}
       - AI_ENABLED=${AI_ENABLED:-true}
       # SIGNUP_WHITELIST_ENABLED=true requires GOTRUE_DISABLE_SIGNUP=false on

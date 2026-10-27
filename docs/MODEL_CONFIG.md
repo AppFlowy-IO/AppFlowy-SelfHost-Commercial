@@ -124,7 +124,7 @@ For an existing installation:
 
 There is currently no one-click bulk regeneration in Admin. Do not switch a production installation unless you have arranged a complete embedding backfill; switching the model alone is insufficient.
 
-Keep `APPFLOWY_INDEXER_ENABLED=true` during this process.
+Keep the Search service configured and its `APPFLOWY_BACKGROUND_INDEXER_ENABLED=true` during this process.
 
 ## 5. Configure AI Overview
 

@@ -225,3 +225,53 @@ For Okta, follow the [SAML setup guide](OKTA_SAML.md). The SAML settings forward
 ## Enterprise identity
 
 SCIM provisioning, custom OIDC / OAuth providers, and LDAP sign-in are configured in the Admin console rather than through `.env`. See [SCIM Provisioning](SCIM.md), [OIDC / OAuth](OIDC.md), and [LDAP](LDAP.md). The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) already routes `/scim` to AppFlowy Cloud and sets `X-Forwarded-For` for `/api`; if you use a customized Nginx configuration, the SCIM and LDAP guides show the exact directives to add.
+
+## Search admission
+
+This Compose deployment includes Search and defaults `APPFLOWY_SEARCH_SERVICE_URL` to
+`http://appflowy_search:4002`. When deliberately deploying without Search, explicitly clear the
+value in `.env`:
+
+```dotenv
+APPFLOWY_SEARCH_SERVICE_URL=
+```
+
+Recreate Cloud to apply the updated environment:
+
+```bash
+docker compose up -d appflowy_cloud
+```
+
+An absent variable keeps the bundled service default; an explicitly empty or whitespace-only
+value means Search is unconfigured. Cloud records admission for the installation, and Worker,
+MCP, and Search observe it through notifications and a five-second recovery poll. There is no
+Admin enable/disable switch. AI and individual indexing capabilities retain narrower controls.
+
+Cloud checks configured Search every 10 seconds. A new installation waits for two consecutive
+healthy checks before accepting indexing work. An enabled installation continues queuing during
+brief failures; after 60 seconds of observed unhealthiness, admission pauses. Two consecutive
+healthy checks resume admission and start reconciliation of content changed while paused.
+Existing queued work is retained when admission pauses; its durability still depends on Redis
+storage and queue retention. The Admin Search overview shows checking, degraded, paused, and
+recovering states, the last failure, and the next check. An existing enabled installation keeps
+admission during its first health checks when upgrading to this policy.
+
+Unconfigured Search stops new indexing tasks and pauses consumers after propagation. Restoring
+the service URL and recreating Cloud starts health checks; indexing resumes after two successes.
+Use the same Search configuration on every Cloud replica.
+
+### Server compatibility and rollout
+
+The minimum server capability is **URL-derived admission with automatic Search health checks**.
+A numbered published server release containing that capability has not yet been qualified for
+this deployment change. These configuration files alone do not add it to an older image. Before
+relying on an empty URL or automatic outage pause/recovery, deploy a matching server release and
+verify the admission states in Admin. Upgrade Cloud, Worker, Search, and MCP together, with Cloud
+migrations completing first; mixed Cloud versions can overwrite the shared admission decision.
+
+Compose and Swarm supply a fixed `APPFLOWY_SEARCH_ENABLED=true` inside Cloud for bootstrap
+compatibility with older images that otherwise disable Search on fresh installations. It is not
+read from `.env` and is not an operator toggle. New Cloud ignores that retired variable and
+`APPFLOWY_INDEXER_ENABLED`; its Search URL and observed health control admission. This fixed
+compatibility value keeps the ordinary bundled Search deployment working during a staged release;
+it does not make older images support unconfigured Search or automatic health admission.
