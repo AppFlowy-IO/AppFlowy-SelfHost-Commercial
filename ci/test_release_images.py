@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
+import images
 from deployment import normalized_image_reference
 import update_release_images as release
 
@@ -190,7 +191,7 @@ class RegistryIndexTests(unittest.TestCase):
 
 
 class WorkflowImageSelectionTests(unittest.TestCase):
-    def test_release_pr_checks_do_not_substitute_the_temporary_test_images(self):
+    def test_release_pr_checks_do_not_substitute_the_qualification_baseline(self):
         for filename, step_name in (
                 ('deployment-test.yml', 'Resolve exact linux/amd64 image digests once'),
                 ('backup-test.yml', 'Resolve exact core and Backup image digests')):
@@ -201,12 +202,55 @@ class WorkflowImageSelectionTests(unittest.TestCase):
                 with self.subTest(workflow=filename, use_pins=use_pins), tempfile.TemporaryDirectory() as directory:
                     capture = Path(directory) / 'arguments'
                     environment = dict(os.environ, USE_RELEASE_PINS=use_pins, CAPTURED_ARGS=str(capture),
-                                       SERVER_IMAGE_TAG='0.19.4_test', BACKUP_IMAGE='appflowyinc/appflowy_backup:0.19.4_test')
+                                       SERVER_IMAGE_TAG='0.20.0', WEB_IMAGE_TAG='0.19.30',
+                                       BACKUP_IMAGE='appflowyinc/appflowy_backup:0.20.0')
                     subprocess.run(['bash', '-e', '-o', 'pipefail', '-c',
                                     'python() { printf "%s\\n" "$@" > "$CAPTURED_ARGS"; }\n' + step['run']],
                                    env=environment, check=True, capture_output=True)
                     arguments = capture.read_text().splitlines()
                     self.assertEqual('--server-tag' in arguments, use_pins == 'false')
+                    self.assertEqual('--web-tag' in arguments, use_pins == 'false')
                     if filename == 'backup-test.yml':
                         self.assertIn('--backup', arguments)
                         self.assertEqual('--backup-image' in arguments, use_pins == 'false')
+
+
+class QualificationImageTests(unittest.TestCase):
+    def test_server_and_web_baseline_is_explicit_and_release_pins_are_preserved(self):
+        digest = 'sha256:' + 'a' * 64
+        configured = {name: {'image': name + ':configured-release'} for name in images.CORE}
+        backup = 'appflowy_backup:configured-release'
+        for use_baseline in (False, True):
+            with self.subTest(use_baseline=use_baseline), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'docker-compose.yml').write_text('source fingerprint input')
+                output = root / 'image-lock.json'
+                argv = ['images.py', '--backup', '--output', str(output)]
+                if use_baseline:
+                    argv += ['--server-tag', '0.20.0', '--web-tag', '0.19.30',
+                             '--backup-image', 'appflowy_backup:0.20.0']
+                configs = [json.dumps({'services': configured}),
+                           json.dumps({'services': {**configured, 'appflowy_backup': {'image': backup}}})]
+
+                def resolved(_name, reference):
+                    return {'source': reference, 'image': images.repository(reference) + '@' + digest,
+                            'digest': digest, 'config_digest': digest, 'platform': 'linux/amd64'}
+
+                with patch('sys.argv', argv), patch.object(images, 'ROOT', root), \
+                     patch.object(images, 'check_compose'), patch.object(images, 'isolated_source', return_value=root), \
+                     patch.object(images, 'command', side_effect=configs), \
+                     patch.object(images, 'source_fingerprint', return_value='source fingerprint'), \
+                     patch.object(images, 'resolve_image', side_effect=resolved):
+                    images.main()
+                lock = json.loads(output.read_text())
+                for service, config in configured.items():
+                    record = lock['services'][service]
+                    expected = (service + ':0.20.0' if service in images.SERVER else
+                                'appflowy_web:0.19.30' if service == 'appflowy_web' else config['image'])
+                    self.assertEqual(record['source'], expected if use_baseline else config['image'])
+                    if use_baseline and (service in images.SERVER or service == 'appflowy_web'):
+                        self.assertEqual(record['configured_source'], config['image'])
+                    else:
+                        self.assertNotIn('configured_source', record)
+                record = lock['backup_services']['appflowy_backup']
+                self.assertEqual(record['source'], 'appflowy_backup:0.20.0' if use_baseline else backup)

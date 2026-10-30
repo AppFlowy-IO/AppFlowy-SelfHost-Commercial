@@ -108,14 +108,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search and optional Backup')
+    parser.add_argument('--web-tag', help='CI-only Web tag paired with the qualification server baseline')
     parser.add_argument('--backup', action='store_true', help='Resolve the optional Backup image too')
     parser.add_argument('--backup-image', help='Explicit Backup build to qualify; recorded in the image lock')
     parser.add_argument('--local', action='store_true', help='Pin already installed native images for isolated local qualification')
     parser.add_argument('--helm-redis', action='store_true',
                         help="Append the chart's Redis image lock in the Helm job; never replace it with Compose Redis")
     args = parser.parse_args()
-    if args.server_tag and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}', args.server_tag):
-        parser.error('--server-tag must be a valid Docker image tag')
+    for option, tag in (('--server-tag', args.server_tag), ('--web-tag', args.web_tag)):
+        if tag and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}', tag):
+            parser.error(option + ' must be a valid Docker image tag')
     if args.helm_redis:
         lock = json.loads(args.output.read_text())
         lock['helm_services'] = {'redis': resolve_image('helm Redis', chart_redis_image())}
@@ -136,8 +138,9 @@ def main():
     resolver = resolve_local_image if args.local else resolve_image
 
     def resolve_selected(name, configured_source, explicit_source=None):
-        selected = explicit_source or (repository(configured_source) + ':' + args.server_tag
-            if args.server_tag and name in SERVER else configured_source)
+        override_tag = args.server_tag if name in SERVER else args.web_tag if name == 'appflowy_web' else None
+        selected = explicit_source or (repository(configured_source) + ':' + override_tag
+                                      if override_tag else configured_source)
         record = resolver(name, selected)
         if selected != configured_source:
             record['configured_source'] = configured_source

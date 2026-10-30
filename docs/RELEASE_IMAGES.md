@@ -49,9 +49,9 @@ override that reference. Use an explicit Compose override for development qualif
 ## Deployment checks
 
 On image-update PRs, both deployment workflows use the images configured in the proposed
-Compose files. They omit the temporary `0.19.4_test` server override and the Backup test-image
-override, so a green result cannot be produced by substituting different server images.
-Other branches retain their existing temporary qualification settings.
+Compose files. They omit the standard `0.20.0` server/Backup and `0.19.30` Web baseline
+overrides, so a green result cannot be produced by substituting different component images.
+Other branches use that fixed qualification baseline.
 
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job

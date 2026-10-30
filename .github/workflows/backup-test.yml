@@ -14,7 +14,7 @@ on:
         description: Backup image to qualify with the CI server images (matching tag or digest)
         type: string
         required: true
-        default: appflowyinc/appflowy_backup:0.19.4_test
+        default: appflowyinc/appflowy_backup:0.20.0
 
 permissions:
   contents: read
@@ -29,9 +29,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      SERVER_IMAGE_TAG: 0.19.4_test
+      SERVER_IMAGE_TAG: 0.20.0
+      WEB_IMAGE_TAG: 0.19.30
       APPFLOWY_BACKUP_PROFILE: backup
-      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.19.4_test' }}
+      BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.20.0' }}
       USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') }}
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +53,7 @@ jobs:
         run: python ci/configuration.py --check-tools
       - name: Resolve exact core and Backup image digests
         run: |
-          image_options=(--server-tag "$SERVER_IMAGE_TAG" --backup-image "$BACKUP_IMAGE")
+          image_options=(--server-tag "$SERVER_IMAGE_TAG" --web-tag "$WEB_IMAGE_TAG" --backup-image "$BACKUP_IMAGE")
           if [[ "$USE_RELEASE_PINS" == true ]]; then
             image_options=()
           fi
