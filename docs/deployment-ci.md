@@ -63,6 +63,12 @@ The default license allows one occupied seat. After every recovery and image che
 
 Tests fail on timeouts and failed assertions. Registry download failures also fail the run; the workflow does not silently skip a deployment or a required application check.
 
+After deliberate dependency replacement, existing-user verification allows a bounded
+15-second recovery window for application error 1017 while Redis connections reconnect.
+Authentication/permission rejections and other errors fail immediately, and verification
+must succeed before the original document, row, attachment and search assertions run.
+New-user provisioning is not retried by this recovery probe.
+
 ## Backup acceptance
 
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release

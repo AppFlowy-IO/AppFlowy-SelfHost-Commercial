@@ -18,6 +18,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from api_recovery import ApplicationResponseError, verify_account
+
 runtime_dir = Path(os.environ.get("SWARM_TEST_DIR", Path(__file__).resolve().parents[1] / ".local")).expanduser().resolve()
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("phase", choices=["create", "verify"])
@@ -103,7 +105,8 @@ def request(method, path, payload=None, raw=None, content_type=None, label=None,
     parsed = json.loads(data) if data else None
     if unwrap and isinstance(parsed, dict) and "code" in parsed:
         if parsed["code"] != 0:
-            raise RuntimeError(redact(f"{check}: application error {parsed['code']}: {parsed.get('message')}"))
+            raise ApplicationResponseError(parsed['code'],
+                redact(f"{check}: application error {parsed['code']}: {parsed.get('message')}"))
         return parsed.get("data")
     return parsed
 
@@ -171,7 +174,9 @@ try:
     token = request("POST", "/gotrue/token?grant_type=password", payload=ordinary_credentials,
                     label="ordinary_user_login", unwrap=False)["access_token"]
     record("password_login", passed=True)
-    request("GET", "/api/user/verify/" + token, label="cloud_user_verify")
+    verify_account(lambda: request("GET", "/api/user/verify/" + token, label="cloud_user_verify"),
+                   after_replacement=args.phase == "verify",
+                   on_retry=lambda attempt: record("waiting_for_auth_reconnect", attempt=attempt))
     record("cloud_user_verify", passed=True)
     workspaces = request("GET", "/api/workspace")
     assert workspaces, "No workspace returned"
