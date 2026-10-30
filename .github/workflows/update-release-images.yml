@@ -1,0 +1,79 @@
+name: Update release image pins
+run-name: Update ${{ github.event.client_payload.source || inputs.source }} images to ${{ github.event.client_payload.tag || inputs.tag }}
+
+on:
+  repository_dispatch:
+    types: [selfhost-images-published]
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Publisher to update
+        type: choice
+        options: [cloud, web]
+        required: true
+      tag:
+        description: Published version tag (tags ending in _test are ignored)
+        type: string
+        required: true
+      services:
+        description: Optional comma-separated published Compose services; Cloud defaults to Cloud, Worker and Search
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-image-update-${{ github.event.client_payload.source || inputs.source }}-${{ github.event.client_payload.tag || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: >-
+      github.repository == 'AppFlowy-IO/AppFlowy-SelfHost-Commercial' &&
+      !endsWith(github.event.client_payload.tag || inputs.tag, '_test')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: docker/setup-buildx-action@v3
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+      - run: python -m pip install -r docker-swarm/requirements.txt
+      - name: Check Docker Compose compatibility
+        run: python ci/configuration.py --check-tools
+      - name: Resolve published release images and prepare the update
+        id: update
+        run: python ci/update_release_images.py --body "$RUNNER_TEMP/image-update.md"
+      - name: Regenerate Swarm and validate proposed sources
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          python docker-swarm/generate.py
+          python docker-swarm/generate.py --check
+          python -m unittest discover -s ci -p 'test_*.py'
+          python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
+          python -m unittest discover -s helm/appflowy-cloud/tests -p 'test_*.py'
+          helm lint helm/appflowy-cloud
+      - name: Open or refresh the image update PR
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          # An App/PAT token lets the normal PR deployment checks start automatically.
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          base: ${{ github.event.repository.default_branch }}
+          branch: ${{ steps.update.outputs.branch }}
+          title: 'chore: update ${{ steps.update.outputs.source }} images to ${{ steps.update.outputs.tag }}'
+          commit-message: 'chore: pin ${{ steps.update.outputs.source }} release images to ${{ steps.update.outputs.tag }}'
+          body-path: ${{ runner.temp }}/image-update.md
+          add-paths: |
+            docker-compose.yml
+            docker-swarm/docker-stack.yml
+            docker-swarm/docker-stack.backup.yml
+            helm/appflowy-cloud/values.yaml

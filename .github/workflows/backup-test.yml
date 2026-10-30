@@ -32,6 +32,7 @@ jobs:
       SERVER_IMAGE_TAG: 0.19.4_test
       APPFLOWY_BACKUP_PROFILE: backup
       BACKUP_IMAGE: ${{ inputs.backup_image || 'appflowyinc/appflowy_backup:0.19.4_test' }}
+      USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,10 +51,12 @@ jobs:
       - name: Check Docker Compose compatibility
         run: python ci/configuration.py --check-tools
       - name: Resolve exact core and Backup image digests
-        run: >-
-          python ci/images.py ${APPFLOWY_BACKUP_PROFILE:+--backup}
-          --server-tag "$SERVER_IMAGE_TAG"
-          --backup-image "$BACKUP_IMAGE" --output ci-artifacts/compose-backup/image-lock.json
+        run: |
+          image_options=(--server-tag "$SERVER_IMAGE_TAG" --backup-image "$BACKUP_IMAGE")
+          if [[ "$USE_RELEASE_PINS" == true ]]; then
+            image_options=()
+          fi
+          python ci/images.py --backup "${image_options[@]}" --output ci-artifacts/compose-backup/image-lock.json
       - name: Start the deployment with Backup enabled
         run: >-
           python ci/deployment.py up --mode compose ${APPFLOWY_BACKUP_PROFILE:+--backup}

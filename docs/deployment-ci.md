@@ -44,6 +44,10 @@ defaults remain `latest`. For each override, the image lock records the selected
 its original `configured_source`, preserving the Helm source checks before applying the test
 image digests.
 
+PRs from `automation/image-updates/` omit those temporary server and Backup overrides.
+They qualify the exact references in the proposed deployment files. See
+[Release image updates](RELEASE_IMAGES.md) for publisher events, `_test` exclusions, and review requirements.
+
 All runtime jobs must verify:
 
 - Service readiness and the public API, authentication, Web, and Admin routes.

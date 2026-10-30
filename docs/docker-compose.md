@@ -92,9 +92,11 @@ If you add MCP, connectors, or other services that write to this installation, i
 Compose service names in the Backup service's `APPFLOWY_BACKUP_COMPOSE_WRITERS` environment
 setting through a Compose override before using restore.
 
-Backup uses `appflowyinc/appflowy_backup:${APPFLOWY_BACKUP_VERSION:-latest}`. Use the Backup image
-published with your Cloud release and set `APPFLOWY_BACKUP_VERSION` to that release's
-tag when available. Its PostgreSQL tools must support your database version and extensions;
+Use the Backup image published with your Cloud release. The
+[release-image workflow](RELEASE_IMAGES.md) proposes its exact version and digest when
+Backup is published. Once pinned, that Compose image reference determines the version;
+use an explicit Compose override for qualification builds. Its PostgreSQL tools must support
+your database version and extensions;
 the bundled deployment uses PostgreSQL 16 with pgvector.
 
 Qualify Cloud, Worker, Search, GoTrue, Admin, and Backup together. A successfully pulled `latest`
