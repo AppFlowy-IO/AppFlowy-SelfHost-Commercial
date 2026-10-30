@@ -66,7 +66,37 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.11 (Latest)
+### 🚀 v0.20.0 (Latest)
+
+#### New Features
+
+- **Row-document recovery API** — Added an explicit, user-confirmed command to recreate a missing database-row page as an empty document so editing could resume. Existing readable content was preserved; recovery required page history and version enforcement.
+- **Operational diagnostics** — Added a Grafana alert overview and expanded Search, creation, and sync dashboards to distinguish request failures, partial results, processing delays, and indexing backlogs. Added opt-in Prometheus warnings for Search availability, latency, and stalled indexing.
+
+#### Improvements
+
+- **Keyword search** — Reduced unnecessary matching, document loading, and ranking work while preserving permission checks, typo tolerance, and result ordering.
+- **Creation and navigation** — Reduced repeated database reads in page, row, and linked-view creation, permission checks, and mention suggestions, and shortened page-duplication waits.
+- **Full-sync batches** — Increased the default standard batch limit to 1,000 items and added `APPFLOWY_FULL_SYNC_BATCH_MAX_ITEMS` for operator tuning after a Cloud restart.
+- **Background indexing** — Deferred new indexing work under Redis memory pressure and retained pending snapshot-indexing tasks in PostgreSQL for recovery across Worker restarts.
+
+#### Bug Fixes
+
+- Fixed stalled sidebar updates, automatically recovered eligible legacy Folder initialization gaps, and closed stalled realtime connections so clients could reconnect.
+- Fixed row and linked-view creation in legacy databases, inconsistent Notion row-document metadata, and List property visibility.
+- Preserved unknown database layout and property-type values and rejected unsupported edits without rewriting their content.
+- Fixed Search rebuilds blocked by invalid database references, stale index writes during CPU contention, and incorrect exclusions in negated metadata filters.
+- Enforced login revocation after password changes and recovery, including open realtime connections and MCP authorization.
+- Fixed AI chat workspace checks, large chat-history proxy failures, and dropped document context in AI answers.
+
+#### ⚠️ Action Required
+
+- **Missing-row recovery** — Upgrade every realtime-writing server before enabling the recovery command, and keep `APPFLOWY_PAGE_HISTORY_ENABLE=true`. Require explicit user confirmation because recreation can discard unsynced content on other devices.
+- **Authentication compatibility** — Sign in again or reauthorize legacy MCP connections whose credentials lack a live GoTrue session. Custom requests to `/api/meeting/summary_templates` now require bearer authentication.
+
+**Baseline:** [`e3e0ed628f9514cbd57616db71891223eb5a400d`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/e3e0ed628f9514cbd57616db71891223eb5a400d)
+
+### 🚀 v0.19.11
 
 #### New Features
 
