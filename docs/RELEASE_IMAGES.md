@@ -25,10 +25,12 @@ For a real version tag, the receiver:
    `linux/amd64` and `linux/arm64` must be available before an update can be proposed.
 3. Changes the selected Compose images to `repository:version@sha256:digest`, updates
    the matching Helm tag/digest, and regenerates the Swarm files.
-4. Opens or refreshes `automation/image-updates/<source>-<tag>` as a PR. The version
+4. Opens or refreshes `automation/image-updates/<source>-<tag>[-<services>]` as a PR. The version
    remains readable, while the digest prevents tag replacement from changing a deployment.
 
-Repeated publication/release notifications reuse the same PR. Notifications older than
+Repeated publication/release notifications for the same image selection reuse the same PR.
+Cloud branches also identify the selected services, so a GoTrue-only publication cannot
+replace an open Cloud/Worker/Search update for the same version. Notifications older than
 the selected services' current versions are ignored. Reusing an already pinned version
 with different image contents fails; publish a new version instead.
 

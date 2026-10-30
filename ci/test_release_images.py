@@ -98,6 +98,14 @@ class ReleaseImageTests(unittest.TestCase):
         self.assertEqual(self.contents(), pinned)
         self.assertEqual(pinned[self.paths[1]].count('    digest: ' + self.digest), 1)
 
+    def test_separate_cloud_publications_do_not_replace_another_open_image_selection(self):
+        services = ['appflowy_cloud', 'appflowy_worker', 'appflowy_search']
+        branch = release.update_branch('cloud', '0.20.0', services)
+        self.assertEqual(branch, release.update_branch('cloud', '0.20.0', services[::-1]))
+        self.assertNotEqual(branch, release.update_branch('cloud', '0.20.0', ['gotrue']))
+        self.assertEqual(release.update_branch('web', '0.19.30', ['appflowy_web']),
+                         'automation/image-updates/web-0.19.30')
+
     def test_one_missing_image_prevents_the_entire_set_from_being_written(self):
         self.resolve.side_effect = [self.digest, RuntimeError('image not published')]
         with self.assertRaisesRegex(RuntimeError, 'not published'):

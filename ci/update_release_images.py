@@ -95,6 +95,14 @@ def image_tag(reference):
     return reference.split('@')[0].rsplit(':', 1)[-1]
 
 
+def update_branch(source, tag, services):
+    branch = f'automation/image-updates/{source}-{tag}'
+    if source == 'cloud':
+        # A later GoTrue-only build of the same version must not replace an open Cloud/Worker PR.
+        branch += '-' + '-'.join(service.removeprefix('appflowy_') for service in sorted(services))
+    return branch
+
+
 def prepare_update(root, source, tag, services, resolve=release_digest):
     if source not in SOURCES or not isinstance(tag, str):
         raise ValueError('Unknown release source or invalid tag')
@@ -188,7 +196,7 @@ def main():
         with open(output, 'a') as stream:
             stream.write('changed=' + str(bool(changes)).lower() + '\n')
             if changes:
-                stream.write(f'source={source}\ntag={tag}\nbranch=automation/image-updates/{source}-{tag}\n')
+                stream.write(f'source={source}\ntag={tag}\nbranch={update_branch(source, tag, services)}\n')
 
 
 if __name__ == '__main__':
