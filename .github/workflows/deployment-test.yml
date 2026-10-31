@@ -14,7 +14,9 @@ permissions:
   contents: read
 
 env:
-  SERVER_IMAGE_TAG: 0.19.4_test
+  SERVER_IMAGE_TAG: 0.20.0
+  WEB_IMAGE_TAG: 0.19.30
+  USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') }}
 
 concurrency:
   group: deployment-test-${{ github.workflow }}-${{ github.ref }}
@@ -43,7 +45,12 @@ jobs:
           python -m unittest discover -s ci -p 'test_*.py'
           python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
       - name: Resolve exact linux/amd64 image digests once
-        run: python ci/images.py --server-tag "$SERVER_IMAGE_TAG" --output ci-artifacts/image-lock.json
+        run: |
+          image_options=()
+          if [[ "$USE_RELEASE_PINS" != true ]]; then
+            image_options+=(--server-tag "$SERVER_IMAGE_TAG" --web-tag "$WEB_IMAGE_TAG")
+          fi
+          python ci/images.py "${image_options[@]}" --output ci-artifacts/image-lock.json
       - uses: actions/upload-artifact@v4
         with:
           name: deployment-image-lock

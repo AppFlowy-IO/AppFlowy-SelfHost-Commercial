@@ -44,8 +44,10 @@ HELM_WORKLOADS = {'appflowy_cloud': 'deployment/appflowy-ci-cloud',
 
 
 def normalized_image_reference(reference):
-    """Normalize Docker Hub aliases without discarding a tag or digest."""
+    """Normalize registry aliases and compare digest-pinned references by content."""
     name, separator, digest = reference.partition('@')
+    if separator:
+        name = repository(name)  # A digest identifies the image even when a readable tag is included.
     if ':' not in name.rsplit('/', 1)[-1] and not separator:
         name += ':latest'
     parts = name.split('/')
