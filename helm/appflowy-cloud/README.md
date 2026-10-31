@@ -90,6 +90,13 @@ storage, stop every Cloud replica and privately copy both files while preserving
 restrictive permissions. Preserve an existing reporting credential from its old configured path.
 Do not create new identities per Pod or restore these files from an older PostgreSQL backup.
 
+For an existing preview that stored its credential at `/app/.appflowy/license-report.json`, copy it
+privately from the old Pod into the retained `report.json` **before the first Pod replacement**.
+Also preserve `installation.json` at the retained identity path if it already exists. Keep file
+ownership and mode `0600`; never print these files or include them in support bundles. The new
+PVC cannot recover files after the old Pod's writable layer has been discarded. Released
+installations that never ran the reporter have no old reporting state to copy.
+
 ## Backup and restore
 
 `appflowy-backup.enabled` defaults to `false`. Enabling it requires a Backup image built with the

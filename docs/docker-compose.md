@@ -55,6 +55,13 @@ at a custom or container-local path, stop Cloud and privately preserve that file
 path, retaining its ownership and restrictive permissions. Retain both files outside PostgreSQL
 backup restoration; restoring application data must not roll back the installation's identity.
 
+For an existing preview that stored its credential at `/app/.appflowy/license-report.json`, copy it
+privately from the old container into the retained `report.json` **before the first recreation**.
+Also preserve `installation.json` at the retained identity path if it already exists. Keep file
+ownership and mode `0600`; never print these files or include them in support bundles. The new
+volume cannot recover files after the old container's writable layer has been discarded. Released
+installations that never ran the reporter have no old reporting state to copy.
+
 ## Redis
 
 The bundled Redis service uses Redis's default `maxmemory=0`: no configured memory cap.
