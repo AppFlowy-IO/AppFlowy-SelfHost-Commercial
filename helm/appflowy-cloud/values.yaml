@@ -312,6 +312,16 @@ appflowy-cloud:
   enabled: true
   replicaCount: 1
 
+  # Installation identity and reporting credentials must survive pod replacement and database
+  # restores. Share this one installation volume across Cloud replicas serving the same database.
+  # Multiple replicas (including an HPA maximum above 1) require ReadWriteMany storage.
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+    size: 1Gi
+
   image:
     repository: appflowyinc/appflowy_cloud
     tag: "latest"

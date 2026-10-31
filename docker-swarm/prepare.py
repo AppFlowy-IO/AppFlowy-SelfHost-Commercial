@@ -200,7 +200,7 @@ def main() -> None:
         for port in service.get('ports', []):
             if 'published' in port:
                 port['published'] = int(port['published'])
-        if name in {'postgres', 'minio', 'appflowy_search'}:
+        if name in {'appflowy_cloud', 'postgres', 'minio', 'appflowy_search'}:
             service['deploy']['placement'] = {
                 'constraints': ['node.labels.appflowy-swarm-test == true'],
             }

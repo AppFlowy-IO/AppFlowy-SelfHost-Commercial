@@ -33,6 +33,28 @@ With the default localhost settings, open [AppFlowy Web](http://localhost) or th
 
 If upgrading an installation previously started from `docker/`, move its existing `.env` to the repository root and retain its Compose project name. For the old default, add `COMPOSE_PROJECT_NAME=docker` to `.env`; if you used a custom project name, keep that value. This reuses the existing named data volumes and the default network. Containers whose definition changed are recreated in place: `nginx` and `appflowy_cloud` leave the old `cloud_proxy` network, and `minio`, `appflowy_cloud`, and `appflowy_worker` move to new image references. Unchanged service definitions are reused. The old `<project>_cloud_proxy` network is left behind and can be removed with `docker network rm` after the upgrade.
 
+## Installation identity and license reporting state
+
+Cloud mounts the private named volume `appflowy_cloud_state` at `/var/lib/appflowy/license`.
+The deployment sets `APPFLOWY_INSTALLATION_IDENTITY_PATH` to
+`/var/lib/appflowy/license/installation.json` and `APPFLOWY_LICENSE_REPORT_STATE_PATH` to
+`/var/lib/appflowy/license/report.json`. A compatible Cloud image uses these files for its
+installation identity and reporting credential. Retain this volume across container recreation,
+image upgrades, and PostgreSQL restores. A container restart alone does not establish that state
+will survive recreation. Avoid `docker compose down --volumes` when retaining the installation.
+
+Only Cloud mounts this volume. Keep its contents private: the installation file contains the UUID's
+private preimage and the reporting file contains a credential.
+Replicas serving one PostgreSQL database must share one installation identity and state directory;
+do not create a separate licensed device identity for each replica. The default local Docker volume
+stays on its Docker host and does not provide shared storage across hosts.
+
+These paths require a Cloud image that supports persistent installation identity. An older image
+ignores the new identity path. Before upgrading a deployment that already has a reporting credential
+at a custom or container-local path, stop Cloud and privately preserve that file at the new report
+path, retaining its ownership and restrictive permissions. Retain both files outside PostgreSQL
+backup restoration; restoring application data must not roll back the installation's identity.
+
 ## Redis
 
 The bundled Redis service uses Redis's default `maxmemory=0`: no configured memory cap.

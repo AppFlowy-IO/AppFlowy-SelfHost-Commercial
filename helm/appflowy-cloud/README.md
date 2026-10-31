@@ -63,6 +63,33 @@ Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the 
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
+## Persistent Cloud installation state
+
+Cloud stores its installation identity and reporting credential on one service-owned PVC mounted
+at `/var/lib/appflowy/license`. The chart sets `APPFLOWY_INSTALLATION_IDENTITY_PATH` to
+`/var/lib/appflowy/license/installation.json` and `APPFLOWY_LICENSE_REPORT_STATE_PATH` to
+`/var/lib/appflowy/license/report.json`. Use a Cloud image that supports these paths. The identity
+file includes the UUID's private preimage. Keep both files private and retain them across Pod
+replacement, image upgrades, and PostgreSQL restores.
+
+`appflowy-cloud.persistence` defaults to an enabled, 1 GiB `ReadWriteOnce` claim. The chart uses
+`Recreate` for this single writer, and marks its generated PVC `helm.sh/resource-policy: keep`
+so Helm uninstall retains it. Retain the release name when reinstalling. If reinstalling does not
+adopt the retained claim, set `appflowy-cloud.persistence.existingClaim` to its name; do not delete
+it to clear an ownership error. An existing claim is reused without creating or modifying it.
+
+Cloud replicas serving one PostgreSQL database share one installation identity and report file.
+More than one replica, including an autoscaler's configured maximum above one, requires
+`appflowy-cloud.persistence.accessModes: [ReadWriteMany]` and a matching shared storage class or
+`existingClaim`. Declare the existing claim's actual access mode in these values. The filesystem
+must support cross-process file locking and atomic rename. The chart rejects disabled persistence
+and multiple replicas with `ReadWriteOnce`; it never falls back to an ephemeral directory.
+
+Before moving an existing installation to this directory or changing from a local claim to shared
+storage, stop every Cloud replica and privately copy both files while preserving ownership and
+restrictive permissions. Preserve an existing reporting credential from its old configured path.
+Do not create new identities per Pod or restore these files from an older PostgreSQL backup.
+
 ## Backup and restore
 
 `appflowy-backup.enabled` defaults to `false`. Enabling it requires a Backup image built with the

@@ -19,7 +19,7 @@ The Swarm counterpart makes these explicit compatibility changes:
 - Removes `depends_on`; Swarm does not implement Compose startup ordering.
 - Keeps the Compose `backup` profile out of the base stack. Checked-in source environment defaults are inlined without expanding variables; private Compose restore selections are excluded. Other required environment-file paths are rebased to the repository root. Unknown optional/raw files and profiles fail generation for explicit review.
 - Converts `restart` to `deploy.restart_policy`, retaining Swarm's default of one replica and using stop-first updates. Omitting an explicit base replica count lets the bootstrap override set zero replicas on older Docker CLIs.
-- Constrains PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
+- Constrains Cloud, PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
 - Converts Nginx's configuration and certificate mounts to Swarm configs, and its TLS private key mount to a Swarm secret. Source paths are relative to this folder.
 
 Redis matches the root Compose configuration: the image's default command, with no explicit AOF settings, named Redis data volume, or health check. The base stack does not guarantee that Redis-backed queues or pending work survive replacement. See [storage and Redis](../docs/docker-compose.md#storage-and-redis).
@@ -30,7 +30,15 @@ Redis matches the root Compose configuration: the image's default command, with 
 
 The bootstrap override is for initial startup or a planned restart: applying it to a running stack scales application services down. For release upgrades, follow the migration and rollout requirements in the [root deployment instructions](../README.md). A generic Swarm rolling update does not implement that sequence, and the local tests have not validated release upgrades.
 
-Label one designated data node `appflowy.data=true`. Docker's local volumes do not move when services move to another node. Single-replica services have downtime during replacement. Multiple Cloud replicas, shared storage, stateful failover, and cross-node networking require separate validation. Backup support uses the opt-in coordinator described below.
+Label one designated data node `appflowy.data=true`. PostgreSQL, MinIO, Search, and Cloud's private installation-state volume are constrained to that node. Docker's local volumes do not move when services move to another node. Single-replica services have downtime during replacement. Multiple Cloud replicas, shared storage, stateful failover, and cross-node networking require separate validation. Backup support uses the opt-in coordinator described below.
+
+Cloud retains its installation identity and reporting credential in `appflowy_cloud_state`, mounted
+at `/var/lib/appflowy/license`, using the same paths as
+[Compose](../docs/docker-compose.md#installation-identity-and-license-reporting-state). Keep this
+private volume across task replacement, stack removal, image upgrades, and PostgreSQL restores.
+Replicas serving one database must share the same installation identity rather than create a
+licensed device identity for each task. The default local volume does not establish cross-node
+shared storage or high availability.
 
 ## Backup and restore
 

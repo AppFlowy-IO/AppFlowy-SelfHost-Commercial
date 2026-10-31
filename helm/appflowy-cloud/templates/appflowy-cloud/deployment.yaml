@@ -1,6 +1,18 @@
 {{- if index .Values "appflowy-cloud" "enabled" }}
 {{- $cloud := index .Values "appflowy-cloud" }}
 {{- $metrics := $cloud.metrics }}
+{{- $state := $cloud.persistence }}
+{{- if not $state.enabled }}
+{{- fail "appflowy-cloud.persistence.enabled must remain true: Cloud installation identity and reporting credentials require persistent storage" }}
+{{- end }}
+{{- if or (ne (len $state.accessModes) 1) (not (or (has "ReadWriteOnce" $state.accessModes) (has "ReadWriteMany" $state.accessModes))) }}
+{{- fail "appflowy-cloud.persistence.accessModes must contain exactly ReadWriteOnce or ReadWriteMany" }}
+{{- end }}
+{{- $shared := has "ReadWriteMany" $state.accessModes }}
+{{- if and (not $shared) (or (gt (int $cloud.replicaCount) 1) (and $cloud.autoscaling.enabled (gt (int $cloud.autoscaling.maxReplicas) 1))) }}
+{{- fail "Multiple Cloud replicas or an autoscaling maximum above 1 require appflowy-cloud.persistence.accessModes=[ReadWriteMany] and a matching shared storage class or existingClaim" }}
+{{- end }}
+{{- $stateClaim := $state.existingClaim | default (printf "%s-state" (include "appflowy.cloud.fullname" .)) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,6 +22,11 @@ metadata:
     app.kubernetes.io/component: appflowy-cloud
 spec:
   replicas: {{ $cloud.replicaCount }}
+  {{- if not $shared }}
+  # Stop the old pod before attaching its ReadWriteOnce claim to a replacement node.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "appflowy.selectorLabels" . | nindent 6 }}
@@ -77,6 +94,10 @@ spec:
               value: {{ $cloud.config.rustLog | quote }}
             - name: APPFLOWY_ENVIRONMENT
               value: {{ $cloud.config.environment | quote }}
+            - name: APPFLOWY_INSTALLATION_IDENTITY_PATH
+              value: /var/lib/appflowy/license/installation.json
+            - name: APPFLOWY_LICENSE_REPORT_STATE_PATH
+              value: /var/lib/appflowy/license/report.json
 
             # Database configuration
             - name: POSTGRES_USER
@@ -240,6 +261,13 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml $cloud.resources | nindent 12 }}
+          volumeMounts:
+            - name: cloud-state
+              mountPath: /var/lib/appflowy/license
+      volumes:
+        - name: cloud-state
+          persistentVolumeClaim:
+            claimName: {{ $stateClaim | quote }}
       {{- with $cloud.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -252,4 +280,24 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- if not $state.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $stateClaim | quote }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml $state.accessModes | nindent 4 }}
+  {{- if $state.storageClass }}
+  storageClassName: {{ $state.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $state.size | quote }}
+{{- end }}
 {{- end }}

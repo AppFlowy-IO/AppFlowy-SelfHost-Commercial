@@ -155,6 +155,8 @@ services:
     - APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI}
     - RUST_LOG=${RUST_LOG:-info}
     - APPFLOWY_ENVIRONMENT=production
+    - APPFLOWY_INSTALLATION_IDENTITY_PATH=/var/lib/appflowy/license/installation.json
+    - APPFLOWY_LICENSE_REPORT_STATE_PATH=/var/lib/appflowy/license/report.json
     - APPFLOWY_DATABASE_URL=${APPFLOWY_DATABASE_URL}
     - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL}
@@ -188,6 +190,8 @@ services:
     - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
     - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
     image: appflowyinc/appflowy_cloud:${APPFLOWY_CLOUD_VERSION:-latest}
+    volumes:
+    - appflowy_cloud_state:/var/lib/appflowy/license
     healthcheck:
       test: curl --fail http://127.0.0.1:8000/api/health || exit 1
       interval: 5s
@@ -199,6 +203,9 @@ services:
       update_config:
         parallelism: 1
         order: stop-first
+      placement:
+        constraints:
+        - node.labels.appflowy.data == true
   admin_frontend:
     image: appflowyinc/admin_frontend:${APPFLOWY_ADMIN_FRONTEND_VERSION:-latest}
     environment:
@@ -340,6 +347,7 @@ services:
         parallelism: 1
         order: stop-first
 volumes:
+  appflowy_cloud_state: null
   postgres_data: null
   minio_data: null
   keyword_index_data: null

@@ -130,7 +130,7 @@ Replace Cloud, then wait for it to become healthy and refresh the page to check 
 docker service update --force appflowy-swarm_appflowy_cloud
 ```
 
-One replica means brief downtime during replacement. PostgreSQL, MinIO, and Search use named volumes. Redis matches the root Compose configuration, with no explicit AOF settings or named Redis data volume; pending Redis-backed work is not guaranteed to survive replacement. Port `18444` uses the repository's development TLS certificate; this walkthrough uses HTTP.
+One replica means brief downtime during replacement. PostgreSQL, MinIO, Search, and Cloud's installation state use named volumes. Retain Cloud's private `appflowy_cloud_state` volume and the [installation identity and reporting files](docker-compose.md#installation-identity-and-license-reporting-state) across replacement, image upgrades, and PostgreSQL restores. Cloud is constrained to the designated data node so a task replacement keeps using that local volume. Redis matches the root Compose configuration, with no explicit AOF settings or named Redis data volume; pending Redis-backed work is not guaranteed to survive replacement. Port `18444` uses the repository's development TLS certificate; this walkthrough uses HTTP.
 
 ## 5. Stop or start again
 
