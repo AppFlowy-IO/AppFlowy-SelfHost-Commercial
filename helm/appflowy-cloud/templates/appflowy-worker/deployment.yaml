@@ -85,6 +85,8 @@ spec:
               {{- include "appflowy.backup.bucketSelection" . | nindent 14 }}
             - name: APPFLOWY_S3_REGION
               value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_CREATE_BUCKET
+              value: {{ .Values.global.s3.createBucket | quote }}
             - name: APPFLOWY_S3_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

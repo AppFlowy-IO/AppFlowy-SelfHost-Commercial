@@ -20,5 +20,5 @@ flake.lock
 
 # Python virtual environment and bytecode
 .venv/
-__pycache__/
+**/__pycache__/
 *.pyc

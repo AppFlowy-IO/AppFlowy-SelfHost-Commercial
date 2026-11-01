@@ -183,7 +183,7 @@ class BackupConfigurationTests(unittest.TestCase):
             environment = override[service]['environment']
             self.assertEqual(environment['AI_ENABLED'], 'false')
             self.assertEqual(environment['APPFLOWY_BACKGROUND_INDEXER_ENABLED'], 'false')
-            self.assertEqual(environment['APPFLOWY_INDEXER_ENABLED'], 'true')
+            self.assertNotIn('APPFLOWY_INDEXER_ENABLED', environment)
             self.assertNotIn('APPFLOWY_INDEXER_DATABASE_ENABLED', environment)
             for key in ('APPFLOWY_S3_BUCKET', 'APPFLOWY_REDIS_URI', 'APPFLOWY_KEYWORD_INDEX_DIR'):
                 self.assertNotIn(key, environment, 'Overrides must not shadow restored selections')

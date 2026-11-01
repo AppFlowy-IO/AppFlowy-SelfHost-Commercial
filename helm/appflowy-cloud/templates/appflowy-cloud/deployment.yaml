@@ -181,9 +181,14 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
-            {{- if index .Values "appflowy-search" "enabled" }}
+            # Bootstrap compatibility for older images; not an operator enable/disable setting.
+            - name: APPFLOWY_SEARCH_ENABLED
+              value: {{ index .Values "appflowy-search" "enabled" | quote }}
             - name: APPFLOWY_SEARCH_SERVICE_URL
+            {{- if index .Values "appflowy-search" "enabled" }}
               value: "http://{{ include "appflowy.search.fullname" . }}:{{ index .Values "appflowy-search" "service" "port" }}"
+            {{- else }}
+              value: ""
             {{- end }}
             - name: APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS
               value: {{ $cloud.config.searchRequestTimeoutSecs | quote }}

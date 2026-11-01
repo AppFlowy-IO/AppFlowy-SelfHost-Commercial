@@ -125,7 +125,6 @@ def main() -> None:
         'ASSEMBLYAI_API_KEY': '',
         'ASSEMBLYAI_API_BASE': 'http://127.0.0.1:9',
         'ASSEMBLYAI_STREAMING_API_BASE': 'ws://127.0.0.1:9',
-        'APPFLOWY_INDEXER_ENABLED': 'false',
         'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false',
         'APPFLOWY_KEYWORD_SEARCH_ENABLED': 'true',
         'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
@@ -211,7 +210,6 @@ def main() -> None:
     for name in ('appflowy_cloud', 'appflowy_search', 'appflowy_worker'):
         services[name]['environment'].update({
             'AI_ENABLED': 'false',
-            'APPFLOWY_INDEXER_ENABLED': 'false',
             'APPFLOWY_BACKGROUND_INDEXER_ENABLED': 'false',
         })
     # Preserve runtime shell variables. Compose config retains $$ escapes;

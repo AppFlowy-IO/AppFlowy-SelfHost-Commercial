@@ -8,6 +8,9 @@ We also provide a series of [self-hosting video tutorials on YouTube](https://ww
 
 Check out our [release notes](#Release-Notes) for the latest updates, improvements, and fixes.
 
+For how component versions are selected and proposed for deployment releases, see
+[Release image updates](docs/RELEASE_IMAGES.md).
+
 For audit configuration, event review, and CSV export in the Admin console, see the illustrated [Audit Logging guide](docs/AUDIT.md).
 
 For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
@@ -66,7 +69,92 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.19.7 (Latest)
+### 🚀 v0.20.0 (Latest)
+
+#### New Features
+
+- **Row-document recovery API** — Added an explicit, user-confirmed command to recreate a missing database-row page as an empty document so editing could resume. Existing readable content was preserved; recovery required page history and version enforcement.
+- **Operational diagnostics** — Added a Grafana alert overview and expanded Search, creation, and sync dashboards to distinguish request failures, partial results, processing delays, and indexing backlogs. Added opt-in Prometheus warnings for Search availability, latency, and stalled indexing.
+
+#### Improvements
+
+- **Keyword search** — Reduced unnecessary matching, document loading, and ranking work while preserving permission checks, typo tolerance, and result ordering.
+- **Creation and navigation** — Reduced repeated database reads in page, row, and linked-view creation, permission checks, and mention suggestions, and shortened page-duplication waits.
+- **Full-sync batches** — Increased the default standard batch limit to 1,000 items and added `APPFLOWY_FULL_SYNC_BATCH_MAX_ITEMS` for operator tuning after a Cloud restart.
+- **Background indexing** — Deferred new indexing work under Redis memory pressure and retained pending snapshot-indexing tasks in PostgreSQL for recovery across Worker restarts.
+
+#### Bug Fixes
+
+- Fixed stalled sidebar updates, automatically recovered eligible legacy Folder initialization gaps, and closed stalled realtime connections so clients could reconnect.
+- Fixed row and linked-view creation in legacy databases, inconsistent Notion row-document metadata, and List property visibility.
+- Preserved unknown database layout and property-type values and rejected unsupported edits without rewriting their content.
+- Fixed Search rebuilds blocked by invalid database references, stale index writes during CPU contention, and incorrect exclusions in negated metadata filters.
+- Enforced login revocation after password changes and recovery, including open realtime connections and MCP authorization.
+- Fixed AI chat workspace checks, large chat-history proxy failures, and dropped document context in AI answers.
+
+#### ⚠️ Action Required
+
+- **Missing-row recovery** — Upgrade every realtime-writing server before enabling the recovery command, and keep `APPFLOWY_PAGE_HISTORY_ENABLE=true`. Require explicit user confirmation because recreation can discard unsynced content on other devices.
+- **Authentication compatibility** — Sign in again or reauthorize legacy MCP connections whose credentials lack a live GoTrue session. Custom requests to `/api/meeting/summary_templates` now require bearer authentication.
+
+**Baseline:** [`e3e0ed628f9514cbd57616db71891223eb5a400d`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/e3e0ed628f9514cbd57616db71891223eb5a400d)
+
+### 🚀 v0.19.11
+
+#### New Features
+
+- **Creation API diagnostics** — Added metrics and a Grafana dashboard to identify delays in page, database, linked-view, and row creation.
+
+#### Improvements
+
+- **Page and database creation** — Reduced database round trips and contention in atomic creation APIs, and batched row uploads during database duplication.
+- **Workspace navigation** — Reduced data loaded for Recent, Favorites, and Trash, and avoided waiting for unrelated sidebar updates when opening saved pages.
+- **Realtime sync** — Reduced contention during full sync and improved permission recovery under load.
+
+#### Bug Fixes
+
+- Fixed incomplete synchronization metadata in stored database reads that could prevent row or linked-view creation.
+- Fixed AI provider refreshes that could block shared server work or apply stale configuration.
+- Strengthened deleted-account checks when the deletion cache was unavailable or contained invalid data.
+- Limited Search retry batches to reduce Redis stalls and bounded retries for missing database content.
+
+**Baseline:** [`c0bb51bc5038ca87b83a9d6ffb95e6fdeb847d6f`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/c0bb51bc5038ca87b83a9d6ffb95e6fdeb847d6f)
+
+### 🚀 v0.19.9
+
+#### New Features
+
+- **Search activity APIs** — Added process-level visibility into active indexing and embedding work, workspace maintenance, and deferred recovery through the Admin Search overview API.
+- **Search and database health monitoring** — Added Grafana dashboards and metrics for search latency, indexing progress, database generation, isolated corrupt rows, and download readiness.
+
+#### Improvements
+
+- **Realtime sync** — Reduced repeated permission and restore checks, retained verified caches during permission renewal, and shared concurrent database loads to reduce contention during busy periods.
+- **Search indexing** — Improved keyword batching on servers with limited CPU capacity, isolated workspace rebuild failures, and preserved queued indexing work during temporary dependency failures.
+
+#### Bug Fixes
+
+- Fixed linked-database creation that could remain stuck after Notion imports with inconsistent embedded/sidebar metadata.
+- Fixed malformed database row lists disrupting snapshot processing and restore notifications missed during permission recovery or reconnects.
+- Fixed cases where slightly oversized creation uploads produced proxy errors instead of HTTP 413 responses.
+
+**Baseline:** [`9d8008d4a02d1ed2f9f3819ceb2c82993562390d`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/9d8008d4a02d1ed2f9f3819ceb2c82993562390d)
+
+### 🚀 v0.19.8
+
+#### New Features
+
+- **Desktop update policy APIs** — Added server APIs to discover platform-specific desktop installers and configure the minimum desktop version advertised to clients without restarting Cloud.
+
+#### Improvements
+
+- **Permission recovery** — Reduced PostgreSQL work after restarts and cache misses by reusing validated Redis permission snapshots, sharing concurrent loads, and combining recovery queries.
+- **Permission updates** — Preserved unchanged cached workspace structure during page, group, and access changes, reducing unnecessary reloads while refreshing affected permissions.
+
+
+**Baseline:** [`4b077abb51134cf53d0a8d080c921397ea5faa10`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/4b077abb51134cf53d0a8d080c921397ea5faa10)
+
+### 🚀 v0.19.7
 
 #### New Features
 

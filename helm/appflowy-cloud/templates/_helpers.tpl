@@ -257,7 +257,13 @@ S3/MinIO host
 S3/MinIO endpoint URL
 */}}
 {{- define "appflowy.s3.endpoint" -}}
-http://{{ include "appflowy.s3.host" . }}:{{ .Values.global.s3.port | default 9000 }}
+{{- $host := include "appflowy.s3.host" . -}}
+{{- $port := .Values.global.s3.port | default 9000 -}}
+{{- if or (hasPrefix "http://" $host) (hasPrefix "https://" $host) -}}
+{{ $host }}:{{ $port }}
+{{- else -}}
+http://{{ $host }}:{{ $port }}
+{{- end -}}
 {{- end }}
 
 {{/*
