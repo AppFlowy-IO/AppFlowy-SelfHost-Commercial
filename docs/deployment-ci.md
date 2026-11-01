@@ -69,6 +69,11 @@ Authentication/permission rejections and other errors fail immediately, and veri
 must succeed before the original document, row, attachment and search assertions run.
 New-user provisioning is not retried by this recovery probe.
 
+Before creating Search fixtures, the administrator's read-only Search overview must report
+indexing admission enabled and the service reachable. Fresh installations require two healthy
+checks; fixtures must not race that startup gate. This wait is bounded to 60 seconds and never
+changes the admission setting. Keyword-search readback remains a separate required assertion.
+
 ## Backup acceptance
 
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release

@@ -18,7 +18,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from api_recovery import ApplicationResponseError, verify_account
+from api_recovery import ApplicationResponseError, verify_account, wait_search_admission
 
 runtime_dir = Path(os.environ.get("SWARM_TEST_DIR", Path(__file__).resolve().parents[1] / ".local")).expanduser().resolve()
 parser = argparse.ArgumentParser(description=__doc__)
@@ -151,6 +151,12 @@ try:
         label="password_login", unwrap=False)
     token = auth["access_token"]
     record("admin_password_login", passed=True)
+    if args.phase == "create" and not args.skip_search:
+        wait_search_admission(lambda: request("GET", "/api/admin/search/overview", label="search_admission"),
+                              timeout=min(args.timeout, 60),
+                              on_wait=lambda enabled, service: record("waiting_for_search_admission",
+                                                                     indexing_enabled=enabled, service=service))
+        record("search_admission_ready", passed=True)
     # The seeded GoTrue system administrator deliberately has no application
     # workspace. Provision one ordinary test user using the local admin token.
     if ordinary_path.exists():
