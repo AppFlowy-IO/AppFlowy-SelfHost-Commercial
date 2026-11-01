@@ -63,6 +63,34 @@ Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the 
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
+## Existing GoTrue credentials
+
+To manage GoTrue credentials outside Helm, create a Secret in the release namespace and set:
+
+```yaml
+gotrue:
+  existingSecret: appflowy-gotrue-credentials
+```
+
+The chart references this Secret and omits its generated GoTrue Secret. The existing Secret must
+contain the following keys for the features you enable:
+
+| Secret key | Required when |
+| --- | --- |
+| `admin-password` | GoTrue is enabled. Used to create the initial admin account. |
+| `smtp-password` | `gotrue.config.smtp.enabled=true` |
+| `google-oauth-secret` | `gotrue.config.oauth.google.enabled=true` |
+| `github-oauth-secret` | `gotrue.config.oauth.github.enabled=true` |
+| `discord-oauth-secret` | `gotrue.config.oauth.discord.enabled=true` |
+| `saml-private-key` | `gotrue.config.saml.enabled=true` |
+
+With `gotrue.existingSecret` set, inline GoTrue passwords and provider secrets are ignored. JWT
+credentials continue to use `global.jwt.*`. Changing the initial admin password value or Secret
+does not reset an existing admin account's password.
+
+When switching an existing release, create the external Secret under a new name and copy its
+required credentials before upgrading. Helm removes the previous generated GoTrue Secret on upgrade.
+
 ## Backup and restore
 
 `appflowy-backup.enabled` defaults to `false`. Enabling it requires a Backup image built with the
