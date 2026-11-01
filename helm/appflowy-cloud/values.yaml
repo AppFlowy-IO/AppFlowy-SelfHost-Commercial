@@ -557,6 +557,12 @@ admin-frontend:
 
   config:
     pathPrefix: "/console"
+    # Public origin of the MCP service for the Admin MCP Tool Console, without /mcp or
+    # /api/mcp. Empty uses the bundled appflowy-mcp service's origin (same domain). Set it
+    # only for an MCP service deployed outside this chart; the operator's browser must reach
+    # it directly, and that service must allow this Admin origin. With appflowy-mcp disabled,
+    # Cloud also advertises this origin to AppFlowy Web.
+    mcpBaseUrl: ""
     # OAuth settings for third-party integrations
     oauth:
       clientId: "appflowy_cloud"
@@ -624,6 +630,76 @@ appflowy-ai:
   tolerations: []
   affinity: {}
 
+# AppFlowy MCP Service (AI apps)
+# AI apps such as Claude, ChatGPT, Cursor and Claude Code connect to <public origin>/mcp. The
+# chart routes /mcp, /api/mcp and the OAuth/MCP discovery documents on global.domain to this
+# service (see ingress.mcp), and Cloud advertises the origin to AppFlowy Web and Desktop.
+appflowy-mcp:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: appflowyinc/appflowy_mcp
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8002
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  config:
+    rustLog: "info"
+    # AI apps are off until an administrator turns them on in Admin -> AI apps (MCP). Leave
+    # empty so Admin controls it. false keeps AI apps off whatever Admin stores; true only
+    # turns them on until an administrator changes it there. Cloud receives the same value.
+    enabledOverride: ""
+    # Public origin without /mcp. Empty uses global.scheme://global.domain. It is also the
+    # OAuth issuer: changing it makes every connected AI app reconnect. Remote AI apps such
+    # as claude.ai and ChatGPT need a public HTTPS origin.
+    publicBaseUrl: ""
+    # Proxies whose X-Forwarded-For/X-Real-IP MCP trusts for its per-IP OAuth rate limit and
+    # audit address. Narrow this to the ingress controller's pod CIDR, and keep ingress-nginx's
+    # default of replacing X-Forwarded-For: an appended header lets clients inside these ranges
+    # choose their own address. Empty trusts no proxy, so all clients share one address.
+    trustedProxyCidrs: "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+    # Unauthenticated OAuth and client-registration requests per client IP per minute, until
+    # Admin -> AI apps (MCP) sets a limit.
+    oauthIpRateLimitPerMinute: 60
+    # Optional server-wide client governance (comma-separated). Empty allows any dynamically
+    # registered public PKCE client; workspace owners still approve apps for their workspace.
+    allowedClientIds: ""
+    allowedRedirectHosts: ""
+    # Optional email allowlist fallbacks (comma-separated). Lists saved in Admin -> AI apps
+    # (MCP) take precedence; empty lists allow every account.
+    allowedEmailDomains: ""
+    allowedEmails: ""
+    # Browser origins other than global.domain that call MCP directly. Empty mirrors the
+    # request origin; Web and Admin on global.domain need no entry.
+    corsAllowedOrigins: ""
+    # Optional fallback for the audit switch managed in Admin. Empty leaves it unset.
+    auditEnable: ""
+    # MCP keeps its own small pool rather than appflowy-cloud.config.databaseMaxConnections.
+    databaseMaxConnections: 8
+    databaseMinConnections: 1
+    # Concurrent tool calls; at most 16 per pooled connection.
+    maxInFlight: 128
+    collabS3Threshold: 8000
+    # Must match GoTrue's JWT audience.
+    gotrueExpectedAudiences: "authenticated"
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 # -----------------------------------------------------------------------------
 # Ingress Configuration
 # -----------------------------------------------------------------------------
@@ -650,6 +726,20 @@ ingress:
     # Add /scim to the primary TLS Ingress. Disable this when SCIM is unused or
     # when the inherited annotations apply browser or external authentication.
     enabled: true
+
+  # Separate Ingress for AI apps (MCP) on global.domain: Exact /mcp,
+  # /.well-known/oauth-authorization-server and /.well-known/mcp.json, Prefix /api/mcp and
+  # /.well-known/oauth-protected-resource. It inherits the annotations above and always turns
+  # proxy buffering off. Disable it when those annotations apply browser or external
+  # authentication, and route the same paths to the MCP Service yourself.
+  mcp:
+    enabled: true
+    # Extra annotations for this Ingress only.
+    annotations: {}
+    # Edge body ceiling; MCP enforces its own 4 MiB request limit.
+    bodySize: "8m"
+    # GET /mcp holds a server-sent event stream open.
+    proxyTimeoutSeconds: 3600
 
   tls:
     enabled: true

@@ -77,7 +77,8 @@ class ReleaseImageTests(unittest.TestCase):
 
     def test_cloud_updates_only_successfully_published_services_including_optional_ones(self):
         original = self.compose()
-        services = ['gotrue', 'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_backup', 'ai']
+        services = ['gotrue', 'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp',
+                    'appflowy_backup', 'ai']
         changes, _ = self.update('cloud', services=services)
         self.assertEqual({row[0] for row in changes}, set(services))
         updated = self.compose()

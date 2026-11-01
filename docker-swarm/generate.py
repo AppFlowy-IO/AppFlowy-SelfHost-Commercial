@@ -179,6 +179,8 @@ def derive_backup(source: dict, override: dict) -> dict:
     settings.pop('depends_on', None)
     settings.pop('volumes', None)
     settings_environment = environment_map(settings.pop('environment', {}))
+    # The Compose writer list names Compose services; the Swarm adapter owns its own inventory.
+    settings_environment.pop('APPFLOWY_BACKUP_COMPOSE_WRITERS', None)
     service.update(settings)
     service.pop('restart', None)
     service['environment'] = {

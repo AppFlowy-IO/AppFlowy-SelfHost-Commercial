@@ -15,6 +15,10 @@ For audit configuration, event review, and CSV export in the Admin console, see 
 
 For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
 
+To let users connect Claude, ChatGPT, Cursor, and other AI apps to their workspaces, see
+[AI apps (MCP)](docs/docker-compose.md#ai-apps-mcp). The bundled `appflowy_mcp` service is served
+on your AppFlowy domain at `https://your-domain/mcp`; hosted AI apps require HTTPS.
+
 For optional server backups, set `APPFLOWY_BACKUP_PROFILE=backup` in `.env` and run
 `docker compose up -d` (Compose 2.30 or newer). Once Backup is ready, open **Tools → Backup**.
 See the [Backup guide](docs/BACKUP.md) and [Compose details](docs/docker-compose.md#backup).

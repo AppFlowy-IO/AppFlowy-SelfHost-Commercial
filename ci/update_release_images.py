@@ -19,12 +19,13 @@ SERVICES = {
     'appflowy_cloud': ('appflowy_cloud', 'appflowy-cloud'),
     'appflowy_worker': ('appflowy_worker', 'appflowy-worker'),
     'appflowy_search': ('appflowy_search', 'appflowy-search'),
+    'appflowy_mcp': ('appflowy_mcp', 'appflowy-mcp'),
     'appflowy_backup': ('appflowy_backup', 'appflowy-backup'),
     'ai': ('appflowy_ai', 'appflowy-ai'),
     'appflowy_web': ('appflowy_web', 'appflowy-web'),
 }
 DEFAULT_SERVICES = {
-    'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search'],
+    'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'],
     'web': ['appflowy_web'],
 }
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')

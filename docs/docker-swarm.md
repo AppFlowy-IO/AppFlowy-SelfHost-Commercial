@@ -4,7 +4,7 @@
 
 Run a fresh AppFlowy installation on a local, single-node Docker Swarm using Docker commands directly. You need a running Docker Desktop or Docker Engine and a shell; no Python, extra packages, or setup script is required. Run these commands from the repository root.
 
-The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 11 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 10 services, leaving optional AI at zero replicas.
+The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 12 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 11 services, leaving optional AI at zero replicas.
 
 ## 1. Prepare your configuration
 
@@ -92,19 +92,20 @@ Repeat the `docker ps` check until GoTrue is **healthy**, then start Cloud:
 docker service scale appflowy-swarm_appflowy_cloud=1
 ```
 
-Wait until Cloud is **healthy**, so startup and database migrations finish before Worker and Search start. Then run:
+Wait until Cloud is **healthy**, so startup and database migrations finish before Worker, Search, and MCP start. Then run:
 
 ```bash
 docker service scale \
   appflowy-swarm_appflowy_worker=1 \
   appflowy-swarm_appflowy_search=1 \
+  appflowy-swarm_appflowy_mcp=1 \
   appflowy-swarm_appflowy_web=1 \
   appflowy-swarm_admin_frontend=1 \
   appflowy-swarm_nginx=1
 docker stack services appflowy-swarm
 ```
 
-Wait for 10 services to show `1/1`, with AI at `0/0`, and for Search to show **healthy** in `docker ps`. A successful deploy command or `1/1` alone does not establish application readiness. Swarm does not implement Compose's `depends_on` ordering.
+Wait for 11 services to show `1/1`, with AI at `0/0`, and for Search to show **healthy** in `docker ps`. A successful deploy command or `1/1` alone does not establish application readiness. Swarm does not implement Compose's `depends_on` ordering.
 
 For failures, inspect the affected service:
 
@@ -184,7 +185,7 @@ docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_backup=1"
 docker service logs --tail 100 "${APPFLOWY_SWARM_STACK}_appflowy_backup"
 ```
 
-Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. It manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
+Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage; confirm that your Backup image's Swarm adapter includes it in its writer inventory before relying on restore. The adapter manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
 
 Every later deployment must include the persisted selection overlay. Keep the `backup_work` volume and runtime directory across upgrades, task replacement, and planned shutdowns. Bootstrap retains the host directory group; generated selections use mode `0640` so that group can read them for redeployment. The runtime file may contain Redis credentials; protect it like the deployment environment. Follow the release migration order for upgrades and restart Backup only after application readiness. Do not change service definitions or replica counts while a restore is active.
 

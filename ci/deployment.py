@@ -27,14 +27,16 @@ from configuration import SOURCE_FILES, check_compose, isolated_source, source_f
 NAME = 'appflowy-ci'
 NAMESPACE = NAME
 STAGES = [['postgres', 'redis', 'minio'], ['gotrue'], ['appflowy_cloud'],
-          ['appflowy_search', 'appflowy_worker', 'appflowy_web', 'admin_frontend', 'nginx']]
+          ['appflowy_search', 'appflowy_worker', 'appflowy_mcp', 'appflowy_web', 'admin_frontend', 'nginx']]
+MCP_ROUTE_PROBE = '/.well-known/oauth-authorization-server'
 HELM_KEYS = {'appflowy_cloud': 'appflowy-cloud', 'appflowy_worker': 'appflowy-worker',
-             'appflowy_search': 'appflowy-search', 'appflowy_web': 'appflowy-web',
-             'admin_frontend': 'admin-frontend', 'gotrue': 'gotrue',
+             'appflowy_search': 'appflowy-search', 'appflowy_mcp': 'appflowy-mcp',
+             'appflowy_web': 'appflowy-web', 'admin_frontend': 'admin-frontend', 'gotrue': 'gotrue',
              'postgres': 'postgresql', 'redis': 'redis', 'minio': 'minio'}
 HELM_WORKLOADS = {'appflowy_cloud': 'deployment/appflowy-ci-cloud',
                   'appflowy_worker': 'deployment/appflowy-ci-worker',
                   'appflowy_search': 'deployment/appflowy-ci-search',
+                  'appflowy_mcp': 'deployment/appflowy-ci-mcp',
                   'appflowy_web': 'deployment/appflowy-ci-web',
                   'admin_frontend': 'deployment/appflowy-ci-admin',
                   'gotrue': 'deployment/appflowy-ci-gotrue',
@@ -95,7 +97,7 @@ class Deployment:
         self.lock = json.loads(lock.read_text())
         self.images = self.lock['services']
         if set(self.images) != CORE:
-            raise RuntimeError('Image lock does not cover exactly all ten core services')
+            raise RuntimeError('Image lock does not cover exactly all eleven core services')
         source_root = self.runtime / 'deployment' if installed_source else ROOT
         if installed_source and (not backup or mode != 'compose' or not self.lock.get('source_files')):
             raise RuntimeError('Installed source validation requires a recorded Compose Backup manifest')
@@ -340,7 +342,7 @@ class Deployment:
                     overlay['healthcheck'] = {'start_period': '180s'}
                 if name == 'appflowy_backup':
                     overlay['environment'] = {'APPFLOWY_BACKUP_COMPOSE_WRITERS': json.dumps(
-                        ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search'])}
+                        ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'])}
                 overrides['services'][name] = overlay
             self.write_backup_override(overrides)
             private_write(self.source / '.env', '\n'.join(lines) + '\n')
@@ -395,8 +397,22 @@ class Deployment:
             time.sleep(3)
         raise RuntimeError('Service readiness timed out: ' + json.dumps(last))
 
+    @staticmethod
+    def mcp_turned_off(error):
+        """MCP's own 503 `mcp_disabled` reply, which it sends while Admin has AI apps off."""
+        if not isinstance(error, urllib.error.HTTPError) or error.code != 503:
+            return False
+        try:
+            body = json.loads(error.read(4096) or b'{}')
+        except ValueError:
+            return False
+        return isinstance(body, dict) and body.get('error') == 'mcp_disabled'
+
     def wait_http(self):
-        for path in ('/api/health', '/gotrue/health', '/', '/console'):
+        # The OAuth metadata document proves Nginx/Ingress routes the same-domain MCP paths. AI
+        # apps are off until an administrator turns them on, the shipped default, and MCP then
+        # answers with its own 503 `mcp_disabled`, which proves the route just as well.
+        for path in ('/api/health', '/gotrue/health', '/', '/console', MCP_ROUTE_PROBE):
             deadline = time.monotonic() + 180
             last_error = 'no response'
             while time.monotonic() < deadline:
@@ -406,12 +422,14 @@ class Deployment:
                             break
                         last_error = 'HTTP ' + str(response.status)
                 except Exception as error:
+                    if path == MCP_ROUTE_PROBE and self.mcp_turned_off(error):
+                        break
                     last_error = type(error).__name__ + ': ' + str(error)
                 time.sleep(3)
             else:
                 raise RuntimeError('Public route failed: ' + self.base_url + path + '; '
                                    + sanitize(last_error, self.runtime))
-        print('Public API, authentication, Web and Admin routes are ready', flush=True)
+        print('Public API, authentication, Web, Admin and AI-app (MCP) routes are ready', flush=True)
 
     def up(self):
         self.guard()

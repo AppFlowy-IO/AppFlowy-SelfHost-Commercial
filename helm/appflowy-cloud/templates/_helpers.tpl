@@ -366,6 +366,49 @@ http://{{ include "appflowy.fullname" . }}-ai:{{ index .Values "appflowy-ai" "se
 {{- end }}
 
 {{/*
+Public origin of the bundled MCP service, without /mcp. AI apps connect to <origin>/mcp and it
+is the OAuth issuer, so changing it makes connected AI apps reconnect. The chart routes the MCP
+paths on global.domain, so the AppFlowy base URL is the default.
+*/}}
+{{- define "appflowy.mcp.baseUrl" -}}
+{{- $configured := index .Values "appflowy-mcp" "config" "publicBaseUrl" | default "" | toString | trim | trimSuffix "/" -}}
+{{- if $configured -}}
+{{- if not (regexMatch "^https?://[^/?#@[:space:]]+$" $configured) -}}
+{{- fail "appflowy-mcp.config.publicBaseUrl must be an http(s) origin without a path such as /mcp" -}}
+{{- end -}}
+{{- $configured -}}
+{{- else -}}
+{{- include "appflowy.baseUrl" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+APPFLOWY_MCP_ENABLED for Cloud and MCP. Empty lets Admin -> AI apps (MCP) turn AI apps on and
+off; "false" keeps them off whatever Admin stores; "true" turns them on until an administrator
+changes it. A YAML boolean is accepted, so an unquoted `false` still keeps AI apps off.
+*/}}
+{{- define "appflowy.mcp.enabledOverride" -}}
+{{- $value := index .Values "appflowy-mcp" "config" "enabledOverride" -}}
+{{- if kindIs "bool" $value -}}
+{{- ternary "true" "false" $value -}}
+{{- else if and (kindIs "string" $value) (ne (trim $value) "") -}}
+{{- trim $value -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+MCP origin advertised by Cloud's server-info: the bundled service, otherwise the externally
+deployed service configured for the Admin MCP Tool Console. Empty advertises nothing.
+*/}}
+{{- define "appflowy.mcp.advertisedUrl" -}}
+{{- if index .Values "appflowy-mcp" "enabled" -}}
+{{- include "appflowy.mcp.baseUrl" . -}}
+{{- else -}}
+{{- index .Values "admin-frontend" "config" "mcpBaseUrl" | default "" | toString | trim | trimSuffix "/" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 =============================================================================
 Service Name Helpers
 =============================================================================
@@ -397,6 +440,10 @@ Service Name Helpers
 
 {{- define "appflowy.search.fullname" -}}
 {{- printf "%s-search" (include "appflowy.fullname" .) }}
+{{- end }}
+
+{{- define "appflowy.mcp.fullname" -}}
+{{- printf "%s-mcp" (include "appflowy.fullname" .) }}
 {{- end }}
 
 {{/*

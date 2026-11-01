@@ -11,7 +11,7 @@ Cloud, GoTrue, and the other services the same version number.
 
 | Publisher | When it notifies | Compose services it can update |
 | --- | --- | --- |
-| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, GoTrue, AI, and Backup images |
+| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, MCP, GoTrue, AI, and Backup images |
 | [AppFlowy-Web](https://github.com/AppFlowy-IO/AppFlowy-Web/releases) | After Web's version manifest is published, and when a GitHub release is published | Web |
 
 **Tags ending in `_test` never dispatch an update.** The receiving workflow and its
@@ -71,6 +71,6 @@ Using an App/PAT token for PR creation allows normal deployment checks to start 
 The workflows never print the token or require a local credential to be copied into GitHub.
 
 For a missing notification, use **Actions → Update release image pins → Run workflow**.
-Choose `cloud` or `web` and enter the published tag. Cloud defaults to Cloud, Worker and
-Search; override the service list to match the images actually published, for example
+Choose `cloud` or `web` and enter the published tag. Cloud defaults to Cloud, Worker, Search
+and MCP; override the service list to match the images actually published, for example
 `appflowy_backup` for a Backup-only release. Manual `_test` requests are also ignored.

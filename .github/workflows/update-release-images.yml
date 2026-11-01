@@ -16,7 +16,7 @@ on:
         type: string
         required: true
       services:
-        description: Optional comma-separated published Compose services; Cloud defaults to Cloud, Worker and Search
+        description: Optional comma-separated published Compose services; Cloud defaults to Cloud, Worker, Search and MCP
         type: string
         required: false
 

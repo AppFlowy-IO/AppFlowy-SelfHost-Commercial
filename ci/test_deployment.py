@@ -10,7 +10,8 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import urllib.error
 
 import yaml
 
@@ -51,7 +52,7 @@ class RuntimeSafetyTests(unittest.TestCase):
     def test_requires_every_core_service_and_matching_source(self):
         self.payload['services'].pop('appflowy_search')
         self.lock.write_text(json.dumps(self.payload))
-        with self.assertRaisesRegex(RuntimeError, 'ten core services'):
+        with self.assertRaisesRegex(RuntimeError, 'eleven core services'):
             self.deployment()
         self.payload['services']['appflowy_search'] = {}
         self.payload['compose_sha256'] = 'different'
@@ -202,7 +203,7 @@ class RuntimeSafetyTests(unittest.TestCase):
                 patch.object(instance, 'run', return_value=json.dumps(controller)):
             instance.check_images('running-images.json')
         evidence = json.loads((instance.artifacts / 'running-images.json').read_text())
-        self.assertEqual(len(evidence), 10)
+        self.assertEqual(len(evidence), 11)
         admin = next(row for row in evidence if row['service'] == 'admin_frontend')
         expected = instance.helm_images['admin_frontend']
         self.assertEqual(admin['image'], normalized_image_reference(expected['image']))
@@ -662,12 +663,37 @@ class RuntimeSafetyTests(unittest.TestCase):
             instance.wait_http()
             self.assertEqual([call.args[0] for call in request.call_args_list],
                              ['http://127.0.0.1' + path for path in
-                              ('/api/health', '/gotrue/health', '/', '/console')])
+                              ('/api/health', '/gotrue/health', '/', '/console',
+                               '/.well-known/oauth-authorization-server')])
         with patch('deployment.urllib.request.urlopen', side_effect=TimeoutError('timed out')), \
              patch('deployment.time.monotonic', side_effect=[0, 0, 181]), \
              patch('deployment.time.sleep'):
             with self.assertRaisesRegex(RuntimeError, r'http://127\.0\.0\.1/api/health; TimeoutError: timed out'):
                 instance.wait_http()
+
+    def test_public_readiness_accepts_mcp_reply_while_ai_apps_are_off(self):
+        instance = self.deployment('swarm')
+        probe = '/.well-known/oauth-authorization-server'
+
+        def opener(body):
+            def urlopen(url, timeout):
+                if url.endswith(probe):
+                    raise urllib.error.HTTPError(url, 503, 'Service Unavailable', {}, io.BytesIO(body))
+                response = MagicMock()
+                response.__enter__.return_value.status = 200
+                return response
+            return urlopen
+
+        mcp_off = b'{"error":"mcp_disabled","reason":"mcp_disabled","retryable":false}'
+        with patch('deployment.urllib.request.urlopen', side_effect=opener(mcp_off)):
+            instance.wait_http()
+        # A 503 that MCP did not send, such as the proxy's own page, still fails readiness.
+        for body in (b'<html>503 Service Temporarily Unavailable</html>', b'{"error":"other"}'):
+            with patch('deployment.urllib.request.urlopen', side_effect=opener(body)), \
+                 patch('deployment.time.monotonic', side_effect=[0] * 10 + [181]), \
+                 patch('deployment.time.sleep'):
+                with self.assertRaisesRegex(RuntimeError, r'oauth-authorization-server; HTTPError'):
+                    instance.wait_http()
 
 
 if __name__ == '__main__':

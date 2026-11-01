@@ -133,6 +133,7 @@ round.
 | appflowy_cloud audit log | `APPFLOWY_AUDIT_DB_MAX_CONNECTIONS` | 4 |
 | appflowy_worker | `APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS` | 16 |
 | appflowy_search | `APPFLOWY_SEARCH_DATABASE_MAX_CONNECTIONS` and `APPFLOWY_SEARCH_EMBEDDING_DB_MAX_CONNECTIONS` | 20 and 10 |
+| appflowy_mcp | `APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS` (Helm: `appflowy-mcp.config.databaseMaxConnections`, per replica) | 8 |
 | gotrue | `GOTRUE_DB_MAX_POOL_SIZE` | unlimited when unset; set it to 10 |
 | AI, backup, and administrative sessions | — | reserve 20 |
 

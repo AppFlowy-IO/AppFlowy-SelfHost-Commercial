@@ -1,0 +1,88 @@
+{{- $mcpIngress := .Values.ingress.mcp | default (dict) -}}
+{{- if and .Values.ingress.enabled (index .Values "appflowy-mcp" "enabled") ($mcpIngress.enabled | default false) }}
+{{- $timeout := int ($mcpIngress.proxyTimeoutSeconds | default 3600) -}}
+{{- if lt $timeout 60 -}}
+{{- fail "ingress.mcp.proxyTimeoutSeconds must be at least 60: GET /mcp holds a server-sent event stream open" -}}
+{{- end -}}
+{{- $bodySize := $mcpIngress.bodySize | default "8m" | toString -}}
+{{- if not (regexMatch "^[1-9][0-9]{0,8}[kKmM]?$" $bodySize) -}}
+{{- fail "ingress.mcp.bodySize must be a non-zero Nginx size such as 8m" -}}
+{{- end -}}
+{{- /* Streamable HTTP needs unbuffered, long-lived responses whatever ingress.annotations say. */ -}}
+{{- $streamingAnnotations := dict
+  "nginx.ingress.kubernetes.io/proxy-buffering" "off"
+  "nginx.ingress.kubernetes.io/proxy-http-version" "1.1"
+  "nginx.ingress.kubernetes.io/proxy-read-timeout" (toString $timeout)
+  "nginx.ingress.kubernetes.io/proxy-send-timeout" (toString $timeout)
+  "nginx.ingress.kubernetes.io/proxy-body-size" $bodySize
+-}}
+{{- $annotations := mergeOverwrite
+  (dict)
+  (.Values.ingress.annotations | default (dict))
+  ($mcpIngress.annotations | default (dict))
+  $streamingAnnotations
+-}}
+{{- $service := include "appflowy.mcp.fullname" . -}}
+{{- $port := index .Values "appflowy-mcp" "service" "port" -}}
+# AI apps (MCP) on the main host: Exact for /mcp and the two root discovery documents, Prefix
+# for /api/mcp and protected-resource metadata. Everything else keeps the primary Ingress.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "appflowy.fullname" . }}-mcp
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "appflowy.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          # Streamable HTTP endpoint; GET opens a server-sent event stream.
+          - path: /mcp
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          # OAuth, client, member and owner APIs, plus the legacy /api/mcp transport.
+          - path: /api/mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/oauth-authorization-server
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/oauth-protected-resource
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/mcp.json
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+{{- end }}

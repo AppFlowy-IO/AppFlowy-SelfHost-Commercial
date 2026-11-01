@@ -16,6 +16,9 @@ Access your AppFlowy Cloud instance at:
   Admin Console: {{ include "appflowy.baseUrl" . }}/console
   API:           {{ include "appflowy.baseUrl" . }}/api
   WebSocket:     {{ include "appflowy.websocketUrl" . }}
+{{- if index .Values "appflowy-mcp" "enabled" }}
+  AI apps (MCP): {{ include "appflowy.mcp.baseUrl" . }}/mcp
+{{- end }}
 
 {{- if .Values.ingress.tls.enabled }}
   TLS is enabled. Make sure cert-manager is configured to issue certificates.
