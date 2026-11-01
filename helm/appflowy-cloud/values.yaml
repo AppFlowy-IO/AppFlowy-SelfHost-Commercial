@@ -286,8 +286,8 @@ appflowy-backup:
   enabled: false
   image:
     repository: appflowyinc/appflowy_backup
-    tag: ""
-    digest: ""
+    tag: "0.20.2"
+    digest: sha256:75a938425a8557d7fb9945b39b094bc66eb4b0058e8c3dd29cbce0f20c64daaf
     pullPolicy: IfNotPresent
   # Exact kubernetes.io/hostname shared with Search's local LMDB volume.
   nodeName: ""
@@ -314,7 +314,8 @@ appflowy-cloud:
 
   image:
     repository: appflowyinc/appflowy_cloud
-    tag: "latest"
+    tag: "0.20.2"
+    digest: sha256:1596f58b2c94059da6a3471a2fdb0a7eae8f11d143c44bb29260d490598fcf8b
     pullPolicy: IfNotPresent
 
   service:
@@ -404,7 +405,8 @@ appflowy-worker:
 
   image:
     repository: appflowyinc/appflowy_worker
-    tag: "latest"
+    tag: "0.20.2"
+    digest: sha256:c95a43dc014a7a2c570f2d412a6bc0a7ca7de595574c2a7fba2ad53ee726ba9e
     pullPolicy: IfNotPresent
 
   service:
@@ -450,7 +452,8 @@ appflowy-search:
   replicaCount: 1
   image:
     repository: appflowyinc/appflowy_search
-    tag: latest
+    tag: "0.20.2"
+    digest: sha256:0d170a8a50fc2dde402f6fd4252de8a495515f5a19e0166179b1ee1ea409cf4e
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -571,7 +574,8 @@ appflowy-ai:
 
   image:
     repository: appflowyinc/appflowy_ai
-    tag: "latest"
+    tag: "0.20.2"
+    digest: sha256:d9ca0852a14d1c7dbbdbb4f2cb42f5e95547fb71286c4e9e351235f6052e4109
     pullPolicy: IfNotPresent
 
   service:

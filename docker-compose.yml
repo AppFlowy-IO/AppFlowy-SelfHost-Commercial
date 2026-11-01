@@ -169,7 +169,7 @@ services:
       # and rely on the whitelist + invitations to gate who can sign up.
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:${APPFLOWY_CLOUD_VERSION:-latest}
+    image: appflowyinc/appflowy_cloud:0.20.2@sha256:1596f58b2c94059da6a3471a2fdb0a7eae8f11d143c44bb29260d490598fcf8b
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -200,7 +200,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:${APPFLOWY_AI_VERSION:-latest}
+    image: appflowyinc/appflowy_ai:0.20.2@sha256:d9ca0852a14d1c7dbbdbb4f2cb42f5e95547fb71286c4e9e351235f6052e4109
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -237,7 +237,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:${APPFLOWY_WORKER_VERSION:-latest}
+    image: appflowyinc/appflowy_worker:0.20.2@sha256:c95a43dc014a7a2c570f2d412a6bc0a7ca7de595574c2a7fba2ad53ee726ba9e
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -270,7 +270,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:${APPFLOWY_SEARCH_VERSION:-latest}
+    image: appflowyinc/appflowy_search:0.20.2@sha256:0d170a8a50fc2dde402f6fd4252de8a495515f5a19e0166179b1ee1ea409cf4e
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -325,7 +325,7 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:${APPFLOWY_BACKUP_VERSION:-latest}
+    image: appflowyinc/appflowy_backup:0.20.2@sha256:75a938425a8557d7fb9945b39b094bc66eb4b0058e8c3dd29cbce0f20c64daaf
     restart: unless-stopped
 
   appflowy_web:
