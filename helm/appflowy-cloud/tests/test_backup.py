@@ -96,7 +96,7 @@ class BackupChartTests(unittest.TestCase):
     def test_unsafe_platform_configurations_fail_rendering(self):
         for value, error in (
             ('appflowy-backup.nodeName=', 'nodeName'),
-            ('appflowy-backup.image.tag=', 'explicitly selected image'),
+            ('appflowy-backup.image.tag=,appflowy-backup.image.digest=', 'explicitly selected image'),
             ('appflowy-backup.apiServerCIDR=', 'API egress'),
             ('appflowy-cloud.autoscaling.enabled=true', 'autoscaling'),
             ('gotrue.replicaCount=2', 'replicaCount'),
@@ -105,6 +105,15 @@ class BackupChartTests(unittest.TestCase):
         ):
             with self.subTest(value=value):
                 self.assertIn(error, self.render(overrides=(value,), success=False))
+
+    def test_backup_digest_selects_the_image_with_or_without_a_tag(self):
+        digest = 'sha256:' + 'a' * 64
+        for tag in ('', 'release-tag'):
+            with self.subTest(tag=tag):
+                documents = self.render(overrides=('appflowy-backup.image.tag=' + tag,
+                                                  'appflowy-backup.image.digest=' + digest))
+                container = self.deployment(documents, 'backup')['spec']['template']['spec']['containers'][0]
+                self.assertEqual(container['image'], 'appflowyinc/appflowy_backup@' + digest)
 
     def test_artifact_location_is_fixed_and_shared_by_cloud_and_backup(self):
         documents = self.render(overrides=('appflowy-backup.artifacts.bucket=private-backups',
