@@ -1,7 +1,42 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from api_recovery import ApplicationResponseError, verify_account
+from api_recovery import ApplicationResponseError, verify_account, wait_search_admission
+
+
+class SearchAdmissionTests(unittest.TestCase):
+    def test_fixture_creation_waits_for_admission_and_reachable_search(self):
+        probe = Mock(side_effect=[
+            {'indexing_enabled': False, 'service': {'state': 'reachable'}},
+            {'indexing_enabled': True, 'service': {'state': 'unreachable'}},
+            {'indexing_enabled': True, 'service': {'state': 'reachable'}},
+        ])
+        waiting = Mock()
+        with patch('api_recovery.time.sleep') as sleep:
+            wait_search_admission(probe, on_wait=waiting)
+        self.assertEqual(probe.call_count, 3)
+        self.assertEqual(waiting.call_count, 2)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_permanently_disabled_search_still_fails_the_suite(self):
+        probe = Mock(return_value={'indexing_enabled': False, 'service': {'state': 'reachable'}})
+        elapsed = [0]
+        def sleep(seconds):
+            elapsed[0] += seconds
+        with patch('api_recovery.time.monotonic', side_effect=lambda: elapsed[0]), \
+             patch('api_recovery.time.sleep', side_effect=sleep):
+            with self.assertRaisesRegex(RuntimeError, 'Search admission did not become ready'):
+                wait_search_admission(probe, timeout=6)
+        self.assertEqual(elapsed[0], 6)
+        self.assertEqual(probe.call_count, 4)
+
+    def test_administrator_permission_errors_are_not_retried(self):
+        probe = Mock(side_effect=ApplicationResponseError(1012, 'permission denied'))
+        with patch('api_recovery.time.sleep') as sleep:
+            with self.assertRaisesRegex(ApplicationResponseError, 'permission denied'):
+                wait_search_admission(probe)
+        probe.assert_called_once()
+        sleep.assert_not_called()
 
 
 class AuthenticatedRecoveryTests(unittest.TestCase):

@@ -244,7 +244,8 @@ class Deployment:
         self.runtime.chmod(0o700)
         isolated_source(self.source)
         credentials = {'admin_email': 'ci-' + secrets.token_hex(6) + '@example.com',
-                       'admin_password': secrets.token_urlsafe(32),
+                       # GoTrue's bootstrap CLI treats a leading '-' as an option.
+                       'admin_password': 'ci-' + secrets.token_urlsafe(32),
                        'postgres_password': secrets.token_hex(24), 'jwt_secret': secrets.token_hex(32),
                        's3_access_key': 'ci' + secrets.token_hex(8), 's3_secret_key': secrets.token_hex(24)}
         private_write(self.runtime / 'credentials.json', json.dumps(credentials))

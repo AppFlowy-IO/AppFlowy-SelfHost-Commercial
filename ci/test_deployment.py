@@ -90,6 +90,26 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.assertEqual(overrides['global']['domain'], 'localhost')
         self.assertEqual(overrides['global']['s3']['presignedUrlEndpoint'], 'http://localhost/minio-api')
 
+    def test_generated_admin_password_cannot_be_parsed_as_gotrue_cli_flags(self):
+        self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
+        self.lock.write_text(json.dumps(self.payload))
+        instance = self.deployment('helm')
+        source = yaml.safe_dump_all(self.helm_source_documents())
+        original_run = instance.run
+        def run(*args, **kwargs):
+            if args[:2] == ('helm', 'template'):
+                return source
+            return original_run(*args, **kwargs)
+        with patch.object(instance, 'run', side_effect=run), \
+             patch('deployment.secrets.token_urlsafe', return_value='-Warning_random_secret'):
+            instance.render()
+        credentials = json.loads((instance.runtime / 'credentials.json').read_text())
+        password = credentials['admin_password']
+        self.assertFalse(password.startswith('-'))
+        self.assertIn('-Warning_random_secret', password)
+        overrides = yaml.safe_load((instance.runtime / 'helm-overrides.yaml').read_text())
+        self.assertEqual(overrides['gotrue']['config']['adminPassword'], password)
+
     def test_helm_pins_cannot_hide_a_changed_source_repository_or_tag(self):
         self.payload['helm_services'] = {'redis': self.payload['services']['redis']}
         self.lock.write_text(json.dumps(self.payload))

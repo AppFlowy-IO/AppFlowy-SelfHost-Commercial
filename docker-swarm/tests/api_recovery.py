@@ -8,6 +8,23 @@ class ApplicationResponseError(RuntimeError):
         self.code = code
 
 
+def wait_search_admission(probe, *, timeout=60, on_wait=None):
+    """Observe readiness before creating fixtures; never change Search's policy."""
+    deadline = time.monotonic() + timeout
+    while True:
+        overview = probe()
+        enabled = overview.get('indexing_enabled')
+        service = overview.get('service', {}).get('state')
+        if enabled is True and service == 'reachable':
+            return
+        if on_wait:
+            on_wait(enabled, service)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(f'Search admission did not become ready: indexing_enabled={enabled}, service={service}')
+        time.sleep(min(2, remaining))
+
+
 def verify_account(verify, *, after_replacement=False, timeout=15, on_retry=None):
     # New-account provisioning is not a recovery probe and must never be retried here.
     if not after_replacement:
