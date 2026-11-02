@@ -342,14 +342,16 @@ minute, the server default, until Admin → AI apps (MCP) sets another limit; th
 each user's tool-call and search limits per workspace. To start from a different limit, set
 `APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` in `.env` and recreate both `appflowy_cloud` and
 `appflowy_mcp`, which must agree.
-MCP records the client address in its audit log. MCP takes that address from `X-Forwarded-For` or `X-Real-IP` only when the request
-comes from `APPFLOWY_MCP_TRUSTED_PROXY_CIDRS`, which defaults to Docker's private address pools
-(`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`); a blank value restores that default. Only Nginx and
-other Compose containers can reach the service, and the bundled Nginx replaces both headers with
-the address it received the request from. A proxy that appends to the client's `X-Forwarded-For`
-instead would let users on a private LAN or VPN, whose addresses fall in those ranges, choose their
-own address. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from` to
-only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
+MCP records the client address in its audit log. MCP takes that address from `X-Forwarded-For` or
+`X-Real-IP` only when the request comes from `APPFLOWY_MCP_TRUSTED_PROXY_CIDRS`, which defaults to
+Docker's private address pools (`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`); a blank value restores
+that default. Even then it believes only the right-most `X-Forwarded-For` address, the one that
+proxy set, and never the entries a client wrote to its left. A proxy may therefore append the
+address it received the request from or replace the header with it, as the bundled Nginx does;
+either way no client, even one on a private LAN or VPN, chooses its own address. What matters is
+that nothing else inside those ranges reaches MCP directly: only Nginx and other Compose
+containers can. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from`
+to only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
 describes, so that `$remote_addr` is the end user. On Docker Swarm, the routing mesh hides client
 addresses from Nginx; see [client addresses](docker-swarm.md#client-addresses).
 

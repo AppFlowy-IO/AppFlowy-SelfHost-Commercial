@@ -670,9 +670,11 @@ appflowy-mcp:
     # as claude.ai and ChatGPT need a public HTTPS origin.
     publicBaseUrl: ""
     # Proxies whose X-Forwarded-For/X-Real-IP MCP trusts for its per-IP OAuth rate limit and
-    # audit address. Narrow this to the ingress controller's pod CIDR, and keep ingress-nginx's
-    # default of replacing X-Forwarded-For: an appended header lets clients inside these ranges
-    # choose their own address. Empty trusts no proxy, so all clients share one address.
+    # audit address. MCP believes only the right-most X-Forwarded-For entry, the one the proxy
+    # appended or set, so ingress-nginx may replace the header (its default, which LDAP sign-in
+    # needs) or append to it. Anything else inside these ranges that reaches MCP directly can
+    # choose its own address: narrow this to the ingress controller's pod CIDR, and keep
+    # networkPolicy.enabled. Empty trusts no proxy, so all clients share one address.
     trustedProxyCidrs: "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
     # Unauthenticated OAuth and client-registration requests per client IP per minute (1-10000),
     # until Admin -> AI apps (MCP) sets a limit. Empty uses the server's default, 60. Cloud
