@@ -195,8 +195,10 @@ spec:
             - name: APPFLOWY_MCP_ENABLED
               value: {{ . | quote }}
             {{- end }}
+            {{- with include "appflowy.mcp.oauthIpRateLimit" . }}
             - name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
-              value: {{ $mcpConfig.oauthIpRateLimitPerMinute | default 60 | quote }}
+              value: {{ . | quote }}
+            {{- end }}
             {{- with $mcpConfig.allowedEmailDomains }}
             - name: APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
               value: {{ . | quote }}

@@ -56,8 +56,10 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_MCP_TRUSTED_PROXY_CIDRS
               value: {{ $mcp.config.trustedProxyCidrs | default "" | quote }}
+            {{- with include "appflowy.mcp.oauthIpRateLimit" . }}
             - name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
-              value: {{ $mcp.config.oauthIpRateLimitPerMinute | default 60 | quote }}
+              value: {{ . | quote }}
+            {{- end }}
             - name: MCP_ALLOWED_CLIENT_IDS
               value: {{ $mcp.config.allowedClientIds | default "" | quote }}
             - name: MCP_ALLOWED_REDIRECT_HOSTS

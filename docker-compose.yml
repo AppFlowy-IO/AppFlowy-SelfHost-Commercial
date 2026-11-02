@@ -161,7 +161,7 @@ services:
       - APPFLOWY_MCP_ENABLED=${APPFLOWY_MCP_ENABLED:-}
       - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
       - APPFLOWY_MCP_ALLOWED_EMAILS
-      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE=${APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE:-60}
+      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
       - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
       - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
       - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
@@ -354,10 +354,11 @@ services:
       # default; `false` keeps them off whatever Admin stores (see deploy.env). Keep
       # appflowy_cloud's APPFLOWY_MCP_* values equal to these.
       - APPFLOWY_MCP_ENABLED=${APPFLOWY_MCP_ENABLED:-}
-      # Fallbacks for the MCP email allowlist; Admin -> AI apps (MCP) takes precedence.
+      # Fallbacks for the MCP email allowlist and OAuth per-IP limit; Admin -> AI apps (MCP)
+      # takes precedence. Unset, the server's own defaults apply.
       - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
       - APPFLOWY_MCP_ALLOWED_EMAILS
-      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE=${APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE:-60}
+      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
       # Per-IP OAuth limit and audit address. Only Nginx and other Compose containers reach
       # MCP, and Nginx replaces X-Forwarded-For and X-Real-IP with the connecting address,
       # so trusting Docker's private pools lets no client pick its own. Blank restores them.

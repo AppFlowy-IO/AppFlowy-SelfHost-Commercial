@@ -397,6 +397,17 @@ changes it. A YAML boolean is accepted, so an unquoted `false` still keeps AI ap
 {{- end }}
 
 {{/*
+APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE for Cloud and MCP. Empty leaves it unset, so the
+server's own default applies; any other value, 0 included, goes to the server to validate.
+*/}}
+{{- define "appflowy.mcp.oauthIpRateLimit" -}}
+{{- $value := index .Values "appflowy-mcp" "config" "oauthIpRateLimitPerMinute" -}}
+{{- if not (kindIs "invalid" $value) -}}
+{{- toString $value | trim -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 MCP origin advertised by Cloud's server-info: the bundled service, otherwise the externally
 deployed service configured for the Admin MCP Tool Console. Empty advertises nothing.
 */}}

@@ -332,9 +332,11 @@ timeouts of at least an hour and a body limit of at least 4 MiB. Pass `Host` and
 `X-Forwarded-Proto`, and set both `X-Real-IP` and `X-Forwarded-For` to `$remote_addr`, replacing
 any value the client sent.
 
-Unauthenticated OAuth and client-registration requests are limited to
-`APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` (60) per client address until Admin → AI apps (MCP)
-sets another limit; that page also sets each user's tool-call and search limits per workspace.
+Unauthenticated OAuth and client-registration requests are limited per client address to 60 a
+minute, the server default, until Admin → AI apps (MCP) sets another limit; that page also sets
+each user's tool-call and search limits per workspace. To start from a different limit, set
+`APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` in `.env` and recreate both `appflowy_cloud` and
+`appflowy_mcp`, which must agree.
 MCP records the client address in its audit log. MCP takes that address from `X-Forwarded-For` or `X-Real-IP` only when the request
 comes from `APPFLOWY_MCP_TRUSTED_PROXY_CIDRS`, which defaults to Docker's private address pools
 (`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`); a blank value restores that default. Only Nginx and

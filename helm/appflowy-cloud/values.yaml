@@ -670,9 +670,10 @@ appflowy-mcp:
     # default of replacing X-Forwarded-For: an appended header lets clients inside these ranges
     # choose their own address. Empty trusts no proxy, so all clients share one address.
     trustedProxyCidrs: "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
-    # Unauthenticated OAuth and client-registration requests per client IP per minute, until
-    # Admin -> AI apps (MCP) sets a limit.
-    oauthIpRateLimitPerMinute: 60
+    # Unauthenticated OAuth and client-registration requests per client IP per minute (1-10000),
+    # until Admin -> AI apps (MCP) sets a limit. Empty uses the server's default, 60. Cloud
+    # receives the same value.
+    oauthIpRateLimitPerMinute: ""
     # Optional server-wide client governance (comma-separated). Empty allows any dynamically
     # registered public PKCE client; workspace owners still approve apps for their workspace.
     allowedClientIds: ""
