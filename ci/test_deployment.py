@@ -1,10 +1,13 @@
 """Safety and rendering contracts for the runtime harness (never start services)."""
 import base64
+import email.message
 import hashlib
 import io
+import itertools
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -19,6 +22,53 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
 from images import CORE, ROOT, clean_environment
 from configuration import source_fingerprint
+
+
+MCP_PATHS = ('/mcp', '/api/mcp', '/api/mcp/clients?client_id=ci', '/.well-known/oauth-authorization-server',
+             '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp',
+             '/.well-known/mcp.json')
+MCP_DOCUMENTS = {'/.well-known/oauth-authorization-server': {'issuer': 'http://127.0.0.1',
+                                                             'authorization_endpoint': 'http://127.0.0.1/api/mcp/authorize'},
+                 '/.well-known/oauth-protected-resource': {'resource': 'http://127.0.0.1/mcp',
+                                                           'authorization_servers': ['http://127.0.0.1']},
+                 '/.well-known/oauth-protected-resource/mcp': {'resource': 'http://127.0.0.1/mcp',
+                                                               'authorization_servers': ['http://127.0.0.1']},
+                 '/.well-known/mcp.json': {'name': 'AppFlowy', 'endpoint': 'http://127.0.0.1/mcp'}}
+
+
+def http_reply(status, body, content_type):
+    """A urlopen context manager answering with `status`, `body` and `content_type`."""
+    headers = email.message.Message()
+    headers['Content-Type'] = content_type
+    response = MagicMock()
+    response.__enter__.return_value.status = status
+    response.__enter__.return_value.headers = headers
+    response.__enter__.return_value.read.side_effect = lambda size=-1: body
+    return response
+
+
+def http_error(status, body):
+    def reply(url):
+        raise urllib.error.HTTPError(url, status, 'HTTP error', {}, io.BytesIO(body))
+    return reply
+
+
+def web_page(url):
+    """AppFlowy Web's catch-all, which answers any path the proxy does not send elsewhere."""
+    return http_reply(200, b'<!doctype html><html></html>', 'text/html')
+
+
+mcp_turned_off = http_error(503, b'{"error":"mcp_disabled","reason":"mcp_disabled","retryable":false}')
+
+
+def public_routes(**mcp_replies):
+    """urlopen stand-in: Web for the non-MCP routes, `mcp_replies[path]` or AI apps off for MCP's."""
+    def urlopen(url, timeout):
+        path = url.removeprefix('http://127.0.0.1')
+        if path not in MCP_PATHS:
+            return web_page(url)
+        return mcp_replies.get(path, mcp_turned_off)(url)
+    return urlopen
 
 
 class RuntimeSafetyTests(unittest.TestCase):
@@ -668,43 +718,45 @@ class RuntimeSafetyTests(unittest.TestCase):
 
     def test_swarm_public_readiness_uses_ipv4_and_reports_last_error(self):
         instance = self.deployment('swarm')
-        with patch('deployment.urllib.request.urlopen') as request:
-            request.return_value.__enter__.return_value.status = 200
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes()) as request:
             instance.wait_http()
             self.assertEqual([call.args[0] for call in request.call_args_list],
                              ['http://127.0.0.1' + path for path in
-                              ('/api/health', '/gotrue/health', '/', '/console',
-                               '/.well-known/oauth-authorization-server')])
+                              ('/api/health', '/gotrue/health', '/', '/console') + MCP_PATHS])
         with patch('deployment.urllib.request.urlopen', side_effect=TimeoutError('timed out')), \
              patch('deployment.time.monotonic', side_effect=[0, 0, 181]), \
              patch('deployment.time.sleep'):
             with self.assertRaisesRegex(RuntimeError, r'http://127\.0\.0\.1/api/health; TimeoutError: timed out'):
                 instance.wait_http()
 
-    def test_public_readiness_accepts_mcp_reply_while_ai_apps_are_off(self):
+    def test_public_readiness_accepts_mcp_replies_with_ai_apps_off_or_on(self):
         instance = self.deployment('swarm')
-        probe = '/.well-known/oauth-authorization-server'
-
-        def opener(body):
-            def urlopen(url, timeout):
-                if url.endswith(probe):
-                    raise urllib.error.HTTPError(url, 503, 'Service Unavailable', {}, io.BytesIO(body))
-                response = MagicMock()
-                response.__enter__.return_value.status = 200
-                return response
-            return urlopen
-
-        mcp_off = b'{"error":"mcp_disabled","reason":"mcp_disabled","retryable":false}'
-        with patch('deployment.urllib.request.urlopen', side_effect=opener(mcp_off)):
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes()):
             instance.wait_http()
-        # A 503 that MCP did not send, such as the proxy's own page, still fails readiness.
-        for body in (b'<html>503 Service Temporarily Unavailable</html>', b'{"error":"other"}'):
-            with patch('deployment.urllib.request.urlopen', side_effect=opener(body)), \
-                 patch('deployment.time.monotonic', side_effect=[0] * 10 + [181]), \
-                 patch('deployment.time.sleep'):
-                with self.assertRaisesRegex(RuntimeError, r'oauth-authorization-server; HTTPError'):
-                    instance.wait_http()
+        # With AI apps on, MCP serves its discovery documents.
+        documents = {path: (lambda document: lambda url: http_reply(
+            200, json.dumps(document).encode(), 'application/json'))(document)
+            for path, document in MCP_DOCUMENTS.items()}
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes(**documents)):
+            instance.wait_http()
 
+    def test_mcp_readiness_fails_on_any_route_mcp_did_not_answer(self):
+        instance = self.deployment('swarm')
+        not_mcp = {
+            'Web catch-all page': web_page,
+            'proxy 503 page': http_error(503, b'<html>503 Service Temporarily Unavailable</html>'),
+            'other 503': http_error(503, b'{"error":"other"}'),
+            'Cloud 404': http_error(404, b'{"code":1000,"message":"Not Found"}'),
+            'JSON without MCP metadata': lambda url: http_reply(200, b'{"status":"ok"}', 'application/json'),
+        }
+        for path in MCP_PATHS:
+            for name, reply in not_mcp.items():
+                with self.subTest(path=path, reply=name), \
+                     patch('deployment.urllib.request.urlopen', side_effect=public_routes(**{path: reply})), \
+                     patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
+                     patch('deployment.time.sleep'):
+                    with self.assertRaisesRegex(RuntimeError, re.escape('http://127.0.0.1' + path + '; ')):
+                        instance.wait_http()
 
 if __name__ == '__main__':
     unittest.main()
