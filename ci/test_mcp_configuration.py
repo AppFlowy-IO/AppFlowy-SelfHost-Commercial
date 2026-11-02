@@ -57,6 +57,17 @@ class McpConfigurationTests(unittest.TestCase):
                     # MCP refuses 0 at startup instead of the chart replacing it.
                     self.assertEqual(environment.get(OAUTH_IP_LIMIT), configured)
 
+    def test_cors_origins_are_configurable_for_mcp_only(self):
+        # Helm exposes appflowy-mcp.config.corsAllowedOrigins; Compose and Swarm take it from .env.
+        origins = 'https://tools.example.test,https://console.example.test'
+        for file in COMPOSE_FILES:
+            for configured, expected in ((None, ''), (origins, origins)):
+                with self.subTest(file=file, configured=configured):
+                    values = {} if configured is None else {'APPFLOWY_CORS_ALLOWED_ORIGINS': configured}
+                    cloud, mcp = self.compose_environments(file, **values)
+                    self.assertEqual(mcp.get('APPFLOWY_CORS_ALLOWED_ORIGINS'), expected)
+                    self.assertNotIn('APPFLOWY_CORS_ALLOWED_ORIGINS', cloud)
+
 
 if __name__ == '__main__':
     unittest.main()

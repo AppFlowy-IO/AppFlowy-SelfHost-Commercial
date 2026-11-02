@@ -363,6 +363,9 @@ services:
       # MCP, and Nginx replaces X-Forwarded-For and X-Real-IP with the connecting address,
       # so trusting Docker's private pools lets no client pick its own. Blank restores them.
       - APPFLOWY_MCP_TRUSTED_PROXY_CIDRS=${APPFLOWY_MCP_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      # Browser origins, other than this domain, that call MCP directly. Empty mirrors the
+      # request origin. Only MCP reads it here; appflowy_cloud has no CORS setting in Compose.
+      - APPFLOWY_CORS_ALLOWED_ORIGINS=${APPFLOWY_CORS_ALLOWED_ORIGINS:-}
       - APPFLOWY_AUDIT_ENABLE
       - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL}

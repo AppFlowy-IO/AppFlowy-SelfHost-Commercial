@@ -332,6 +332,11 @@ timeouts of at least an hour and a body limit of at least 4 MiB. Pass `Host` and
 `X-Forwarded-Proto`, and set both `X-Real-IP` and `X-Forwarded-For` to `$remote_addr`, replacing
 any value the client sent.
 
+MCP answers CORS requests itself. By default it mirrors the request origin; AppFlowy Web and the
+Admin console on this domain need nothing more. To limit which other browser origins may call MCP
+directly, list them (scheme, host and optional port, comma-separated) in
+`APPFLOWY_CORS_ALLOWED_ORIGINS` and recreate `appflowy_mcp`.
+
 Unauthenticated OAuth and client-registration requests are limited per client address to 60 a
 minute, the server default, until Admin → AI apps (MCP) sets another limit; that page also sets
 each user's tool-call and search limits per workspace. To start from a different limit, set
