@@ -3,10 +3,12 @@ name: AppFlowy Backup integration
 on:
   pull_request:
     paths-ignore:
+      - 'README.md'
       - 'docs/**'
   push:
     branches: [main, master, 'release/public/**']
     paths-ignore:
+      - 'README.md'
       - 'docs/**'
   workflow_dispatch:
     inputs:
