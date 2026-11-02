@@ -22,6 +22,8 @@ The Swarm counterpart makes these explicit compatibility changes:
 - Constrains PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
 - Converts Nginx's configuration and certificate mounts to Swarm configs, and its TLS private key mount to a Swarm secret. Source paths are relative to this folder.
 
+Nginx keeps the Compose port syntax, which Swarm publishes through its routing mesh. The mesh does not preserve client source addresses, so MCP's per-address OAuth limit and audit log, and LDAP sign-in throttling, see one address for every client. See [client addresses](../docs/docker-swarm.md#client-addresses) before exposing a Swarm installation to the internet.
+
 Redis matches the root Compose configuration: the image's default command, with no explicit AOF settings, named Redis data volume, or health check. The base stack does not guarantee that Redis-backed queues or pending work survive replacement. See [storage and Redis](../docs/docker-compose.md#storage-and-redis).
 
 ## Startup and storage

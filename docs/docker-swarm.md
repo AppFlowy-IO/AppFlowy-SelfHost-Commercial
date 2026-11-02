@@ -145,6 +145,15 @@ To enable AI later, configure its provider credentials, set `AI_ENABLED=true`, a
 
 See [docker-swarm/README.md](../docker-swarm/README.md) for optional automated tests and parity maintenance, and [deployment CI](deployment-ci.md) for automated Compose, Swarm, and Helm checks. This single-node guide does not establish multi-node operation, high availability, or safe release upgrades.
 
+## Client addresses
+
+The stack publishes Nginx's ports through Swarm's routing mesh (ingress mode), which does not keep the client's source address: Nginx sees the same address for every client. Everything that tells clients apart by address then treats all clients as one:
+
+- MCP's limit on unauthenticated OAuth and client-registration requests (60 a minute per address by default) becomes one limit for the whole installation. A single client that exceeds it makes every user's AI-app sign-in and token refresh fail with HTTP 429 until the minute passes.
+- LDAP sign-in throttling likewise becomes one limit, and MCP's audit log records that one address for every user.
+
+Before exposing a Swarm installation to the internet, publish Nginx's ports in host mode (the long port syntax with `mode: host`) so that Nginx sees each client's address. The local tests in this repository have not validated host-mode publishing.
+
 ## Backup and restore
 
 Backup is opt-in and requires an image built with the Swarm deployment adapter. Use matching release images for Backup, Cloud, Worker, and Search. The adapter implementation and unit tests do not replace a full restore acceptance run against the final image; the existing Swarm CI deployment excludes Backup.

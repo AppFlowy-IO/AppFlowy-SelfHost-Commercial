@@ -350,7 +350,8 @@ the address it received the request from. A proxy that appends to the client's `
 instead would let users on a private LAN or VPN, whose addresses fall in those ranges, choose their
 own address. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from` to
 only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
-describes, so that `$remote_addr` is the end user.
+describes, so that `$remote_addr` is the end user. On Docker Swarm, the routing mesh hides client
+addresses from Nginx; see [client addresses](docker-swarm.md#client-addresses).
 
 MCP keeps its own PostgreSQL pool of up to `APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS` (8)
 connections; include it in your [connection budget](HARDWARE_SIZING.md#connection-budget). It starts
