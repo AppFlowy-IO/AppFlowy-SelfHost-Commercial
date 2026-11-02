@@ -314,8 +314,8 @@ appflowy-cloud:
 
   image:
     repository: appflowyinc/appflowy_cloud
-    tag: "0.20.3"
-    digest: sha256:e1be6f652c6b313c7125c06ad1e5777cb235516de6643f831365ad6249e4c7d3
+    tag: "0.20.4"
+    digest: sha256:047c0332138aaa047fe19f88bab42623c4d03005d52a55ae135063e8182a6fed
     pullPolicy: IfNotPresent
 
   service:
@@ -405,8 +405,8 @@ appflowy-worker:
 
   image:
     repository: appflowyinc/appflowy_worker
-    tag: "0.20.3"
-    digest: sha256:a59dbee6479be53eac6d14f133629f8ab429b60c8c19fea061abce5f2cde44fa
+    tag: "0.20.4"
+    digest: sha256:d3958ac22528cb4b55b5ed1d9ce4ffb7bbad1dbcc1d4ed14be19f7baa6acd49d
     pullPolicy: IfNotPresent
 
   service:
@@ -452,8 +452,8 @@ appflowy-search:
   replicaCount: 1
   image:
     repository: appflowyinc/appflowy_search
-    tag: "0.20.3"
-    digest: sha256:4ae79f02e91c5504c57eda6b1e382ee4cdb8707fcce5d872208fd811b719290a
+    tag: "0.20.4"
+    digest: sha256:4d8782b232c74ab024bb77f524f8d9647a29360135584a18de8f902060dfa4ab
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -575,8 +575,8 @@ appflowy-ai:
 
   image:
     repository: appflowyinc/appflowy_ai
-    tag: "0.20.3"
-    digest: sha256:e8e86247f4f51c593908474f2e19b47c4f8bf90f7ae11b47a57d0c8810ff452f
+    tag: "0.20.4"
+    digest: sha256:d4cb71829b96da66b9d57731cd68f9e3f0022c82e7a294dad93347bf801fe460
     pullPolicy: IfNotPresent
 
   service:
