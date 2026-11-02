@@ -39,6 +39,9 @@ MCP_COPIES = (
     ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`'),
     ('docker-compose.yml', 'the `appflowy_mcp` environment'),
 )
+# The AppFlowy-Cloud-Premium commit (the head of PR #1521) the copies were last compared with. It is
+# the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
+MCP_COPIES_BASELINE = 'e8e561a225519ff2b54cee8a2bcbda64a2afccff'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
@@ -192,12 +195,16 @@ def pull_request_body(source, tag, url, changes):
     body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
              'The deployment checks use the proposed pins without CI baseline image overrides.',
              'Review compatibility and migration requirements before merging. This PR does not deploy services.', '']
-    if any(service == 'appflowy_mcp' for service, _, _ in changes):
+    mcp = [before for service, before, _ in changes if service == 'appflowy_mcp']
+    if mcp:
         body += ['The MCP image changed. These MCP routes and settings are copies of AppFlowy-Cloud-Premium files '
                  '(Nginx: `nginx/nginx.conf`). Compare them with the server commit the publisher run built, '
                  "not the server tag with the same number, and port the server's changes before merging:", '']
         body += [f'- [ ] `{path}`: {part}' for path, part in MCP_COPIES]
         body += ['']
+        if not DIGEST.search(mcp[0]):
+            body += ['The previous MCP image is unpinned. The copies were last compared with server commit '
+                     f'`{MCP_COPIES_BASELINE}` (PR #1521), so port the server changes since that commit.', '']
     return '\n'.join(body)
 
 

@@ -108,6 +108,21 @@ class ReleaseImageTests(unittest.TestCase):
                 # A moved or renamed copy must not leave the checklist pointing nowhere.
                 self.assertIn('mcp', (release.ROOT / path).read_text().lower())
 
+    def test_mcp_updates_name_the_recorded_copy_baseline_until_mcp_is_pinned(self):
+        self.assertRegex(release.MCP_COPIES_BASELINE, r'^[0-9a-f]{40}$')
+        changes, _ = self.update('cloud', services=['appflowy_mcp'])
+        self.assertIn(release.MCP_COPIES_BASELINE, release.pull_request_body('cloud', '0.20.0', '', changes))
+        # Once MCP is pinned, the build of the pinned image is the baseline.
+        changes, _ = self.update('cloud', tag='0.20.1', services=['appflowy_mcp'])
+        self.assertIn('@sha256:', changes[0][1])
+        pinned = release.pull_request_body('cloud', '0.20.1', '', changes)
+        self.assertIn('server commit the publisher run built', pinned)
+        self.assertNotIn(release.MCP_COPIES_BASELINE, pinned)
+        # The release guide records the same baseline while the shipped MCP image is unpinned.
+        image = yaml.safe_load((release.ROOT / 'docker-compose.yml').read_text())['services']['appflowy_mcp']['image']
+        if not release.DIGEST.search(image):
+            self.assertIn(release.MCP_COPIES_BASELINE, (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text())
+
     def test_duplicate_events_and_release_retries_are_idempotent(self):
         self.update()
         pinned = self.contents()
