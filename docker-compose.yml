@@ -162,6 +162,9 @@ services:
       - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
       - APPFLOWY_MCP_ALLOWED_EMAILS
       - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
+      # Audit fallback until Admin -> Audit Log saves the switch. appflowy_mcp resolves it too
+      # and receives the same value (see deploy.env).
+      - APPFLOWY_AUDIT_ENABLE
       - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
       - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
       - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
@@ -366,6 +369,7 @@ services:
       # Browser origins, other than this domain, that call MCP directly. Empty mirrors the
       # request origin. Only MCP reads it here; appflowy_cloud has no CORS setting in Compose.
       - APPFLOWY_CORS_ALLOWED_ORIGINS=${APPFLOWY_CORS_ALLOWED_ORIGINS:-}
+      # appflowy_cloud's audit fallback; both must agree (see deploy.env).
       - APPFLOWY_AUDIT_ENABLE
       - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL}

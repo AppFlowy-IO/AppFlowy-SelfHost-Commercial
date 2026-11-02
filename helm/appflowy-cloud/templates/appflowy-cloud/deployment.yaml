@@ -140,6 +140,11 @@ spec:
             # Access control
             - name: APPFLOWY_ACCESS_CONTROL
               value: {{ $cloud.config.accessControl | quote }}
+            {{- with $cloud.config.auditEnable }}
+            # Audit fallback until Admin -> Audit Log saves the switch; MCP receives the same value.
+            - name: APPFLOWY_AUDIT_ENABLE
+              value: {{ . | quote }}
+            {{- end }}
 
             # WebSocket configuration
             - name: APPFLOWY_WEBSOCKET_MAILBOX_SIZE

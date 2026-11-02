@@ -338,6 +338,10 @@ appflowy-cloud:
     # Access control
     accessControl: true
 
+    # Audit logging fallback for the switch in Admin -> Audit Log, used until Admin saves one.
+    # Empty leaves it unset (off). The bundled appflowy-mcp service receives the same value.
+    auditEnable: ""
+
     # WebSocket configuration
     websocketMailboxSize: 6000
 
@@ -685,8 +689,6 @@ appflowy-mcp:
     # Browser origins other than global.domain that call MCP directly. Empty mirrors the
     # request origin; Web and Admin on global.domain need no entry.
     corsAllowedOrigins: ""
-    # Optional fallback for the audit switch managed in Admin. Empty leaves it unset.
-    auditEnable: ""
     # MCP keeps its own small pool rather than appflowy-cloud.config.databaseMaxConnections.
     databaseMaxConnections: 8
     databaseMinConnections: 1

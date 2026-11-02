@@ -81,7 +81,8 @@ spec:
             - name: APPFLOWY_CORS_ALLOWED_ORIGINS
               value: {{ . | quote }}
             {{- end }}
-            {{- with $mcp.config.auditEnable }}
+            {{- with index .Values "appflowy-cloud" "config" "auditEnable" }}
+            # Cloud's audit fallback: both resolve it, so both receive appflowy-cloud's value.
             - name: APPFLOWY_AUDIT_ENABLE
               value: {{ . | quote }}
             {{- end }}

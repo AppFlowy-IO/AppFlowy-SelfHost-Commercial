@@ -57,6 +57,21 @@ class McpConfigurationTests(unittest.TestCase):
                     # MCP refuses 0 at startup instead of the chart replacing it.
                     self.assertEqual(environment.get(OAUTH_IP_LIMIT), configured)
 
+    def test_audit_fallback_reaches_cloud_and_mcp_alike(self):
+        # Until Admin saves the audit switch, Cloud and MCP each read it from their own
+        # environment; a value only one of them gets leaves AI-app activity out of the audit log.
+        for file in COMPOSE_FILES:
+            for configured in (None, 'true'):
+                with self.subTest(file=file, configured=configured):
+                    values = {} if configured is None else {'APPFLOWY_AUDIT_ENABLE': configured}
+                    for environment in self.compose_environments(file, **values):
+                        self.assertEqual(environment.get('APPFLOWY_AUDIT_ENABLE'), configured)
+        for configured in (None, 'true'):
+            with self.subTest(helm=configured):
+                values = () if configured is None else ('appflowy-cloud.config.auditEnable=' + configured,)
+                for environment in self.helm_environments(*values):
+                    self.assertEqual(environment.get('APPFLOWY_AUDIT_ENABLE'), configured)
+
     def test_cors_origins_are_configurable_for_mcp_only(self):
         # Helm exposes appflowy-mcp.config.corsAllowedOrigins; Compose and Swarm take it from .env.
         origins = 'https://tools.example.test,https://console.example.test'
