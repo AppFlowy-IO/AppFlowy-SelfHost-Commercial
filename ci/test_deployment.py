@@ -34,6 +34,9 @@ MCP_DOCUMENTS = {'/.well-known/oauth-authorization-server': {'issuer': 'http://1
                  '/.well-known/oauth-protected-resource/mcp': {'resource': 'http://127.0.0.1/mcp',
                                                                'authorization_servers': ['http://127.0.0.1']},
                  '/.well-known/mcp.json': {'name': 'AppFlowy', 'endpoint': 'http://127.0.0.1/mcp'}}
+MCP_CHALLENGE = ('Bearer realm="OAuth", resource_metadata="http://127.0.0.1/.well-known/oauth-protected-resource", '
+                 'error="invalid_token", error_description="Missing or invalid access token"')
+MCP_MISSING_TOKEN = b'{"error":"invalid_token","error_description":"Missing or invalid access token"}'
 
 
 def http_reply(status, body, content_type):
@@ -47,9 +50,15 @@ def http_reply(status, body, content_type):
     return response
 
 
-def http_error(status, body):
+def http_error(status, body, content_type='application/json', challenge=None):
+    """A urlopen stand-in raising HTTPError `status` with `body`, `content_type` and `challenge`."""
+    headers = email.message.Message()
+    headers['Content-Type'] = content_type
+    if challenge:
+        headers['WWW-Authenticate'] = challenge
+
     def reply(url):
-        raise urllib.error.HTTPError(url, status, 'HTTP error', {}, io.BytesIO(body))
+        raise urllib.error.HTTPError(url, status, 'HTTP error', headers, io.BytesIO(body))
     return reply
 
 
@@ -733,20 +742,30 @@ class RuntimeSafetyTests(unittest.TestCase):
         instance = self.deployment('swarm')
         with patch('deployment.urllib.request.urlopen', side_effect=public_routes()):
             instance.wait_http()
-        # With AI apps on, MCP serves its discovery documents.
-        documents = {path: (lambda document: lambda url: http_reply(
+        # With AI apps on, MCP challenges a request without a token, refuses an unknown client and
+        # serves its discovery documents.
+        replies = {path: (lambda document: lambda url: http_reply(
             200, json.dumps(document).encode(), 'application/json'))(document)
             for path, document in MCP_DOCUMENTS.items()}
-        with patch('deployment.urllib.request.urlopen', side_effect=public_routes(**documents)):
+        replies['/mcp'] = replies['/api/mcp'] = http_error(401, MCP_MISSING_TOKEN, challenge=MCP_CHALLENGE)
+        replies['/api/mcp/clients?client_id=ci'] = http_error(
+            404, b'{"error":"invalid_client","error_description":"Unknown client_id","reason":"unknown_client"}')
+        self.assertEqual(set(replies), set(MCP_PATHS))
+        # One attempt per route, so a refused reply fails at once instead of after 180 s.
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes(**replies)), \
+             patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
+             patch('deployment.time.sleep'):
             instance.wait_http()
 
     def test_mcp_readiness_fails_on_any_route_mcp_did_not_answer(self):
         instance = self.deployment('swarm')
         not_mcp = {
             'Web catch-all page': web_page,
-            'proxy 503 page': http_error(503, b'<html>503 Service Temporarily Unavailable</html>'),
+            'proxy 503 page': http_error(503, b'<html>503 Service Temporarily Unavailable</html>', 'text/html'),
             'other 503': http_error(503, b'{"error":"other"}'),
             'Cloud 404': http_error(404, b'{"code":1000,"message":"Not Found"}'),
+            '401 without a challenge': http_error(401, MCP_MISSING_TOKEN),
+            'challenge without resource metadata': http_error(401, MCP_MISSING_TOKEN, challenge='Bearer realm="OAuth"'),
             'JSON without MCP metadata': lambda url: http_reply(200, b'{"status":"ok"}', 'application/json'),
         }
         for path in MCP_PATHS:

@@ -30,18 +30,22 @@ STAGES = [['postgres', 'redis', 'minio'], ['gotrue'], ['appflowy_cloud'],
           ['appflowy_search', 'appflowy_worker', 'appflowy_mcp', 'appflowy_web', 'admin_frontend', 'nginx']]
 # One request per same-domain AI-app (MCP) route: each Nginx location and each Ingress path. With
 # AI apps off, the shipped default and CI's state, MCP answers each with its own 503
-# `mcp_disabled`. The keys are those of the discovery document MCP serves there while AI apps are
-# on. A bare 200 proves nothing: AppFlowy Web's catch-all answers 200 HTML for any path the proxy
-# fails to send to MCP.
+# `mcp_disabled`. With AI apps on, it answers with the status and JSON fields (None: any value)
+# below: its 401 for a missing token, which also carries its Bearer challenge naming its resource
+# metadata, its error for an unknown client, or the route's discovery document. A bare 200 proves
+# nothing: AppFlowy Web's catch-all answers 200 HTML for any path the proxy fails to send to MCP.
 MCP_ROUTE_PROBES = {
-    '/mcp': (),
-    '/api/mcp': (),
-    '/api/mcp/clients?client_id=ci': (),
-    '/.well-known/oauth-authorization-server': ('issuer', 'authorization_endpoint'),
-    '/.well-known/oauth-protected-resource': ('resource', 'authorization_servers'),
-    '/.well-known/oauth-protected-resource/mcp': ('resource', 'authorization_servers'),
-    '/.well-known/mcp.json': ('endpoint',),
+    '/mcp': (401, {'error': 'invalid_token'}),
+    '/api/mcp': (401, {'error': 'invalid_token'}),
+    '/api/mcp/clients?client_id=ci': (404, {'error': 'invalid_client', 'reason': 'unknown_client'}),
+    '/.well-known/oauth-authorization-server': (200, {'issuer': None, 'authorization_endpoint': None}),
+    '/.well-known/oauth-protected-resource': (200, {'resource': None, 'authorization_servers': None}),
+    '/.well-known/oauth-protected-resource/mcp': (200, {'resource': None, 'authorization_servers': None}),
+    '/.well-known/mcp.json': (200, {'endpoint': None}),
 }
+MCP_TURNED_OFF = (503, {'error': 'mcp_disabled'})
+# Other services answer 401 too; only MCP's Bearer challenge names its OAuth resource metadata.
+MCP_CHALLENGE = re.compile(r'Bearer\s.*\bresource_metadata=', re.I)
 HELM_KEYS = {'appflowy_cloud': 'appflowy-cloud', 'appflowy_worker': 'appflowy-worker',
              'appflowy_search': 'appflowy-search', 'appflowy_mcp': 'appflowy-mcp',
              'appflowy_web': 'appflowy-web', 'admin_frontend': 'admin-frontend', 'gotrue': 'gotrue',
@@ -411,26 +415,20 @@ class Deployment:
         raise RuntimeError('Service readiness timed out: ' + json.dumps(last))
 
     @staticmethod
-    def mcp_turned_off(error):
-        """MCP's own 503 `mcp_disabled` reply, which it sends while Admin has AI apps off."""
-        if not isinstance(error, urllib.error.HTTPError) or error.code != 503:
+    def mcp_replied(path, reply):
+        """Whether `reply` to `path`, a urlopen response or HTTPError, is one MCP itself sends: its
+        503 `mcp_disabled` with AI apps off, or the route's MCP_ROUTE_PROBES reply with them on."""
+        status, fields = MCP_TURNED_OFF if reply.status == MCP_TURNED_OFF[0] else MCP_ROUTE_PROBES[path]
+        if reply.status != status or reply.headers.get_content_type() != 'application/json':
+            return False
+        if status == 401 and not MCP_CHALLENGE.match(reply.headers.get('WWW-Authenticate', '')):
             return False
         try:
-            body = json.loads(error.read(4096) or b'{}')
+            body = json.loads(reply.read(65536))
         except ValueError:
             return False
-        return isinstance(body, dict) and body.get('error') == 'mcp_disabled'
-
-    @staticmethod
-    def mcp_document(response, keys):
-        """A discovery document MCP serves while AI apps are on: JSON carrying its metadata keys."""
-        if not keys or response.headers.get_content_type() != 'application/json':
-            return False
-        try:
-            body = json.loads(response.read(65536))
-        except ValueError:
-            return False
-        return isinstance(body, dict) and all(key in body for key in keys)
+        return isinstance(body, dict) and all(key in body and (value is None or body[key] == value)
+                                              for key, value in fields.items())
 
     def wait_http(self):
         # Each MCP probe passes only on a reply MCP itself sent, so a missing or shadowed Nginx
@@ -441,14 +439,15 @@ class Deployment:
             while time.monotonic() < deadline:
                 try:
                     with urllib.request.urlopen(self.base_url + path, timeout=10) as response:
-                        if response.status == 200 and (path not in MCP_ROUTE_PROBES
-                                                       or self.mcp_document(response, MCP_ROUTE_PROBES[path])):
+                        if (self.mcp_replied(path, response) if path in MCP_ROUTE_PROBES
+                                else response.status == 200):
                             break
                         last_error = 'HTTP ' + str(response.status)
                         if path in MCP_ROUTE_PROBES:
                             last_error += ' that MCP did not send'
                 except Exception as error:
-                    if path in MCP_ROUTE_PROBES and self.mcp_turned_off(error):
+                    if (path in MCP_ROUTE_PROBES and isinstance(error, urllib.error.HTTPError)
+                            and self.mcp_replied(path, error)):
                         break
                     last_error = type(error).__name__ + ': ' + str(error)
                 time.sleep(3)

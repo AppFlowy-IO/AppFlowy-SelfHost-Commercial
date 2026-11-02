@@ -55,7 +55,9 @@ All runtime jobs must verify:
 - Service readiness and the public API, authentication, Web, Admin, and AI-app (MCP) routes.
   Every MCP route (`/mcp`, `/api/mcp`, `/api/mcp/...`, and the OAuth and MCP discovery
   documents) must answer with MCP's own reply: its `mcp_disabled` 503 while AI apps are off, the
-  shipped default, or its discovery metadata. AppFlowy Web's 200 page for an unrouted path fails.
+  shipped default. With AI apps on, that is its 401 Bearer challenge naming its resource metadata
+  on `/mcp` and `/api/mcp`, its unknown-client error on `/api/mcp/clients`, and its discovery
+  metadata on the discovery documents. AppFlowy Web's 200 page for an unrouted path fails.
 - Administrator authentication, ordinary-user provisioning, login, and workspace access.
 - Document creation/readback, database creation, and row creation/edit/readback.
 - Attachment upload/download with byte equality, completed Worker HTML import, and keyword search.
