@@ -14,8 +14,17 @@ workflow enables Backup with `APPFLOWY_BACKUP_PROFILE=backup`.
 Both integration workflows skip automatic runs when **all changed files are the root
 `README.md` or under `docs/`**, including nested guides and screenshot assets. A change
 outside those paths still triggers CI, even when documentation changes are included. Pushes retain
-the branch filters above. Manual runs remain available, and the separate release
-image build on release-branch creation is unchanged.
+the branch filters above. Manual runs remain available, and release image builds
+start only on release-branch creation.
+
+When a PR is merged, [Cancel merged PR CI](../.github/workflows/cancel-merged-pr-runs.yml)
+cancels its unfinished Backup, deployment, and release Docker workflow runs, including queued
+and approval-waiting runs and earlier PR revisions. It verifies the head repository, branch,
+commit history, and run attempt before cancellation. Post-merge checks on the target branch
+continue normally. The cleanup runs from the trusted base revision without PR-head code.
+Cancelling a release Docker run also requests cancellation of its exact dispatched Docker CI
+build; it does not cancel other releases. Normal cancellation permits existing diagnostic and
+deployment cleanup steps to finish.
 
 Do not require these path-filtered checks unconditionally for every pull request:
 [GitHub leaves required checks pending when their workflow is skipped by a path filter](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#using-filters-to-target-specific-paths-for-pull-request-or-push-events).

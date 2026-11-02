@@ -13,7 +13,9 @@ concurrency:
 jobs:
   docker-build:
     name: Build and wait for release images
-    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/public/')
+    if: >-
+      !cancelled() && github.event.ref_type == 'branch' &&
+      startsWith(github.event.ref, 'release/public/')
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -113,3 +115,31 @@ jobs:
             }
 
             core.setFailed(`Timed out waiting for Docker CI after 230 minutes. See ${runUrl}`);
+
+      - name: Cancel the dispatched Docker build when this run is cancelled
+        if: cancelled() && steps.dispatch.outputs.run-id != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          DOCKER_BUILD_RUN_ID: ${{ steps.dispatch.outputs.run-id }}
+        with:
+          github-token: ${{ secrets.PUBLIC_DOCKER_CI_TOKEN }}
+          script: |
+            const owner = 'AppFlowy-IO';
+            const repo = 'AppFlowy-Docker-CI';
+            const runId = Number(process.env.DOCKER_BUILD_RUN_ID);
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              throw new Error('Missing or invalid Docker CI run ID.');
+            }
+            const args = { owner, repo, run_id: runId };
+            const { data: run } = await github.rest.actions.getWorkflowRun(args);
+            if (run.status !== 'completed') {
+              try {
+                await github.rest.actions.cancelWorkflowRun(args);
+              } catch (error) {
+                if (error.status !== 409) throw error;
+                const { data: raced } = await github.rest.actions.getWorkflowRun(args);
+                if (raced.status !== 'completed') throw error;
+                return;
+              }
+              core.info(`Requested cancellation of https://github.com/${owner}/${repo}/actions/runs/${runId}`);
+            }
