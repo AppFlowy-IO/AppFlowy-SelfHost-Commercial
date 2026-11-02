@@ -69,7 +69,31 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.0 (Latest)
+### 🚀 v0.20.2 (Latest)
+
+#### New Features
+
+- **Presentation and mind-map APIs** — Added server APIs to generate, save, and version slides and mind maps from authorized workspace content, reuse unchanged results, review imported PowerPoint styles, and export editable PowerPoint files. AI generation required AI to be enabled and included in the installation license; structural maps were available without AI.
+- **Image search (opt-in)** — Added keyword matching for image descriptions and recognized text in documents and database Files & media cells. Processing required AI and an enabled default vision model; existing content entered processing after its next edit.
+- **Native-update policy API** — Added the `desktop_auto_update_enabled` Admin setting, enabled by default, to control automatic-update feeds per server for compatible macOS and Windows clients. Discovery validated platform-specific feeds while retaining minimum-version enforcement and manual downloads.
+
+#### Improvements
+
+- **Semantic indexing** — Isolated and paced pgvector writes to reduce competition with interactive database requests, skipped unchanged vectors, and added optional resumable batch ingestion for large documents.
+- **Attachment search** — Reused image analysis and PDF parses within each workspace, waited for edits to settle before processing files, and extended PDF text search to database-row attachments.
+- **Page history** — Made version generation and restore protection always active. `APPFLOWY_PAGE_HISTORY_ENABLE` and domain feature rules no longer disabled page history; database history remained opt-in.
+
+#### Bug Fixes
+
+- Fixed database-field creation failures during brief storage contention and saved complete hidden row-template content without adding template sources to visible rows.
+- Fixed cases where shared navigation showed entries beneath trashed parents, corrected MCP discovery permission checks, and bounded MCP query and OAuth request work.
+- Retained snapshot retries while creator admission was unavailable and prevented abandoned background tasks from being starved by other pending work.
+- Fixed Search crashes or hangs on malformed documents and row lists, unnecessary service restarts after background timeouts, and missed image/PDF uploads that arrived after their page was saved.
+- Removed credentials from Worker startup and GoTrue request-failure logs.
+
+**Baseline:** [`ff94f4c3563e7252b5e08e6d980e3063129febd7`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/ff94f4c3563e7252b5e08e6d980e3063129febd7)
+
+### 🚀 v0.20.0
 
 #### New Features
 
