@@ -167,7 +167,8 @@ if [ ! -e "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json" ]; then
 fi
 ```
 
-Use all four files in place of the deployment command in step 3, then follow the same staged startup:
+Use all four files in place of the deployment command in step 3, then follow the same staged startup,
+leaving out `appflowy-swarm_appflowy_mcp=1` (MCP stays at zero replicas with Backup; see below):
 
 ```bash
 docker stack deploy \
@@ -185,7 +186,13 @@ docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_backup=1"
 docker service logs --tail 100 "${APPFLOWY_SWARM_STACK}_appflowy_backup"
 ```
 
-Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage; confirm that your Backup image's Swarm adapter includes it in its writer inventory before relying on restore. The adapter manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
+Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage, and this guide does not yet name a Backup image whose Swarm adapter includes MCP in its writer inventory. An adapter without MCP in its inventory cannot be relied on to stop MCP before the database switch or to move it to the restored bucket and Redis database. Keep MCP at zero replicas, and AI apps turned off in Admin → AI apps (MCP), for as long as the Backup overlay is deployed:
+
+```bash
+docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_mcp=0"
+```
+
+After a restore, MCP's service still names the original bucket and Redis database, so keep it at zero replicas then as well. The adapter manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
 
 Every later deployment must include the persisted selection overlay. Keep the `backup_work` volume and runtime directory across upgrades, task replacement, and planned shutdowns. Bootstrap retains the host directory group; generated selections use mode `0640` so that group can read them for redeployment. The runtime file may contain Redis credentials; protect it like the deployment environment. Follow the release migration order for upgrades and restart Backup only after application readiness. Do not change service definitions or replica counts while a restore is active.
 

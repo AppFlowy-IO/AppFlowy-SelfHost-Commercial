@@ -75,6 +75,8 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(overlay['services']['appflowy_search'], source['services']['appflowy_search'])
         backup = overlay['services']['appflowy_backup']
         self.assertEqual(backup['environment']['APPFLOWY_BACKUP_DEPLOYMENT'], 'swarm')
+        # Compose service names are no Swarm writer inventory; the Swarm adapter owns its own.
+        self.assertNotIn('APPFLOWY_BACKUP_COMPOSE_WRITERS', backup['environment'])
         self.assertEqual(backup['command'], ['bootstrap'])
         self.assertEqual(backup['deploy']['replicas'], 0)
         self.assertIn('node.role == manager', backup['deploy']['placement']['constraints'])
