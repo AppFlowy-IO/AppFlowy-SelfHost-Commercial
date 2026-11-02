@@ -53,6 +53,14 @@ Compose files. They omit the standard `0.20.0` server/Backup and `0.19.30` Web b
 overrides, so a green result cannot be produced by substituting different component images.
 Other branches use that fixed qualification baseline.
 
+MCP's routes and settings are copies of AppFlowy-Cloud-Premium files and must match the
+`appflowy_mcp` image that serves them: the MCP locations in `docker/nginx/nginx.conf` (the
+server's `nginx/nginx.conf`), the chart's `ingress-mcp.yaml`, `appflowy.mcp.*` helpers,
+`appflowy-mcp` Deployment and values, and the `appflowy_mcp` Compose environment. CI does not
+compare the two repositories. When an update PR changes the `appflowy_mcp` image, its description
+lists these files: compare them with the server commit that the publisher run built, not the
+server tag with the same number, and port the server's changes in that PR.
+
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job
 sends the notification again. An unavailable image never falls back to `latest`.

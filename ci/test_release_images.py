@@ -92,6 +92,22 @@ class ReleaseImageTests(unittest.TestCase):
             else:
                 self.assertEqual(updated['services'][service], original['services'][service])
 
+    def test_mcp_image_updates_ask_the_reviewer_to_compare_the_copied_mcp_routes(self):
+        def body(services):
+            changes, _ = self.update('cloud', services=services)
+            return release.pull_request_body('cloud', '0.20.0', '', changes)
+
+        without_mcp = body(['appflowy_cloud', 'appflowy_worker', 'appflowy_search'])
+        with_mcp = body(['appflowy_mcp'])
+        self.assertIn('| appflowy_mcp |', with_mcp)
+        self.assertIn('server commit the publisher run built', with_mcp)
+        self.assertNotIn('MCP', without_mcp)
+        for path, _ in release.MCP_COPIES:
+            with self.subTest(path=path):
+                self.assertIn(f'- [ ] `{path}`', with_mcp)
+                # A moved or renamed copy must not leave the checklist pointing nowhere.
+                self.assertIn('mcp', (release.ROOT / path).read_text().lower())
+
     def test_duplicate_events_and_release_retries_are_idempotent(self):
         self.update()
         pinned = self.contents()
