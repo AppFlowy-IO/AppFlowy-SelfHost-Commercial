@@ -276,19 +276,18 @@ sign-in expired meanwhile.
 ### Public URL and HTTPS
 
 `APPFLOWY_MCP_BASE_URL` in `.env` defaults to `${APPFLOWY_BASE_URL}`. Set the origin only, without
-`/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console's MCP Tool
-Console uses it. It is also the OAuth issuer: changing it, for example from `http` to `https` or to
-a new domain, makes every connected AI app reconnect. Recreate the affected services after a change:
+`/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console shows it.
+It is also the OAuth issuer: changing it, for example from `http` to `https` or to a new domain,
+makes every connected AI app reconnect. Recreate the affected services after a change:
 
 ```bash
-docker compose up -d appflowy_mcp appflowy_cloud admin_frontend
+docker compose up -d appflowy_mcp appflowy_cloud
 ```
 
 When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
 block from [deploy.env](../deploy.env) into `.env`, or at least add
 `APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`. Without it, MCP still
-answers on your domain, but AppFlowy Cloud does not advertise the URL to AppFlowy Web and Desktop,
-and the Admin MCP Tool Console is unavailable.
+answers on your domain, but AppFlowy Cloud does not advertise the URL to AppFlowy Web and Desktop.
 
 Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
 origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in

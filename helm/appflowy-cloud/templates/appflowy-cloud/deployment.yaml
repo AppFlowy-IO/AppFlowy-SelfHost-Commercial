@@ -186,13 +186,12 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
-            {{- with include "appflowy.mcp.advertisedUrl" . }}
+            {{- $mcpOrigin := include "appflowy.mcp.baseUrl" . }}
+            {{- if $mcpOrigin }}
             # Advertised as server-info `mcp_url` while Admin -> AI apps (MCP) has AI apps turned
             # on, so AppFlowy Web and Desktop find them.
             - name: APPFLOWY_MCP_BASE_URL
-              value: {{ . | quote }}
-            {{- end }}
-            {{- if index .Values "appflowy-mcp" "enabled" }}
+              value: {{ $mcpOrigin | quote }}
             {{- $mcpConfig := index .Values "appflowy-mcp" "config" }}
             # The MCP service's policy defaults: Cloud resolves the MCP policy too, so Admin ->
             # AI apps (MCP) reports the state, limit and allowlist MCP enforces.
@@ -212,6 +211,11 @@ spec:
             - name: APPFLOWY_MCP_ALLOWED_EMAILS
               value: {{ . | quote }}
             {{- end }}
+            {{- else }}
+            # No MCP service is deployed or configured. Unlocked, Cloud would fall back to
+            # APPFLOWY_BASE_URL and advertise routes nothing serves once Admin turns AI apps on.
+            - name: APPFLOWY_MCP_ENABLED
+              value: "false"
             {{- end }}
             # Bootstrap compatibility for older images; not an operator enable/disable setting.
             - name: APPFLOWY_SEARCH_ENABLED

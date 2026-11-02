@@ -561,12 +561,6 @@ admin-frontend:
 
   config:
     pathPrefix: "/console"
-    # Public origin of the MCP service for the Admin MCP Tool Console, without /mcp or
-    # /api/mcp. Empty uses the bundled appflowy-mcp service's origin (same domain). Set it
-    # only for an MCP service deployed outside this chart; the operator's browser must reach
-    # it directly, and that service must allow this Admin origin. With appflowy-mcp disabled,
-    # Cloud also advertises this origin to AppFlowy Web.
-    mcpBaseUrl: ""
     # OAuth settings for third-party integrations
     oauth:
       clientId: "appflowy_cloud"
@@ -639,6 +633,8 @@ appflowy-ai:
 # chart routes /mcp, /api/mcp and the OAuth/MCP discovery documents on global.domain to this
 # service (see ingress.mcp), and Cloud advertises the origin to AppFlowy Web and Desktop.
 appflowy-mcp:
+  # false removes the bundled service. Set config.publicBaseUrl to the origin of an MCP service
+  # deployed elsewhere; left empty, Cloud keeps AI apps off (Admin shows "Managed by deployment").
   enabled: true
   replicaCount: 1
 
@@ -665,9 +661,12 @@ appflowy-mcp:
     # empty so Admin controls it. false keeps AI apps off whatever Admin stores; true only
     # turns them on until an administrator changes it there. Cloud receives the same value.
     enabledOverride: ""
-    # Public origin without /mcp. Empty uses global.scheme://global.domain. It is also the
-    # OAuth issuer: changing it makes every connected AI app reconnect. Remote AI apps such
-    # as claude.ai and ChatGPT need a public HTTPS origin.
+    # Public origin without /mcp, which MCP, Cloud and AppFlowy Web all use. Empty uses
+    # global.scheme://global.domain while enabled. It is also the OAuth issuer: changing it
+    # makes every connected AI app reconnect. Remote AI apps such as claude.ai and ChatGPT need
+    # a public HTTPS origin. With enabled: false, it is the origin of the MCP service deployed
+    # elsewhere, and Cloud also receives enabledOverride, oauthIpRateLimitPerMinute and the
+    # email allowlists below, which must then match that service's own settings.
     publicBaseUrl: ""
     # Proxies whose X-Forwarded-For/X-Real-IP MCP trusts for its per-IP OAuth rate limit and
     # audit address. MCP believes only the right-most X-Forwarded-For entry, the one the proxy

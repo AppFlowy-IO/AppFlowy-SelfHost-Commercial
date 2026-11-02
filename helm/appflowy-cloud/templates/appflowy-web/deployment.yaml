@@ -44,7 +44,7 @@ spec:
               value: {{ include "appflowy.gotrue.externalUrl" . | quote }}
             - name: APPFLOWY_WS_BASE_URL
               value: {{ include "appflowy.websocketUrl" . | quote }}
-            {{- with include "appflowy.mcp.advertisedUrl" . }}
+            {{- with include "appflowy.mcp.baseUrl" . }}
             # server-info leaves out `mcp_url` while Admin has AI apps turned off; with the
             # origin, Settings -> AI apps still shows that and lets members disconnect apps.
             - name: APPFLOWY_MCP_BASE_URL

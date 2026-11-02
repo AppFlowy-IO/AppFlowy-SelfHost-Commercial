@@ -366,9 +366,12 @@ http://{{ include "appflowy.fullname" . }}-ai:{{ index .Values "appflowy-ai" "se
 {{- end }}
 
 {{/*
-Public origin of the bundled MCP service, without /mcp. AI apps connect to <origin>/mcp and it
-is the OAuth issuer, so changing it makes connected AI apps reconnect. The chart routes the MCP
-paths on global.domain, so the AppFlowy base URL is the default.
+Public origin of the MCP service, without /mcp, from appflowy-mcp.config.publicBaseUrl: the only
+source of the origin that MCP, Cloud's server-info and AppFlowy Web use. AI apps connect to
+<origin>/mcp and it is the OAuth issuer, so changing it makes connected AI apps reconnect. The
+bundled service defaults to the AppFlowy base URL because the chart routes the MCP paths on
+global.domain. With appflowy-mcp.enabled=false it is the origin of an MCP service deployed
+outside this chart, and empty when none is configured.
 */}}
 {{- define "appflowy.mcp.baseUrl" -}}
 {{- $configured := index .Values "appflowy-mcp" "config" "publicBaseUrl" | default "" | toString | trim | trimSuffix "/" -}}
@@ -377,7 +380,7 @@ paths on global.domain, so the AppFlowy base URL is the default.
 {{- fail "appflowy-mcp.config.publicBaseUrl must be an http(s) origin without a path such as /mcp" -}}
 {{- end -}}
 {{- $configured -}}
-{{- else -}}
+{{- else if index .Values "appflowy-mcp" "enabled" -}}
 {{- include "appflowy.baseUrl" . -}}
 {{- end -}}
 {{- end }}
@@ -404,18 +407,6 @@ server's own default applies; any other value, 0 included, goes to the server to
 {{- $value := index .Values "appflowy-mcp" "config" "oauthIpRateLimitPerMinute" -}}
 {{- if not (kindIs "invalid" $value) -}}
 {{- toString $value | trim -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-MCP origin advertised by Cloud's server-info: the bundled service, otherwise the externally
-deployed service configured for the Admin MCP Tool Console. Empty advertises nothing.
-*/}}
-{{- define "appflowy.mcp.advertisedUrl" -}}
-{{- if index .Values "appflowy-mcp" "enabled" -}}
-{{- include "appflowy.mcp.baseUrl" . -}}
-{{- else -}}
-{{- index .Values "admin-frontend" "config" "mcpBaseUrl" | default "" | toString | trim | trimSuffix "/" -}}
 {{- end -}}
 {{- end }}
 

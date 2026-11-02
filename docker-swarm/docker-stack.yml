@@ -210,7 +210,6 @@ services:
     environment:
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
-    - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
     deploy:
       restart_policy:
         condition: on-failure

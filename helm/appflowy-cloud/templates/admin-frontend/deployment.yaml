@@ -48,11 +48,6 @@ spec:
               value: {{ include "appflowy.gotrue.internalUrl" . | quote }}
             - name: APPFLOWY_BASE_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
-            {{- with $admin.config.mcpBaseUrl | default (include "appflowy.mcp.advertisedUrl" .) }}
-            # MCP origin for the Admin MCP Tool Console.
-            - name: APPFLOWY_MCP_BASE_URL
-              value: {{ . | quote }}
-            {{- end }}
             {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
             - name: REDIS_PASSWORD
               valueFrom:
