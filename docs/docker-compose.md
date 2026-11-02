@@ -276,12 +276,13 @@ sign-in expired meanwhile.
 ### Public URL and HTTPS
 
 `APPFLOWY_MCP_BASE_URL` in `.env` defaults to `${APPFLOWY_BASE_URL}`. Set the origin only, without
-`/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console shows it.
-It is also the OAuth issuer: changing it, for example from `http` to `https` or to a new domain,
-makes every connected AI app reconnect. Recreate the affected services after a change:
+`/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console shows it;
+AppFlowy Web also reads it directly when its container starts. It is also the OAuth issuer:
+changing it, for example from `http` to `https` or to a new domain, makes every connected AI app
+reconnect. Recreate every service that reads it after a change:
 
 ```bash
-docker compose up -d appflowy_mcp appflowy_cloud
+docker compose up -d appflowy_mcp appflowy_cloud appflowy_web
 ```
 
 When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
