@@ -11,9 +11,9 @@ Backup is disabled in the default installation and all three standard CI deploym
 pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions. Only that
 workflow enables Backup with `APPFLOWY_BACKUP_PROFILE=backup`.
 
-Both integration workflows skip automatic runs when **all changed files are under
-`docs/`**, including nested guides and screenshot assets. A change outside `docs/`
-still triggers CI, even when documentation changes are included. Pushes retain
+Both integration workflows skip automatic runs when **all changed files are the root
+`README.md` or under `docs/`**, including nested guides and screenshot assets. A change
+outside those paths still triggers CI, even when documentation changes are included. Pushes retain
 the branch filters above. Manual runs remain available, and the separate release
 image build on release-branch creation is unchanged.
 

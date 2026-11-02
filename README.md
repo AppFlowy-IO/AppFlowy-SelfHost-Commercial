@@ -69,7 +69,22 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.2 (Latest)
+### 🚀 v0.20.4 (Latest)
+
+#### Improvements
+
+- **AI search summaries** — Added a 1.5-second vector-query budget when usable keyword matches were available, allowing summaries to continue from those matches if semantic retrieval was slow or failed. Added `APPFLOWY_SEARCH_SUMMARY_VECTOR_BUDGET_MS` for tuning; `0` disabled the budget.
+- **Realtime sync** — Increased the default per-workspace allowance for queued and active updates from 256 to 1,024 to absorb brief reconnect bursts, and added saturation counters and capacity panels to the realtime diagnostics dashboard.
+
+#### Bug Fixes
+
+- Fixed Improve Writing and Spelling/Grammar replies that lost generated answers or explanations when the AI stream ended.
+- Corrected AI-summary citations, including duplicate references to the same database row and its page.
+
+
+**Baseline:** [`8f3948d23e1016b7e801ee05b6f81da4e2eec281`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/8f3948d23e1016b7e801ee05b6f81da4e2eec281)
+
+### 🚀 v0.20.2
 
 #### New Features
 
