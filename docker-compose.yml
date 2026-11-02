@@ -428,7 +428,7 @@ services:
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
       - APPFLOWY_WS_BASE_URL=${APPFLOWY_WEBSOCKET_BASE_URL}
       # The MCP origin. server-info leaves out `mcp_url` while AI apps are turned off; with
-      # this, Settings -> AI apps still says they are off and lets members disconnect apps.
+      # this, Settings -> MCP still says they are off and lets members disconnect apps.
       - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
 volumes:
   postgres_data:

@@ -6,7 +6,7 @@ The [root docker-compose.yml](../docker-compose.yml) is the source of truth. Thi
 
 ## Deployment files
 
-- [docker-stack.yml](docker-stack.yml) preserves the 11 application services, including AI, with the same application images, environment variables, commands, health checks, ports, and volumes.
+- [docker-stack.yml](docker-stack.yml) preserves the 12 application services, including AI and MCP, with the same application images, environment variables, commands, health checks, ports, and volumes.
 - [docker-stack.backup.yml](docker-stack.backup.yml) adds opt-in Backup with the Swarm coordinator and Cloud readiness gate. It starts at zero replicas until the application is ready.
 - [docker-stack.bootstrap.yml](docker-stack.bootstrap.yml) initially scales application services to zero so infrastructure and migrations can start in order. It does not change application settings.
 - `.local/swarm.env` is the operator's private configuration for the direct Docker guide. It is copied from [deploy.env](../deploy.env), edited, and explicitly loaded into the shell before deployment.

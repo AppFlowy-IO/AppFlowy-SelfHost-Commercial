@@ -253,7 +253,7 @@ read and edit AppFlowy content through the [Model Context Protocol](https://mode
 The bundled Nginx serves it on your AppFlowy domain, and the service publishes no port of its own.
 
 Users add **`https://your-domain/mcp`** to their AI app as a remote MCP server or custom connector.
-AppFlowy shows the same URL under **Settings → AI apps**, where users connect AI apps and manage
+AppFlowy shows the same URL under **Settings → MCP**, where users connect AI apps and manage
 their connections. When a user connects, the AI app opens an AppFlowy consent page; the user signs
 in, chooses a workspace, and grants the app access to that workspace only.
 
@@ -287,8 +287,11 @@ docker compose up -d appflowy_mcp appflowy_cloud appflowy_web
 
 When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
 block from [deploy.env](../deploy.env) into `.env`, or at least add
-`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`. Without it, MCP still
-answers on your domain, but AppFlowy Cloud does not advertise the URL to AppFlowy Web and Desktop.
+`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`. Without it, AppFlowy
+Cloud and MCP both fall back to `APPFLOWY_BASE_URL`, the same origin, so AI apps keep working, and
+MCP logs a warning that asks for `APPFLOWY_MCP_BASE_URL`. Only AppFlowy Web loses its own copy of
+the URL: while AI apps are turned off, it hides Settings → MCP instead of saying they are off and
+letting members disconnect their apps.
 
 Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
 origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in
@@ -310,7 +313,7 @@ Cursor, also work with `http://localhost`.
 
 Recreate `appflowy_mcp` after changing these `.env` settings (and `appflowy_cloud` too for the
 email lists); changes made in Admin apply without a restart. Users can always revoke their own
-connections from Settings → AI apps.
+connections from Settings → MCP.
 
 ### Routes, limits, and custom proxies
 
