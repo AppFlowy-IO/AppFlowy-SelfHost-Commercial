@@ -758,5 +758,6 @@ class RuntimeSafetyTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, re.escape('http://127.0.0.1' + path + '; ')):
                         instance.wait_http()
 
+
 if __name__ == '__main__':
     unittest.main()
