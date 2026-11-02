@@ -176,8 +176,18 @@ if [ ! -e "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json" ]; then
 fi
 ```
 
-Use all four files in place of the deployment command in step 3, then follow the same staged startup,
-leaving out `appflowy-swarm_appflowy_mcp=1` (MCP stays at zero replicas with Backup; see below):
+MCP stays at zero replicas with Backup (see below), so lock AI apps off first. Otherwise an
+administrator can turn them on in Admin, and Cloud then advertises a `/mcp` that nothing serves.
+Set this in `docker-swarm/.local/swarm.env`, where the template leaves it commented out, and load
+the file again as in step 1:
+
+```bash
+APPFLOWY_MCP_ENABLED=false
+```
+
+Cloud and MCP both read it, and Admin → AI apps (MCP) shows **Managed by deployment**. Use all four
+files in place of the deployment command in step 3, then follow the same staged startup, leaving
+out `appflowy-swarm_appflowy_mcp=1`:
 
 ```bash
 docker stack deploy \
@@ -188,6 +198,8 @@ docker stack deploy \
   "$APPFLOWY_SWARM_STACK"
 ```
 
+At the end of step 3, wait for 10 services to show `1/1`, with AI, MCP and Backup at `0/0`.
+
 The Backup overlay starts its service at zero replicas. When Cloud, Worker and Search are healthy, start it:
 
 ```bash
@@ -195,7 +207,7 @@ docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_backup=1"
 docker service logs --tail 100 "${APPFLOWY_SWARM_STACK}_appflowy_backup"
 ```
 
-Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage, and this guide does not yet name a Backup image whose Swarm adapter includes MCP in its writer inventory. An adapter without MCP in its inventory cannot be relied on to stop MCP before the database switch or to move it to the restored bucket and Redis database. Keep MCP at zero replicas, and AI apps turned off in Admin → AI apps (MCP), for as long as the Backup overlay is deployed:
+Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage, and this guide does not yet name a Backup image whose Swarm adapter includes MCP in its writer inventory. An adapter without MCP in its inventory cannot be relied on to stop MCP before the database switch or to move it to the restored bucket and Redis database. Keep MCP at zero replicas, and `APPFLOWY_MCP_ENABLED=false` in `swarm.env`, for as long as the Backup overlay is deployed:
 
 ```bash
 docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_mcp=0"
