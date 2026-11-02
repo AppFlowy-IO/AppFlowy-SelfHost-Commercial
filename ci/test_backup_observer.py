@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from backup_observer import ComposeRestoreObserver, environment, redis_namespace, writer_stop_evidence
 
 
-WRITERS = ('appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search')
+WRITERS = ('appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp')
 
 
 def event(action, identity, when, service):
@@ -29,7 +29,7 @@ class BackupObserverTests(unittest.TestCase):
         for name in WRITERS + ('postgres', 'appflowy_backup'):
             env = {'APPFLOWY_S3_BUCKET': 'original-bucket', 'APPFLOWY_KEYWORD_INDEX_DIR': '/index'}
             key = {'appflowy_cloud': 'APPFLOWY_REDIS_URI', 'appflowy_worker': 'APPFLOWY_WORKER_REDIS_URL',
-                   'appflowy_search': 'APPFLOWY_SEARCH_REDIS_URL'}.get(name)
+                   'appflowy_search': 'APPFLOWY_SEARCH_REDIS_URL', 'appflowy_mcp': 'APPFLOWY_REDIS_URI'}.get(name)
             if key:
                 env[key] = 'redis://:private-password@redis:6379/0'
             if name == 'appflowy_backup':
@@ -73,7 +73,7 @@ class BackupObserverTests(unittest.TestCase):
         self.assertEqual(name, 'backup-restore-job.json')
         self.assertFalse(receipt['observed_all_stopped_during_poll'])
         self.assertTrue(receipt['all_stopped_before_first_restart'])
-        self.assertEqual(receipt['writer_stop_events'], 4)
+        self.assertEqual(receipt['writer_stop_events'], 5)
         self.assertEqual(receipt['old_database_oid'], 123)
         self.assertEqual(receipt['new_database_oid'], 456)
         self.assertNotIn('private-password', json.dumps(receipt))
@@ -95,7 +95,7 @@ class BackupObserverTests(unittest.TestCase):
         self.activate()
         after = self.observer.snapshot()
         selected = self.observer.validate_selections(after)
-        self.assertEqual(len(selected), 3)
+        self.assertEqual(len(selected), 4)
         path = self.directory / 'selection-appflowy_worker.env'
         path.unlink()
         with self.assertRaisesRegex(RuntimeError, 'persist'):
@@ -103,6 +103,39 @@ class BackupObserverTests(unittest.TestCase):
         path.write_text('APPFLOWY_S3_BUCKET=other-bucket\n')
         with self.assertRaisesRegex(RuntimeError, 'differs'):
             self.observer.validate_selections(after)
+
+    def select(self, name, **values):
+        """Change one writer's running and persisted selection together."""
+        row = self.inventory[name][0]
+        env = {**environment(row), **values}
+        self.inventory[name] = [{**row, 'Config': {**row['Config'],
+                                                   'Env': [key + '=' + value for key, value in env.items()]}}]
+        path = self.directory / ('selection-' + name + '.env')
+        persisted = {**dict(line.split('=', 1) for line in path.read_text().splitlines()), **values}
+        path.write_text('\n'.join(key + '=' + value for key, value in persisted.items()))
+
+    def test_mcp_must_switch_to_the_same_restored_bucket_and_redis_database(self):
+        self.activate()
+        restored = environment(self.inventory['appflowy_mcp'][0])
+        cases = (({'APPFLOWY_S3_BUCKET': 'original-bucket'}, 'reused a previous active storage namespace'),
+                 ({'APPFLOWY_REDIS_URI': 'redis://:private-password@redis:6379/0'},
+                  'reused a previous active storage namespace'),
+                 ({'APPFLOWY_REDIS_URI': 'redis://:private-password@redis:6379/4'},
+                  'different restored resources'))
+        for values, message in cases:
+            with self.subTest(values=values):
+                self.select('appflowy_mcp', **values)
+                with self.assertRaisesRegex(RuntimeError, message):
+                    self.observer.validate_selections(self.observer.snapshot())
+                self.select('appflowy_mcp', **{key: restored[key] for key in values})
+        self.assertIn('appflowy_mcp', self.observer.validate_selections(self.observer.snapshot()))
+
+    def test_writer_inventory_without_mcp_is_incomplete(self):
+        writers = [name for name in WRITERS if name != 'appflowy_mcp']
+        self.inventory['appflowy_backup'][0]['Config']['Env'] = [
+            'APPFLOWY_BACKUP_COMPOSE_WRITERS=' + json.dumps(writers)]
+        with self.assertRaisesRegex(RuntimeError, 'complete writer inventory'):
+            self.observer('before_restore', 'source')
 
     def test_no_claim_of_writer_drain_without_complete_ordered_evidence(self):
         before = {name: 'old-' + name for name in WRITERS}

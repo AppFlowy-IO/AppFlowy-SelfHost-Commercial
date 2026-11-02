@@ -727,7 +727,7 @@ class Deployment:
     def backup_selection(self):
         """Hash effective resource selections, retaining no connection credentials in evidence."""
         selected = {}
-        for name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
+        for name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'):
             rows = self.docker_containers(name)
             if len(rows) != 1:
                 raise RuntimeError('Backup redeploy requires exactly one ' + name)

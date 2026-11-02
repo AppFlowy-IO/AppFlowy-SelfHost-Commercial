@@ -656,6 +656,16 @@ class RuntimeSafetyTests(unittest.TestCase):
                 else:
                     instance.run(*instance.compose, 'config', '--quiet')
 
+    def test_backup_redeploy_compares_every_restored_writer_selection(self):
+        instance = self.deployment()
+        writers = ('appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp')
+        rows = [{'Config': {'Env': ['APPFLOWY_S3_BUCKET=restored', 'APPFLOWY_REDIS_URI=redis://redis/3']}}]
+        with patch.object(instance, 'docker_containers', return_value=rows) as containers:
+            selected = instance.backup_selection()
+        self.assertEqual([call.args[0] for call in containers.call_args_list], list(writers))
+        self.assertEqual(set(selected), set(writers))
+        self.assertNotIn('restored', json.dumps(selected))
+
     def test_swarm_public_readiness_uses_ipv4_and_reports_last_error(self):
         instance = self.deployment('swarm')
         with patch('deployment.urllib.request.urlopen') as request:
