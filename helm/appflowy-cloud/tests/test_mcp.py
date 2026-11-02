@@ -1,4 +1,4 @@
-"""Render the real chart to verify the AI-app (MCP) lock, origin checks and streaming Ingress."""
+"""Render the real chart to verify the AI-app (MCP) lock, shared settings, origin checks and streaming Ingress."""
 from pathlib import Path
 import subprocess
 import unittest
@@ -8,6 +8,7 @@ import yaml
 CHART = Path(__file__).resolve().parents[1]
 ROOT = CHART.parents[1]
 LOCK = 'APPFLOWY_MCP_ENABLED'
+OAUTH_IP_LIMIT = 'APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE'
 
 
 class McpChartTests(unittest.TestCase):
@@ -44,6 +45,29 @@ class McpChartTests(unittest.TestCase):
                 documents = self.render(overrides=overrides, strings=strings)
                 for suffix in ('cloud', 'mcp'):
                     self.assertEqual(self.environment(documents, suffix).get(LOCK), expected, suffix)
+
+    def test_oauth_ip_limit_is_left_to_the_server_default_unless_configured(self):
+        # A deployment value, even one equal to the server default, makes Admin label the limit
+        # "From deployment"; Cloud and MCP must also resolve the same limit.
+        for configured in (None, '0', '120'):
+            with self.subTest(configured=configured):
+                overrides = () if configured is None else (
+                    'appflowy-mcp.config.oauthIpRateLimitPerMinute=' + configured,)
+                documents = self.render(overrides=overrides)
+                for suffix in ('cloud', 'mcp'):
+                    # MCP refuses 0 at startup instead of the chart replacing it.
+                    self.assertEqual(self.environment(documents, suffix).get(OAUTH_IP_LIMIT), configured, suffix)
+
+    def test_audit_fallback_reaches_cloud_and_mcp_alike(self):
+        # Until Admin saves the audit switch, Cloud and MCP each read it from their own
+        # environment; a value only one of them gets leaves AI-app activity out of the audit log.
+        for configured in (None, 'true'):
+            with self.subTest(configured=configured):
+                overrides = () if configured is None else ('appflowy-cloud.config.auditEnable=' + configured,)
+                documents = self.render(overrides=overrides)
+                for suffix in ('cloud', 'mcp'):
+                    self.assertEqual(self.environment(documents, suffix).get('APPFLOWY_AUDIT_ENABLE'), configured,
+                                     suffix)
 
     def test_one_origin_reaches_mcp_cloud_and_web_but_not_admin(self):
         external = 'appflowy-mcp.config.publicBaseUrl=https://ai.example.test/'
