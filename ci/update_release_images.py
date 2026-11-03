@@ -43,7 +43,7 @@ MCP_COPIES = (
 )
 # The AppFlowy-Cloud-Premium commit (the head of PR #1521) the copies were last compared with. It is
 # the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
-MCP_COPIES_BASELINE = 'e8e561a225519ff2b54cee8a2bcbda64a2afccff'
+MCP_COPIES_BASELINE = 'd069a11118b57241df4a4314830a0d25d039b20b'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
