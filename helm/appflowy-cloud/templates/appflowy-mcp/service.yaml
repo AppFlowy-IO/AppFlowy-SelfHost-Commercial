@@ -7,6 +7,10 @@ metadata:
   labels:
     {{- include "appflowy.labels" . | nindent 4 }}
     app.kubernetes.io/component: appflowy-mcp
+  {{- if and $mcp.metrics.enabled $mcp.metrics.serviceAnnotations }}
+  annotations:
+    {{- toYaml $mcp.metrics.serviceAnnotations | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ $mcp.service.type }}
   ports:

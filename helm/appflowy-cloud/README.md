@@ -202,32 +202,46 @@ or higher), which also sets who may use them and their rate limits; changes appl
 without a restart. Users, approvals and the email allowlist work as described in
 [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
 
-A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP:
+A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP, written as
+anchored regular expressions with `pathType: ImplementationSpecific`:
 
-| Path | `pathType` |
+| Routes | Ingress path |
 | --- | --- |
-| `/mcp` (Streamable HTTP; `GET` holds a server-sent event stream open) | `Exact` |
-| `/api/mcp` and everything under it | `Prefix` |
-| `/.well-known/oauth-authorization-server` | `Exact` |
-| `/.well-known/oauth-protected-resource` and its sub-paths | `Prefix` |
-| `/.well-known/mcp.json` | `Exact` |
+| `/mcp` (Streamable HTTP; `GET` holds a server-sent event stream open) | `/mcp$` |
+| `/api/mcp` and everything under it | `/api/mcp(/\|$)` |
+| `/.well-known/oauth-authorization-server` | `/.well-known/oauth-authorization-server$` |
+| `/.well-known/oauth-protected-resource` and its sub-paths | `/.well-known/oauth-protected-resource(/\|$)` |
+| `/.well-known/mcp.json` | `/.well-known/mcp.json$` |
+
+The GoTrue and MinIO Ingresses on the same host use regular expressions, and ingress-nginx then
+matches every path of that host as a case-insensitive regex prefix, whatever its `pathType`; an
+`Exact` `/mcp` would also send `/mcpx` and `/mcp/x` (such as a published site's namespace) to MCP.
+The anchors keep the routes equal to the bundled Nginx's, except that matching stays
+case-insensitive.
 
 `/oauth/*` stays on AppFlowy Web, which serves the consent page, and MCP's health, metrics and root
-`/sse` endpoints are not published. The Ingress inherits `ingress.annotations`, adds
-`ingress.mcp.annotations`, and always sets `proxy-buffering: off`, `proxy-http-version: 1.1`, read
-and send timeouts of `ingress.mcp.proxyTimeoutSeconds` (default 3600, minimum 60) and a body limit
-of `ingress.mcp.bodySize` (default `8m`). Set `ingress.mcp.enabled=false` when the inherited
-annotations apply browser or external authentication, and route the same paths yourself.
+`/sse` endpoints are not published. The Ingress inherits `ingress.annotations` except
+`upstream-hash-by*` and `limit-*`: MCP keeps no session, and client-address affinity or the primary
+per-IP limits would put every user behind one NAT or AI vendor's egress on one replica and one
+connection budget, which each open `GET /mcp` stream counts against. Set limits meant for MCP in
+`ingress.mcp.annotations`, which it adds. It always sets `use-regex: true`, `proxy-buffering: off`,
+`proxy-http-version: 1.1`, read and send timeouts of `ingress.mcp.proxyTimeoutSeconds` (default
+3600, minimum 60) and a body limit of `ingress.mcp.bodySize` (default `8m`). Set
+`ingress.mcp.enabled=false` when the inherited annotations apply browser or external
+authentication, and route the same paths yourself.
 
 | Value | Default and purpose |
 | --- | --- |
 | `appflowy-mcp.enabled` | `true`. Deploys MCP; AI apps still stay off until Admin turns them on. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port; unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then keeps AI apps off whatever Admin stores (Admin shows "Managed by deployment"). |
 | `appflowy-mcp.config.enabledOverride` | Empty, so Admin → AI apps (MCP) turns AI apps on and off. `false` keeps them off whatever Admin stores (Admin shows "Managed by deployment"); `true` turns them on until an administrator changes it there. Cloud and MCP receive the same value. |
 | `appflowy-mcp.config.publicBaseUrl` | Empty, meaning `global.scheme://global.domain`. Must be an http(s) origin without `/mcp` or another path. MCP, Cloud and AppFlowy Web all use it. It is the OAuth issuer: changing it makes every connected AI app reconnect. The chart's Ingress always routes `global.domain`. With `enabled=false`, set it to the origin of an MCP service deployed outside this chart: Cloud and Web advertise it, and Cloud also receives `enabledOverride`, `oauthIpRateLimitPerMinute` and the email allowlists, which must match that service's own settings. |
-| `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. |
+| `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. Behind a CDN or load balancer, have the controller resolve the client with `use-forwarded-headers` and `proxy-real-ip-cidr`, as described for LDAP above. |
 | `appflowy-mcp.config.allowedClientIds` / `allowedRedirectHosts` | Empty. Optional server-wide client governance; workspace owners still approve apps for their workspace. |
 | `appflowy-mcp.config.allowedEmailDomains` / `allowedEmails` | Empty, allowing every account. Lists saved in Admin → AI apps (MCP) take precedence. |
 | `appflowy-mcp.config.databaseMaxConnections` / `databaseMinConnections` | `8` / `1` per replica, separate from Cloud's pool; include them in the PostgreSQL connection budget. |
+| `appflowy-mcp.config.maxBodyBytes` | `1048576` (1 MiB). Largest request body; a tool call carries what a model writes in one response. Every call in flight (`maxInFlight`, 128) holds its parsed body, which MCP refuses with 413 above twice this size, and MCP logs an error at startup when `maxInFlight` × `maxBodyBytes` exceeds a quarter of the memory limit. |
+| `appflowy-mcp.terminationGracePeriodSeconds` | `90`. On shutdown MCP ends its `GET /mcp` streams at once, then waits up to 75 seconds for requests in flight (its 60-second request timeout plus 5), its policy watchers and its audit queue (5 each); the chart refuses to render 75 or less. |
+| `appflowy-mcp.metrics` | Off. MCP always serves `/metrics` on its Service port (in-flight and SSE saturation, rate-limit denials, policy state); the MCP Ingress never publishes it. `metrics.enabled` with `metrics.serviceMonitor.enabled` emits a ServiceMonitor, as the metrics overlays below do. |
 | `appflowy-mcp.resources` / `replicaCount` | 50m/128Mi requests, 500m/512Mi limits, one replica. Backup requires one replica. |
 
 MCP's search tools use the bundled Search Service when `appflowy-search.enabled` is true. Remote AI
@@ -293,7 +307,7 @@ Metrics are off by default so your cluster stays lightweight.
 
 | Overlay | Effect | Requirements |
 | --- | --- | --- |
-| `values/features/metrics.yaml` | Turns on `/metrics` plus ServiceMonitors for AppFlowy Cloud, the worker, and AI services. | A Prometheus Operator already installed (ServiceMonitor CRD must exist). |
+| `values/features/metrics.yaml` | Turns on `/metrics` plus ServiceMonitors for AppFlowy Cloud, the worker, AI, and MCP services. | A Prometheus Operator already installed (ServiceMonitor CRD must exist). |
 | `values/features/monitoring.yaml` | Enables `kube-prometheus-stack`, its ServiceMonitor CRDs, and the same AppFlowy ServiceMonitors with the stack. | Nothing else—this overlay installs Prometheus, Alertmanager, and Grafana for you. |
 
 Enable metrics-only ServiceMonitors:

@@ -1,5 +1,16 @@
 {{- if index .Values "appflowy-mcp" "enabled" }}
 {{- $mcp := index .Values "appflowy-mcp" }}
+{{- /* On SIGTERM MCP ends its GET /mcp streams at once, then waits for the requests in flight (at
+  most its 60-second request timeout plus 5 s), its policy watchers (5 s) and its audit queue
+  (5 s). Kubernetes kills the pod when the grace period ends, dropping queued audit events. The
+  drain is the sum of DEFAULT_REQUEST_TIMEOUT_SECS, ROUTE_TIMEOUT_MARGIN,
+  POLICY_WATCHER_SHUTDOWN_TIMEOUT and AUDIT_SHUTDOWN_TIMEOUT in the server's
+  services/appflowy-mcp/src/server.rs; tests/test_mcp.py checks this chart against it. */}}
+{{- $terminationGracePeriodSeconds := int ($mcp.terminationGracePeriodSeconds | default 90) }}
+{{- $shutdownDrainSeconds := 75 }}
+{{- if le $terminationGracePeriodSeconds $shutdownDrainSeconds }}
+{{- fail (printf "appflowy-mcp.terminationGracePeriodSeconds (%d) must exceed MCP's %d-second shutdown drain: its 60-second request timeout plus 5, then 5 for its policy watchers and 5 for its audit queue" $terminationGracePeriodSeconds $shutdownDrainSeconds) }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +35,7 @@ spec:
         {{- include "appflowy.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: appflowy-mcp
     spec:
+      terminationGracePeriodSeconds: {{ $terminationGracePeriodSeconds }}
       {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
       securityContext:
@@ -43,8 +55,10 @@ spec:
             {{- include "appflowy.backup.redisSelection" . | nindent 12 }}
             - name: RUST_LOG
               value: {{ $mcp.config.rustLog | quote }}
+            # Every address family, like Cloud and Compose: an IPv4-only listener would refuse
+            # the probes and the ingress controller on an IPv6 single-stack cluster.
             - name: APPFLOWY_APPLICATION_HOST
-              value: "0.0.0.0"
+              value: "[::]"
             - name: APPFLOWY_APPLICATION_PORT
               value: "8002"
 
@@ -56,27 +70,12 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_MCP_TRUSTED_PROXY_CIDRS
               value: {{ $mcp.config.trustedProxyCidrs | default "" | quote }}
-            {{- with include "appflowy.mcp.oauthIpRateLimit" . }}
-            - name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
-              value: {{ . | quote }}
-            {{- end }}
             - name: MCP_ALLOWED_CLIENT_IDS
               value: {{ $mcp.config.allowedClientIds | default "" | quote }}
             - name: MCP_ALLOWED_REDIRECT_HOSTS
               value: {{ $mcp.config.allowedRedirectHosts | default "" | quote }}
-            {{- with include "appflowy.mcp.enabledOverride" . }}
-            # Unset lets Admin -> AI apps (MCP) turn AI apps on and off; Cloud gets the same value.
-            - name: APPFLOWY_MCP_ENABLED
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with $mcp.config.allowedEmailDomains }}
-            - name: APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with $mcp.config.allowedEmails }}
-            - name: APPFLOWY_MCP_ALLOWED_EMAILS
-              value: {{ . | quote }}
-            {{- end }}
+            # The policy bootstrap values; Cloud gets the same list.
+            {{- include "appflowy.mcp.policyEnv" . | trim | nindent 12 }}
             {{- with $mcp.config.corsAllowedOrigins }}
             - name: APPFLOWY_CORS_ALLOWED_ORIGINS
               value: {{ . | quote }}
@@ -103,6 +102,8 @@ spec:
               value: {{ $mcp.config.databaseMinConnections | quote }}
             - name: APPFLOWY_MCP_MAX_IN_FLIGHT
               value: {{ $mcp.config.maxInFlight | quote }}
+            - name: APPFLOWY_MCP_MAX_BODY_BYTES
+              value: {{ $mcp.config.maxBodyBytes | int64 | quote }}
 
             # Redis configuration
             {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
@@ -163,6 +164,8 @@ spec:
             {{- end }}
             - name: APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS
               value: {{ index .Values "appflowy-cloud" "config" "searchRequestTimeoutSecs" | default 10 | quote }}
+          # Passes once PostgreSQL and Redis answer; it does not wait for the MCP policy, so a pod
+          # whose policy cannot load yet (Cloud's migration lagging) stays unready, not restarted.
           startupProbe:
             httpGet:
               path: /api/startup
@@ -177,6 +180,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          # Reads the status a background check keeps, so a saturated PostgreSQL pool does not
+          # remove the pod; it fails after 30 s without an answer. Startup checks live. It also
+          # fails while no MCP policy is in force, and then no route reaches the pod, revocation
+          # and disconnects included.
           readinessProbe:
             httpGet:
               path: /api/ready

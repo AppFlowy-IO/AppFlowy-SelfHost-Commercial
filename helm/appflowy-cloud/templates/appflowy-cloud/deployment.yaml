@@ -188,29 +188,13 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             {{- $mcpOrigin := include "appflowy.mcp.baseUrl" . }}
             {{- if $mcpOrigin }}
-            # Advertised as server-info `mcp_url` while Admin -> AI apps (MCP) has AI apps turned
-            # on, so AppFlowy Web and Desktop find them.
+            # Advertised as server-info `mcp_url` while AI apps are on and after Admin -> AI apps
+            # (MCP) turns them off, so AppFlowy Web and Desktop find MCP and members can disconnect.
             - name: APPFLOWY_MCP_BASE_URL
               value: {{ $mcpOrigin | quote }}
-            {{- $mcpConfig := index .Values "appflowy-mcp" "config" }}
-            # The MCP service's policy defaults: Cloud resolves the MCP policy too, so Admin ->
-            # AI apps (MCP) reports the state, limit and allowlist MCP enforces.
-            {{- with include "appflowy.mcp.enabledOverride" . }}
-            - name: APPFLOWY_MCP_ENABLED
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with include "appflowy.mcp.oauthIpRateLimit" . }}
-            - name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with $mcpConfig.allowedEmailDomains }}
-            - name: APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
-              value: {{ . | quote }}
-            {{- end }}
-            {{- with $mcpConfig.allowedEmails }}
-            - name: APPFLOWY_MCP_ALLOWED_EMAILS
-              value: {{ . | quote }}
-            {{- end }}
+            # The MCP service's policy bootstrap values, bundled or external: Cloud resolves the
+            # MCP policy too, so server-info and Admin -> AI apps (MCP) report what MCP enforces.
+            {{- include "appflowy.mcp.policyEnv" . | trim | nindent 12 }}
             {{- else }}
             # No MCP service is deployed or configured. Unlocked, Cloud would fall back to
             # APPFLOWY_BASE_URL and advertise routes nothing serves once Admin turns AI apps on.
