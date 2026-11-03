@@ -290,8 +290,9 @@ block from [deploy.env](../deploy.env) into `.env`, or at least add
 `APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`. Without it, AppFlowy
 Cloud and MCP both fall back to `APPFLOWY_BASE_URL`, the same origin, so AI apps keep working, and
 MCP logs a warning that asks for `APPFLOWY_MCP_BASE_URL`. Only AppFlowy Web loses its own copy of
-the URL: while AI apps are turned off, it hides Settings → MCP instead of saying they are off and
-letting members disconnect their apps.
+the URL: until an administrator first turns AI apps on or off in Admin, and while
+`APPFLOWY_MCP_ENABLED=false` locks them off, Cloud does not advertise it, and Web then hides
+Settings → MCP instead of saying that AI apps are off.
 
 Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
 origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in
@@ -309,7 +310,10 @@ Cursor, also work with `http://localhost`.
   and/or exact addresses (`APPFLOWY_MCP_ALLOWED_EMAILS`); lists saved in Admin take precedence.
 - **Server-wide client lists:** `MCP_ALLOWED_CLIENT_IDS` blocks every AI app except the listed
   OAuth client IDs, and `MCP_ALLOWED_REDIRECT_HOSTS` limits which callback hosts (host or
-  host:port) may register. Leave both empty to let workspace owners decide.
+  host:port) may receive authorization responses, at registration and at every sign-in, also for
+  apps identified by a metadata document URL. While it is set, custom-scheme callbacks such as
+  `raycast://` are refused; list `localhost` to keep loopback callbacks. Leave both empty to let
+  workspace owners decide.
 
 Recreate `appflowy_mcp` after changing these `.env` settings (and `appflowy_cloud` too for the
 email lists); changes made in Admin apply without a restart. Users can always revoke their own
@@ -331,7 +335,8 @@ The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) sends exactl
 `/oauth/*` stays on AppFlowy Web, which serves the consent page. MCP's health, metrics, and root
 `/sse` endpoints are not published. If you use your own reverse proxy, route the same paths and,
 for `/mcp` and `/api/mcp`, use HTTP/1.1 without proxy buffering or caching, with read and send
-timeouts of at least an hour and a body limit of at least 4 MiB. Pass `Host` and
+timeouts of at least an hour and a body limit above MCP's own `APPFLOWY_MCP_MAX_BODY_BYTES` (1 MiB
+by default; the bundled Nginx allows 8 MiB). Pass `Host` and
 `X-Forwarded-Proto`, and set both `X-Real-IP` and `X-Forwarded-For` to `$remote_addr`, replacing
 any value the client sent.
 
@@ -355,13 +360,17 @@ either way no client, even one on a private LAN or VPN, chooses its own address.
 that nothing else inside those ranges reaches MCP directly: only Nginx and other Compose
 containers can. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from`
 to only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
-describes, so that `$remote_addr` is the end user. On Docker Swarm, the routing mesh hides client
-addresses from Nginx; see [client addresses](docker-swarm.md#client-addresses).
+describes, so that `$remote_addr` is the end user. `APPFLOWY_MCP_OUTER_PROXY_CIDRS` is only for a
+proxy that connects to MCP itself and appends to `X-Forwarded-For` (see [deploy.env](../deploy.env)).
+On Docker Swarm, the routing mesh hides client addresses from Nginx; see
+[client addresses](docker-swarm.md#client-addresses).
 
 MCP keeps its own PostgreSQL pool of up to `APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS` (8)
 connections; include it in your [connection budget](HARDWARE_SIZING.md#connection-budget). It starts
-after Cloud and uses the same database, Redis, object storage, and Search settings. Upgrade Cloud,
-Worker, Search, and MCP together.
+after Cloud and uses the same database, Redis, object storage, and Search settings. On
+`docker compose stop` or a recreate, open `GET /mcp` streams end at once, and Compose waits up to
+90 seconds (`stop_grace_period`) for tool calls in flight and the audit queue to finish. Upgrade
+Cloud, Worker, Search, and MCP together.
 
 ## Search admission
 
