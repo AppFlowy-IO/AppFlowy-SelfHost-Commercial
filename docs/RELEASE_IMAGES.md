@@ -56,10 +56,11 @@ Other branches use that fixed qualification baseline.
 MCP's routes and settings are copies of AppFlowy-Cloud-Premium files and must match the
 `appflowy_mcp` image that serves them: the MCP locations in `docker/nginx/nginx.conf` (the
 server's `nginx/nginx.conf`), the chart's `ingress-mcp.yaml`, `appflowy.mcp.*` helpers,
-`appflowy-mcp` Deployment and values, and the `appflowy_mcp` Compose environment. CI does not
-compare the two repositories. When an update PR changes the `appflowy_mcp` image, its description
-lists these files: compare them with the server commit that the publisher run built, not the
-server tag with the same number, and port the server's changes in that PR.
+`appflowy-mcp` Deployment, Service, ServiceMonitor and values, and the `appflowy_mcp` Compose
+environment. CI does not compare the two repositories. When an update PR changes the
+`appflowy_mcp` image, its description lists these files: compare them with the server commit that
+the publisher run built, not the server tag with the same number, and port the server's changes in
+that PR.
 Until `appflowy_mcp` is pinned, the copies' baseline is server commit
 `e8e561a225519ff2b54cee8a2bcbda64a2afccff`, the head of PR #1521, which they were last compared
 with; they differ from it only where this repository's deployments deliberately differ. The first

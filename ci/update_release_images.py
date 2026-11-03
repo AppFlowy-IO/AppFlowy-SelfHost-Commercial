@@ -36,6 +36,8 @@ MCP_COPIES = (
     ('helm/appflowy-cloud/templates/ingress-mcp.yaml', 'the whole file'),
     ('helm/appflowy-cloud/templates/_helpers.tpl', 'the `appflowy.mcp.*` helpers'),
     ('helm/appflowy-cloud/templates/appflowy-mcp/deployment.yaml', 'the whole file'),
+    ('helm/appflowy-cloud/templates/appflowy-mcp/service.yaml', 'the whole file'),
+    ('helm/appflowy-cloud/templates/observability/servicemonitor-appflowy-mcp.yaml', 'the whole file'),
     ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`'),
     ('docker-compose.yml', 'the `appflowy_mcp` environment'),
 )
