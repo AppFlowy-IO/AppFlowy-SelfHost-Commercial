@@ -487,8 +487,8 @@ appflowy-web:
 
   image:
     repository: appflowyinc/appflowy_web
-    tag: "0.20.2"
-    digest: sha256:caa43daab737db193c0904d6b76e7378187bb5fa876e404c532f82e8f1b043ca
+    tag: "0.20.5"
+    digest: sha256:54bcf782952fda6cef38daabfa78f134ce4e452b5b3ea8f7f3bf127504143bda
     pullPolicy: IfNotPresent
 
   service:
