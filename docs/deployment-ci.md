@@ -4,18 +4,27 @@
 
 [Deployment integration](../.github/workflows/deployment-test.yml) runs on pull requests, pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions.
 
-**Deployment tests** is the aggregate result for a deployment run. It succeeds only when image preparation and every runtime job succeeds; a skipped, cancelled, or failed deployment cannot produce a passing aggregate check.
+**Deployment tests** is the aggregate result for a deployment run. It requires successful
+change detection, source checks, and every runtime job selected for the diff. Only the
+documented documentation/Web skips can pass without runtime acceptance.
 
 Backup is disabled in the default installation and all three standard CI deployments. The separate
 [AppFlowy Backup integration](../.github/workflows/backup-test.yml) workflow runs on pull requests,
 pushes to `main`, `master`, and `release/public/**`, and manually from GitHub Actions. Only that
 workflow enables Backup with `APPFLOWY_BACKUP_PROFILE=backup`.
 
-Both integration workflows skip automatic runs when **all changed files are the root
-`README.md` or under `docs/`**, including nested guides and screenshot assets. A change
-outside those paths still triggers CI, even when documentation changes are included. Pushes retain
-the branch filters above. Manual runs remain available, and release image builds
-start only on release-branch creation.
+Both workflows always report their aggregate checks. When **all changed files are the root
+`README.md` or under `docs/`**, including nested guides and screenshot assets, their source
+and runtime jobs are skipped.
+
+Web-image-only updates run source checks and image resolution but skip all three deployment
+runtime jobs and Compose Backup acceptance. The detector compares the actual Git snapshots:
+only Web image fields in Compose, generated Swarm, and Helm may change, and all three proposed
+pins must agree. Documentation may accompany the update. Mixed changes to Cloud, Backup,
+deployment settings, CI, or other code still run integration. PRs use their merge base;
+pushes use their before/after commits, so the post-merge push also skips Web-only integration.
+Branch names alone cannot bypass tests. Manual runs and new branches always run the full suite.
+Pushes retain the branch filters above, and release image builds start only on release-branch creation.
 
 When a PR is merged, [Cancel merged PR CI](../.github/workflows/cancel-merged-pr-runs.yml)
 cancels its unfinished Backup, deployment, and release Docker workflow runs, including queued
@@ -26,11 +35,13 @@ Cancelling a release Docker run also requests cancellation of its exact dispatch
 build; it does not cancel other releases. Normal cancellation permits existing diagnostic and
 deployment cleanup steps to finish.
 
-Do not require these path-filtered checks unconditionally for every pull request:
-[GitHub leaves required checks pending when their workflow is skipped by a path filter](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#using-filters-to-target-specific-paths-for-pull-request-or-push-events).
-If mandatory checks are added later, use an always-running status gate that
-accepts documentation-only changes and requires successful integration checks
-for other changes. These workflow files do not configure branch protection.
+The `main` branch requires the always-running **Deployment tests** and **Backup tests**
+aggregate checks from GitHub Actions. They fail when change detection fails, source validation
+fails, or any selected integration job fails, is cancelled, or is unexpectedly skipped.
+Workflow-level path filters are intentionally absent so documentation PRs can satisfy these
+required checks. Branch protection and the repository's auto-merge setting are configured
+separately from the workflow files. Automated image-update PRs enable squash auto-merge after
+both gates pass; other PRs do not opt in automatically. See [Release image updates](RELEASE_IMAGES.md).
 
 ## What a passing run verifies
 
@@ -86,7 +97,7 @@ changes the admission setting. Keyword-search readback remains a separate requir
 ## Backup acceptance
 
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release
-branch pushes. Automatic runs use `appflowyinc/appflowy_backup:0.20.0`; manual runs can use the
+branch pushes. Standard qualification runs use `appflowyinc/appflowy_backup:0.20.0`; manual runs can use the
 `backup_image` input to select a matching release tag or digest. The core images still come from
 the versioned Compose configuration, with the CI server/Web baseline overrides described above. Each run
 resolves the selected tags to digests for reproducibility. Cloud owns the Backup API and database

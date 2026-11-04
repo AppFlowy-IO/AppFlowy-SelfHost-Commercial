@@ -188,8 +188,10 @@ def main():
                 '| Service | Previous image | Proposed image |', '| --- | --- | --- |']
         body += [f'| {service} | `{before}` | `{after}` |' for service, before, after in changes]
         body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
-                 'The deployment checks use the proposed pins without CI baseline image overrides.',
-                 'Review compatibility and migration requirements before merging. This PR does not deploy services.', '']
+                 ('Web-only image updates run source validation and skip deployment/Backup integration.'
+                  if source == 'web' else
+                  'The integration checks use the proposed pins without CI baseline image overrides.'),
+                 'Auto-merge waits for the required CI checks. This PR does not deploy services.', '']
         args.body.write_text('\n'.join(body))
     output = os.environ.get('GITHUB_OUTPUT')
     if output:
