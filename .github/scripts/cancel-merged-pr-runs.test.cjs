@@ -200,17 +200,21 @@ test('merge cleanup is unfiltered and executes only trusted base code with scope
   assert.equal(checkout.with['persist-credentials'], 'false');
 });
 
-test('existing README filters and release-only build triggers remain active', () => {
+test('required CI gates always run and release builds retain their branch-creation trigger', () => {
   for (const name of ['backup-test', 'deployment-test']) {
     for (const event of ['pull_request', 'push']) {
-      assert.deepEqual(workflows[name].on[event]['paths-ignore'], ['README.md', 'docs/**']);
+      assert.ok(Object.hasOwn(workflows[name].on, event));
+      assert.equal(workflows[name].on[event]?.['paths-ignore'], undefined);
     }
+    assert.deepEqual(workflows[name].on.push.branches, ['main', 'master', 'release/public/**']);
     assert.ok(Object.hasOwn(workflows[name].on, 'workflow_dispatch'));
+    assert.equal(workflows[name].jobs.changes.uses, './.github/workflows/classify-changes.yml');
   }
   assert.deepEqual(Object.keys(workflows['release-docker-build'].on), ['create']);
   assert.equal(workflows['release-docker-build'].jobs['docker-build'].if,
     "!cancelled() && github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/public/')");
-  assert.equal(workflows['deployment-test'].jobs['deployment-tests'].if, 'always() && !cancelled()');
+  assert.equal(workflows['deployment-test'].jobs['deployment-tests'].if, 'always()');
+  assert.equal(workflows['backup-test'].jobs['backup-tests'].if, 'always()');
 });
 
 const cleanup = workflows['release-docker-build'].jobs['docker-build'].steps.find(

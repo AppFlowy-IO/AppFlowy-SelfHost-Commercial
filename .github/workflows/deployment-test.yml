@@ -2,14 +2,8 @@ name: Deployment integration
 
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'docs/**'
   push:
     branches: [main, master, 'release/public/**']
-    paths-ignore:
-      - 'README.md'
-      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -18,17 +12,23 @@ permissions:
 env:
   SERVER_IMAGE_TAG: 0.20.0
   WEB_IMAGE_TAG: 0.19.30
-  USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') }}
 
 concurrency:
   group: deployment-test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    uses: ./.github/workflows/classify-changes.yml
+
   images:
     name: Resolve shared images and check source parity
+    needs: changes
+    if: needs.changes.outputs.run_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') || needs.changes.outputs.kind == 'web-images' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,6 +50,9 @@ jobs:
           node --test .github/scripts/cancel-merged-pr-runs.test.cjs
           python -m unittest discover -s ci -p 'test_*.py'
           python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
+          python -m unittest discover -s helm/appflowy-cloud/tests -p 'test_*.py'
+          helm lint helm/appflowy-cloud
+          helm lint helm/appflowy-cloud -f ci/helm-values.yaml
       - name: Resolve exact linux/amd64 image digests once
         run: |
           image_options=()
@@ -66,7 +69,8 @@ jobs:
 
   runtime:
     name: Runtime (${{ matrix.deployment }})
-    needs: images
+    needs: [changes, images]
+    if: needs.changes.outputs.run_integration == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -102,12 +106,6 @@ jobs:
           python -m pip install -r docker-swarm/requirements.txt
           npm ci --prefix ci
           ci/node_modules/.bin/playwright install --with-deps chromium
-      - name: Lint normal Helm templates and the CI profile
-        if: matrix.deployment == 'helm'
-        run: |
-          helm lint helm/appflowy-cloud
-          helm lint helm/appflowy-cloud -f ci/helm-values.yaml
-          python -m unittest discover -s helm/appflowy-cloud/tests -p 'test_*.py'
       - name: Resolve the Redis image supplied by the Helm chart
         if: matrix.deployment == 'helm'
         run: python ci/images.py --helm-redis --output ci-artifacts/image-lock.json
@@ -157,17 +155,34 @@ jobs:
 
   deployment-tests:
     name: Deployment tests
-    if: always() && !cancelled()
-    needs: [images, runtime]
+    if: always()
+    needs: [changes, images, runtime]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require all three runtime acceptance jobs
+      - name: Require the checks selected by the actual diff
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          RUN_CHECKS: ${{ needs.changes.outputs.run_checks }}
+          RUN_INTEGRATION: ${{ needs.changes.outputs.run_integration }}
           IMAGES_RESULT: ${{ needs.images.result }}
           RUNTIME_RESULT: ${{ needs.runtime.result }}
         run: |
+          test "$CHANGES_RESULT" = success
+          if [[ "$RUN_CHECKS" == false ]]; then
+            test "$IMAGES_RESULT" = skipped
+            test "$RUNTIME_RESULT" = skipped
+            echo 'Documentation-only changes: deployment checks are not needed.'
+            exit 0
+          fi
+          test "$RUN_CHECKS" = true
           test "$IMAGES_RESULT" = success
+          if [[ "$RUN_INTEGRATION" == false ]]; then
+            test "$RUNTIME_RESULT" = skipped
+            echo 'Web image pins validated; deployment integration is not needed.'
+            exit 0
+          fi
+          test "$RUN_INTEGRATION" = true
           test "$RUNTIME_RESULT" = success
           echo 'Compose, single-node Swarm, and Helm runtime acceptance passed with Backup disabled.'
           echo 'External AI, semantic search, SMTP, TLS, Redis queue persistence, upgrades and multi-node/HA are outside this check.'

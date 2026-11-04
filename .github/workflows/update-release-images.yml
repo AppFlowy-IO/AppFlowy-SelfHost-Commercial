@@ -62,10 +62,11 @@ jobs:
           python -m unittest discover -s helm/appflowy-cloud/tests -p 'test_*.py'
           helm lint helm/appflowy-cloud
       - name: Open or refresh the image update PR
+        id: pr
         if: steps.update.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
         with:
-          # An App/PAT token lets the normal PR deployment checks start automatically.
+          # An App/PAT token lets the normal PR checks start automatically.
           token: ${{ secrets.PUBLIC_REPO_TOKEN }}
           base: ${{ github.event.repository.default_branch }}
           branch: ${{ steps.update.outputs.branch }}
@@ -77,3 +78,14 @@ jobs:
             docker-swarm/docker-stack.yml
             docker-swarm/docker-stack.backup.yml
             helm/appflowy-cloud/values.yaml
+      - name: Merge the image update after required CI checks pass
+        if: steps.pr.outputs.pull-request-number && steps.pr.outputs.pull-request-operation != 'closed'
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+          PR_HEAD: ${{ steps.pr.outputs.pull-request-head-sha }}
+        run: |
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PR_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          gh pr merge "$PR_NUMBER" --auto --squash --match-head-commit "$PR_HEAD"
