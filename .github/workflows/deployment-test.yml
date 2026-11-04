@@ -34,6 +34,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: azure/setup-helm@v4
         with:
           version: v3.17.3
@@ -44,6 +47,7 @@ jobs:
         run: python docker-swarm/generate.py --check
       - name: Check test isolation and source rendering
         run: |
+          node --test .github/scripts/cancel-merged-pr-runs.test.cjs
           python -m unittest discover -s ci -p 'test_*.py'
           python -m unittest discover -s docker-swarm/tests -p 'test_*.py'
       - name: Resolve exact linux/amd64 image digests once
@@ -153,7 +157,7 @@ jobs:
 
   deployment-tests:
     name: Deployment tests
-    if: always()
+    if: always() && !cancelled()
     needs: [images, runtime]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
