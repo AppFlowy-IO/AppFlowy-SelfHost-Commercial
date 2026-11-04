@@ -77,6 +77,16 @@ class McpChartTests(unittest.TestCase):
                     self.assertEqual(self.environment(documents, suffix).get('APPFLOWY_AUDIT_ENABLE'), configured,
                                      suffix)
 
+    def test_mcp_reads_the_license_under_clouds_origin(self):
+        # Cloud keys the installed license by the host of APPFLOWY_BASE_URL, and a self-hosted MCP
+        # serves AI apps only with a One plan or higher, so MCP must read the same host, also when
+        # it serves on a domain of its own.
+        for overrides in ((), ('appflowy-mcp.config.publicBaseUrl=https://ai.example.test/',)):
+            with self.subTest(overrides=overrides):
+                documents = self.render(overrides=overrides)
+                cloud = self.environment(documents, 'cloud')['APPFLOWY_BASE_URL']
+                self.assertEqual(self.environment(documents, 'mcp').get('APPFLOWY_BASE_URL'), cloud)
+
     def test_one_origin_reaches_mcp_cloud_and_web_but_not_admin(self):
         external = 'appflowy-mcp.config.publicBaseUrl=https://ai.example.test/'
         for overrides, origin, readers in (

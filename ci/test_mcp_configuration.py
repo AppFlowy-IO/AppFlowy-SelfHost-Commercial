@@ -78,6 +78,16 @@ class McpConfigurationTests(unittest.TestCase):
                     for environment in self.compose_environments(file, **values):
                         self.assertEqual(environment.get('APPFLOWY_AUDIT_ENABLE'), configured)
 
+    def test_mcp_reads_the_license_under_clouds_origin(self):
+        # Cloud keys the installed license by the host of APPFLOWY_BASE_URL, and a self-hosted MCP
+        # serves AI apps only with a One plan or higher, so MCP must read the same host.
+        for file in COMPOSE_FILES:
+            for values in ({}, {'APPFLOWY_MCP_BASE_URL': 'https://ai.example.test'}):
+                with self.subTest(file=file, values=values):
+                    cloud, mcp = self.compose_environments(file, **values)
+                    self.assertTrue(cloud.get('APPFLOWY_BASE_URL'))
+                    self.assertEqual(mcp.get('APPFLOWY_BASE_URL'), cloud['APPFLOWY_BASE_URL'])
+
     def test_cors_origins_are_configurable_for_mcp_only(self):
         # Helm exposes appflowy-mcp.config.corsAllowedOrigins; Compose and Swarm take it from .env.
         origins = 'https://tools.example.test,https://console.example.test'

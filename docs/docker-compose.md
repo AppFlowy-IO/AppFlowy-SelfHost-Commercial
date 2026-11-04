@@ -262,7 +262,8 @@ in, chooses a workspace, and grants the app access to that workspace only.
 AI apps are off until an administrator turns them on: open the Admin console, go to
 **AI apps (MCP)**, and switch on **Enable AI app access**. The same page sets who may use AI apps
 and the rate limits, and lists every change. Changes reach every AppFlowy service within seconds, without
-a restart. The page needs a Team plan license or higher.
+a restart. AI apps need a One, Team or Enterprise license: without one, the MCP service refuses
+them even when `APPFLOWY_MCP_ENABLED=true`, and the Admin page is hidden.
 
 `APPFLOWY_MCP_ENABLED` in `.env` is unset by default, so the Admin switch decides. Set it to
 `false` to keep AI apps off whatever Admin stores (the page then shows **Managed by deployment**),

@@ -197,8 +197,9 @@ or the pod restarts. See [docs/OIDC.md](../../docs/OIDC.md).
 ClusterIP Service on port 8002) and serves it on `global.domain`, so users paste
 `https://<global.domain>/mcp` into Claude, ChatGPT, Cursor, Claude Code or another MCP client. Cloud
 advertises the same origin to AppFlowy Web and Desktop (Settings → MCP), and Admin shows it.
-AI apps are off until an administrator turns them on in Admin → AI apps (MCP) (a Team plan license
-or higher), which also sets who may use them and their rate limits; changes apply within seconds,
+AI apps are off until an administrator turns them on in Admin → AI apps (MCP), and they need a
+One, Team or Enterprise license. The same page sets who may use them and their rate limits; changes
+apply within seconds,
 without a restart. Users, approvals and the email allowlist work as described in
 [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
 
