@@ -62,7 +62,7 @@ environment. CI does not compare the two repositories. When an update PR changes
 the publisher run built, not the server tag with the same number, and port the server's changes in
 that PR.
 Until `appflowy_mcp` is pinned, the copies' baseline is server commit
-`9dac498b1560cc3ac2ec22007fa300a775020752`, the head of PR #1521, which they were last compared
+`8ff4927afde695fc01918a12ef9221127f440f73`, the head of PR #1521, which they were last compared
 with; they differ from it only where this repository's deployments deliberately differ. The first
 MCP image-update PR names it. Once `appflowy_mcp` is pinned, the pinned image's build commit
 replaces it as the baseline.

@@ -186,20 +186,19 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
+            {{- /* Without an MCP origin (appflowy-mcp.enabled=false and no publicBaseUrl), Cloud
+              gets no APPFLOWY_MCP_BASE_URL. It never falls back to APPFLOWY_BASE_URL, so it
+              advertises no MCP and runs no MCP policy watcher, and Web and Desktop hide MCP. */}}
             {{- $mcpOrigin := include "appflowy.mcp.baseUrl" . }}
             {{- if $mcpOrigin }}
-            # Advertised as server-info `mcp_url` while AI apps are on and after Admin -> AI apps
-            # (MCP) turns them off, so AppFlowy Web and Desktop find MCP and members can disconnect.
+            # Advertised as server-info `mcp_url` whether MCP is on or off, so AppFlowy Web and
+            # Desktop find MCP and members can disconnect.
             - name: APPFLOWY_MCP_BASE_URL
               value: {{ $mcpOrigin | quote }}
             # The MCP service's policy bootstrap values, bundled or external: Cloud resolves the
-            # MCP policy too, so server-info and Admin -> AI apps (MCP) report what MCP enforces.
+            # MCP policy too, so server-info and the Admin console's MCP page report what MCP
+            # enforces.
             {{- include "appflowy.mcp.policyEnv" . | trim | nindent 12 }}
-            {{- else }}
-            # No MCP service is deployed or configured. Unlocked, Cloud would fall back to
-            # APPFLOWY_BASE_URL and advertise routes nothing serves once Admin turns AI apps on.
-            - name: APPFLOWY_MCP_ENABLED
-              value: "false"
             {{- end }}
             # Bootstrap compatibility for older images; not an operator enable/disable setting.
             - name: APPFLOWY_SEARCH_ENABLED

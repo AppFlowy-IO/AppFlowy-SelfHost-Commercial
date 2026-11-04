@@ -1,4 +1,4 @@
-"""Render Compose and Swarm AI-app (MCP) settings without starting services (Helm: helm/appflowy-cloud/tests)."""
+"""Render Compose and Swarm MCP settings without starting services (Helm: helm/appflowy-cloud/tests)."""
 import json
 import re
 import subprocess
@@ -8,6 +8,8 @@ from images import ROOT, clean_environment
 
 COMPOSE_FILES = ('docker-compose.yml', 'docker-swarm/docker-stack.yml')
 OAUTH_IP_LIMIT = 'APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE'
+# Removed: MCP is on by default and only the Admin console's MCP page turns it off.
+REMOVED_SWITCH = 'APPFLOWY_MCP_ENABLED'
 
 
 class McpConfigurationTests(unittest.TestCase):
@@ -29,6 +31,19 @@ class McpConfigurationTests(unittest.TestCase):
         """Cloud's and MCP's environments from deploy.env, with `values` set in the shell."""
         services = self.compose_services(file, **values)
         return services['appflowy_cloud']['environment'], services['appflowy_mcp']['environment']
+
+    def test_no_service_receives_an_mcp_on_off_variable(self):
+        # The setting saved in Admin always decides, so neither deploy.env nor a value left in the
+        # shell from an older release may reach Cloud, MCP or any other service.
+        self.assertNotIn(REMOVED_SWITCH, (ROOT / 'deploy.env').read_text())
+        for file in COMPOSE_FILES:
+            for values in ({}, {REMOVED_SWITCH: 'false'}):
+                with self.subTest(file=file, values=values):
+                    services = self.compose_services(file, **values)
+                    for name in ('appflowy_cloud', 'appflowy_mcp'):
+                        self.assertIn(name, services)
+                    for name, service in services.items():
+                        self.assertNotIn(REMOVED_SWITCH, service.get('environment') or {}, name)
 
     def test_stop_grace_period_outlasts_mcp_shutdown_drain(self):
         # MCP drains requests in flight (60-second request timeout plus 5 s), then 5 s each for its
@@ -80,7 +95,7 @@ class McpConfigurationTests(unittest.TestCase):
 
     def test_mcp_reads_the_license_under_clouds_origin(self):
         # Cloud keys the installed license by the host of APPFLOWY_BASE_URL, and a self-hosted MCP
-        # serves AI apps only with a One plan or higher, so MCP must read the same host.
+        # service serves only with a One, Team or Enterprise license, so it must read the same host.
         for file in COMPOSE_FILES:
             for values in ({}, {'APPFLOWY_MCP_BASE_URL': 'https://ai.example.test'}):
                 with self.subTest(file=file, values=values):

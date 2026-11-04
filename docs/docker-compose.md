@@ -257,28 +257,25 @@ AppFlowy shows the same URL under **Settings → MCP**, where users connect AI a
 their connections. When a user connects, the AI app opens an AppFlowy consent page; the user signs
 in, chooses a workspace, and grants the app access to that workspace only.
 
-### Turning AI apps on
+### Turning MCP off or on
 
-AI apps are off until an administrator turns them on: open the Admin console, go to
-**AI apps (MCP)**, and switch on **Enable AI app access**. The same page sets who may use AI apps
-and the rate limits, and lists every change. Changes reach every AppFlowy service within seconds, without
-a restart. AI apps need a One, Team or Enterprise license: without one, the MCP service refuses
-them even when `APPFLOWY_MCP_ENABLED=true`, and the Admin page is hidden.
+MCP is on by default, after installing and after upgrading. It needs a One, Team or Enterprise
+license: without one, the MCP service refuses as if MCP were off, and the Admin page is hidden.
+To turn MCP off, or back on, use the switch on the Admin console's MCP page. The same page sets
+who may use MCP and the rate limits, and lists every change. Changes reach every AppFlowy service
+within seconds, without a restart. The setting saved there always decides: no `.env` setting or
+other environment variable turns MCP on or off.
 
-`APPFLOWY_MCP_ENABLED` in `.env` is unset by default, so the Admin switch decides. Set it to
-`false` to keep AI apps off whatever Admin stores (the page then shows **Managed by deployment**),
-or to `true` to turn them on until an administrator changes it there. Recreate `appflowy_cloud`
-and `appflowy_mcp` after changing it.
-
-Upgrading from a version without this switch turns AI apps off until an administrator turns them
-on. Existing connections are kept and resume once AI apps are on again, unless an app's 30-day
-sign-in expired meanwhile.
+After an upgrade, MCP is on unless an administrator already saved a setting on that page, which
+keeps deciding; to keep MCP off, turn it off there. While MCP is off, existing connections are
+kept, and they resume once it is on again, unless an app's 30-day sign-in expired meanwhile.
 
 ### Public URL and HTTPS
 
 `APPFLOWY_MCP_BASE_URL` in `.env` defaults to `${APPFLOWY_BASE_URL}`. Set the origin only, without
 `/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console shows it;
-AppFlowy Web also reads it directly when its container starts. It is also the OAuth issuer:
+Cloud knows the MCP service only from this setting. AppFlowy Web also reads it directly when its
+container starts. It is also the OAuth issuer:
 changing it, for example from `http` to `https` or to a new domain, makes every connected AI app
 reconnect. Recreate every service that reads it after a change:
 
@@ -288,12 +285,17 @@ docker compose up -d appflowy_mcp appflowy_cloud appflowy_web
 
 When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
 block from [deploy.env](../deploy.env) into `.env`, or at least add
-`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`. Without it, AppFlowy
-Cloud and MCP both fall back to `APPFLOWY_BASE_URL`, the same origin, so AI apps keep working, and
-MCP logs a warning that asks for `APPFLOWY_MCP_BASE_URL`. Only AppFlowy Web loses its own copy of
-the URL: until an administrator first turns AI apps on or off in Admin, and while
-`APPFLOWY_MCP_ENABLED=false` locks them off, Cloud does not advertise it, and Web then hides
-Settings → MCP instead of saying that AI apps are off.
+`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`, then recreate the
+services above. Without it, AppFlowy Cloud advertises no MCP: it never falls back to
+`APPFLOWY_BASE_URL`, so AppFlowy Web and Desktop hide Settings → MCP and the Admin console's MCP
+page shows no endpoint. The MCP service itself does fall back to `APPFLOWY_BASE_URL`, the same
+origin, so AI apps that are already connected keep working.
+
+To run without MCP, leave the `appflowy_mcp` service out (remove it from `docker-compose.yml`)
+and set `APPFLOWY_MCP_BASE_URL=` blank in `.env`, or remove the `APPFLOWY_MCP_BASE_URL` lines of
+`appflowy_cloud` and `appflowy_web`. Cloud then advertises no MCP, and AppFlowy Web and Desktop
+hide their MCP settings. If Cloud keeps the setting while no MCP service runs, Cloud still
+advertises `/mcp`, which nothing serves, and Web and Desktop show MCP as unavailable.
 
 Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
 origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in

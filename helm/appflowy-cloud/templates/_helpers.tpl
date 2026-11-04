@@ -397,20 +397,6 @@ outside this chart, and empty when none is configured.
 {{- end }}
 
 {{/*
-APPFLOWY_MCP_ENABLED for Cloud and MCP. Empty lets Admin -> AI apps (MCP) turn AI apps on and
-off; "false" keeps them off whatever Admin stores; "true" turns them on until an administrator
-changes it. A YAML boolean is accepted, so an unquoted `false` still keeps AI apps off.
-*/}}
-{{- define "appflowy.mcp.enabledOverride" -}}
-{{- $value := index .Values "appflowy-mcp" "config" "enabledOverride" -}}
-{{- if kindIs "bool" $value -}}
-{{- ternary "true" "false" $value -}}
-{{- else if and (kindIs "string" $value) (ne (trim $value) "") -}}
-{{- trim $value -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE for Cloud and MCP, or nothing. Empty leaves the
 variable unset, so the services' built-in default applies (and Admin reports it as the default).
 Any other value is passed as written, 0 included, which MCP refuses at startup.
@@ -424,18 +410,14 @@ Any other value is passed as written, 0 included, which MCP refuses at startup.
 
 {{/*
 The MCP policy's bootstrap variables, from appflowy-mcp.config. The MCP service and Cloud must
-resolve the policy with the same values (Cloud for server-info and Admin -> AI apps (MCP)), so
-both containers render this one list: the bundled service, and Cloud whenever it advertises an
-MCP origin, including one deployed outside this chart (appflowy-mcp.enabled=false with
-config.publicBaseUrl), whose values appflowy-mcp.config must then describe. An unset
-APPFLOWY_MCP_ENABLED lets Admin turn AI apps on and off.
+resolve the policy with the same values (Cloud for server-info and the Admin console's MCP page),
+so both containers render this one list: the bundled service, and Cloud whenever the chart knows
+an MCP origin, including one deployed outside this chart (appflowy-mcp.enabled=false with
+config.publicBaseUrl), whose values appflowy-mcp.config must then describe. Whether MCP is on is
+not among them: MCP is on by default, and only the Admin console's MCP page turns it off.
 */}}
 {{- define "appflowy.mcp.policyEnv" -}}
 {{- $config := index .Values "appflowy-mcp" "config" -}}
-{{- with include "appflowy.mcp.enabledOverride" . }}
-- name: APPFLOWY_MCP_ENABLED
-  value: {{ . | quote }}
-{{- end }}
 {{- with include "appflowy.mcp.oauthIpRateLimit" . }}
 - name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
   value: {{ . | quote }}

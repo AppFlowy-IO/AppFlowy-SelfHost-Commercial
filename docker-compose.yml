@@ -153,12 +153,12 @@ services:
       - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY}
       - APPFLOWY_WEB_URL=${APPFLOWY_WEB_URL}
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
-      # Advertised as server-info `mcp_url` while AI apps are on and after Admin -> AI apps (MCP)
-      # turns them off, so AppFlowy Web and Desktop find MCP and members can disconnect.
+      # Advertised as server-info `mcp_url` whether MCP is on or off, so AppFlowy Web and Desktop
+      # find MCP and members can disconnect. Cloud knows MCP only from this value and never falls
+      # back to APPFLOWY_BASE_URL: blank, it advertises no MCP, and Web and Desktop hide MCP.
       - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
       # The same MCP policy defaults as appflowy_mcp's: Cloud resolves the policy too, for
-      # server-info and Admin -> AI apps (MCP) (see deploy.env).
-      - APPFLOWY_MCP_ENABLED=${APPFLOWY_MCP_ENABLED:-}
+      # server-info and the Admin console's MCP page (see deploy.env).
       - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
       - APPFLOWY_MCP_ALLOWED_EMAILS
       - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
@@ -350,19 +350,19 @@ services:
       - APPFLOWY_APPLICATION_HOST=[::]
       - APPFLOWY_APPLICATION_PORT=8002
       # Public origin without /mcp, and the OAuth issuer. When blank, MCP falls back to
-      # APPFLOWY_BASE_URL, the same-domain default.
+      # APPFLOWY_BASE_URL, the same-domain default, for its own origin; Cloud does not, and then
+      # advertises no MCP to Web and Desktop.
       - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
       # AppFlowy Web serves the browser consent page at /oauth/mcp/authorize.
       - APPFLOWY_WEB_URL=${APPFLOWY_WEB_URL}
       - MCP_ALLOWED_CLIENT_IDS=${MCP_ALLOWED_CLIENT_IDS:-}
       - MCP_ALLOWED_REDIRECT_HOSTS=${MCP_ALLOWED_REDIRECT_HOSTS:-}
-      # Unset: AI apps stay off until Admin -> AI apps (MCP) turns them on. `true` is only that
-      # default; `false` keeps them off whatever Admin stores (see deploy.env). Keep
-      # appflowy_cloud's APPFLOWY_MCP_* values equal to these.
-      - APPFLOWY_MCP_ENABLED=${APPFLOWY_MCP_ENABLED:-}
-      # Fallbacks for the MCP email allowlist and OAuth per-IP limit; Admin -> AI apps (MCP)
-      # takes precedence. Unset, the server's own defaults apply.
+      # MCP is on by default and needs a One, Team or Enterprise license; only the Admin
+      # console's MCP page turns it off (see deploy.env).
+      # Fallbacks for the MCP email allowlist and OAuth per-IP limit; settings saved on that page
+      # take precedence. Unset, the server's own defaults apply. Keep appflowy_cloud's
+      # APPFLOWY_MCP_* values equal to these.
       - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
       - APPFLOWY_MCP_ALLOWED_EMAILS
       - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
@@ -439,8 +439,8 @@ services:
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
       - APPFLOWY_WS_BASE_URL=${APPFLOWY_WEBSOCKET_BASE_URL}
-      # The MCP origin. server-info leaves out `mcp_url` until AI apps are first turned on or
-      # off in Admin; with this, Settings -> MCP already says that they are off.
+      # The MCP origin. Web prefers it to server-info's `mcp_url`, which Cloud leaves out until
+      # it has loaded the MCP policy.
       - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
 volumes:
   postgres_data:

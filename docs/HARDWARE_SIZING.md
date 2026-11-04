@@ -106,10 +106,10 @@ requests and keep the limits. At 100 users, the chart defaults are enough, excep
 | redis (bundled chart) | 0.5 / 1 | 8 GiB / 12 GiB |
 | minio (bundled chart) | 0.5 / 2 | 1 GiB / 4 GiB |
 
-`appflowy-mcp` stays close to idle until an administrator turns AI apps on. Its load then follows
-AI-app tool calls, not online users: it runs at most `appflowy-mcp.config.maxInFlight` (128) calls
-at once over its own pool of `databaseMaxConnections` (8). Start from the chart defaults, and
-raise the CPU limit if the container is throttled once AI apps are in use.
+`appflowy-mcp` is on by default but stays close to idle until MCP clients connect. Its load then
+follows MCP tool calls, not online users: it runs at most `appflowy-mcp.config.maxInFlight` (128)
+calls at once over its own pool of `databaseMaxConnections` (8). Start from the chart defaults,
+and raise the CPU limit if the container is throttled once MCP is in use.
 
 Three rules keep these values healthy:
 

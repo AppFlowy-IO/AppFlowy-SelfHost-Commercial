@@ -65,8 +65,8 @@ spec:
             # Public origin and OAuth issuer; AI apps connect to <origin>/mcp.
             - name: APPFLOWY_MCP_BASE_URL
               value: {{ include "appflowy.mcp.baseUrl" . | quote }}
-            # Cloud's origin: a self-hosted MCP reads the license Cloud installed under its host,
-            # and serves AI apps only with a One, Team or Enterprise license.
+            # Cloud's origin: a self-hosted MCP service reads the license Cloud installed under its
+            # host, and serves only with a One, Team or Enterprise license.
             - name: APPFLOWY_BASE_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
             # AppFlowy Web serves the browser consent page at /oauth/mcp/authorize.

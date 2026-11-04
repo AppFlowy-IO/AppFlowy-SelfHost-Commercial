@@ -1,5 +1,5 @@
-"""Render the real chart to verify the AI-app (MCP) lock, shared settings, origin checks, shutdown, metrics and
-streaming Ingress."""
+"""Render the real chart to verify that nothing in the environment turns MCP on or off, and MCP's shared
+settings, origin checks, shutdown, metrics and streaming Ingress."""
 from pathlib import Path
 import subprocess
 import unittest
@@ -8,7 +8,8 @@ import yaml
 
 CHART = Path(__file__).resolve().parents[1]
 ROOT = CHART.parents[1]
-LOCK = 'APPFLOWY_MCP_ENABLED'
+# Removed: MCP is on by default and only the Admin console's MCP page turns it off.
+REMOVED_SWITCH = 'APPFLOWY_MCP_ENABLED'
 OAUTH_IP_LIMIT = 'APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE'
 
 
@@ -39,20 +40,27 @@ class McpChartTests(unittest.TestCase):
         return next(item for item in documents if item['kind'] == 'Ingress'
                     and item['metadata']['name'] == 'appflowy-ci-mcp')
 
-    def test_enabled_override_locks_cloud_and_mcp_alike(self):
-        # Cloud reports the lock in Admin and MCP enforces it, so they must never disagree. An
-        # unquoted YAML false must still lock AI apps off rather than be skipped as empty.
-        for overrides, strings, expected in (
-            ((), (), None),
-            ((), ('appflowy-mcp.config.enabledOverride=',), None),
-            (('appflowy-mcp.config.enabledOverride=false',), (), 'false'),
-            ((), ('appflowy-mcp.config.enabledOverride=false',), 'false'),
-            (('appflowy-mcp.config.enabledOverride=true',), (), 'true'),
+    def test_no_container_receives_an_mcp_on_off_variable(self):
+        # MCP is on by default and the setting saved in Admin always decides, so neither Cloud nor
+        # MCP may receive APPFLOWY_MCP_ENABLED: not by default, not with an external or no MCP
+        # service, and not from a values file that still sets the removed enabledOverride.
+        external = 'appflowy-mcp.config.publicBaseUrl=https://ai.example.test'
+        for overrides, strings, suffixes in (
+            ((), (), ('cloud', 'mcp')),
+            (('appflowy-mcp.config.enabledOverride=false',), (), ('cloud', 'mcp')),
+            ((), ('appflowy-mcp.config.enabledOverride=true',), ('cloud', 'mcp')),
+            (('appflowy-mcp.enabled=false', external), (), ('cloud',)),
+            (('appflowy-mcp.enabled=false', 'appflowy-mcp.config.enabledOverride=false'), (), ('cloud',)),
         ):
             with self.subTest(overrides=overrides, strings=strings):
                 documents = self.render(overrides=overrides, strings=strings)
-                for suffix in ('cloud', 'mcp'):
-                    self.assertEqual(self.environment(documents, suffix).get(LOCK), expected, suffix)
+                for suffix in suffixes:
+                    self.assertNotIn(REMOVED_SWITCH, self.environment(documents, suffix), suffix)
+                for item in documents:
+                    pod = item.get('spec', {}).get('template', {}).get('spec', {})
+                    for container in pod.get('initContainers', []) + pod.get('containers', []):
+                        names = [entry['name'] for entry in container.get('env', [])]
+                        self.assertNotIn(REMOVED_SWITCH, names, item['metadata']['name'])
 
     def test_oauth_ip_limit_is_left_to_the_server_default_unless_configured(self):
         # A deployment value, even one equal to the server default, makes Admin label the limit
@@ -79,8 +87,8 @@ class McpChartTests(unittest.TestCase):
 
     def test_mcp_reads_the_license_under_clouds_origin(self):
         # Cloud keys the installed license by the host of APPFLOWY_BASE_URL, and a self-hosted MCP
-        # serves AI apps only with a One plan or higher, so MCP must read the same host, also when
-        # it serves on a domain of its own.
+        # service serves only with a One, Team or Enterprise license, so it must read the same host,
+        # also when it serves on a domain of its own.
         for overrides in ((), ('appflowy-mcp.config.publicBaseUrl=https://ai.example.test/',)):
             with self.subTest(overrides=overrides):
                 documents = self.render(overrides=overrides)
@@ -103,34 +111,28 @@ class McpChartTests(unittest.TestCase):
 
     def test_external_mcp_origin_keeps_the_policy_env_on_cloud(self):
         disabled = ('appflowy-mcp.enabled=false', 'appflowy-mcp.config.publicBaseUrl=https://ai.example.test')
-        for override, expected in ((None, None), ('true', 'true'), ('false', 'false')):
-            with self.subTest(enabledOverride=override):
-                overrides = disabled + ('appflowy-mcp.config.allowedEmailDomains=example.test',
-                                        'appflowy-mcp.config.allowedEmails=a@example.test',
-                                        'appflowy-mcp.config.oauthIpRateLimitPerMinute=120')
-                if override is not None:
-                    overrides += ('appflowy-mcp.config.enabledOverride=' + override,)
-                cloud = self.environment(self.render(overrides=overrides), 'cloud')
-                self.assertEqual(cloud.get(LOCK), expected)
-                self.assertEqual(cloud['APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS'], 'example.test')
-                self.assertEqual(cloud['APPFLOWY_MCP_ALLOWED_EMAILS'], 'a@example.test')
-                self.assertEqual(cloud[OAUTH_IP_LIMIT], '120')
+        overrides = disabled + ('appflowy-mcp.config.allowedEmailDomains=example.test',
+                                'appflowy-mcp.config.allowedEmails=a@example.test',
+                                'appflowy-mcp.config.oauthIpRateLimitPerMinute=120')
+        cloud = self.environment(self.render(overrides=overrides), 'cloud')
+        self.assertEqual(cloud['APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS'], 'example.test')
+        self.assertEqual(cloud['APPFLOWY_MCP_ALLOWED_EMAILS'], 'a@example.test')
+        self.assertEqual(cloud[OAUTH_IP_LIMIT], '120')
         error = self.render(overrides=disabled[:1],
                             strings=('appflowy-mcp.config.publicBaseUrl=https://ai.example.test/mcp',),
                             success=False)
         self.assertIn('publicBaseUrl', error)
 
-    def test_disabling_mcp_without_an_origin_locks_ai_apps_off_in_cloud(self):
-        # Unlocked, Cloud would fall back to APPFLOWY_BASE_URL and advertise /mcp to every client
-        # once Admin turns AI apps on, although nothing serves it.
-        for overrides in ((), ('appflowy-mcp.config.enabledOverride=true',)):
-            with self.subTest(overrides=overrides):
-                documents = self.render(overrides=('appflowy-mcp.enabled=false',) + overrides)
-                self.assertFalse(any(item['metadata']['name'] == 'appflowy-ci-mcp' for item in documents))
-                cloud = self.environment(documents, 'cloud')
-                self.assertEqual(cloud[LOCK], 'false')
-                self.assertNotIn('APPFLOWY_MCP_BASE_URL', cloud)
-                self.assertNotIn('APPFLOWY_MCP_BASE_URL', self.environment(documents, 'web'))
+    def test_disabling_mcp_without_an_origin_leaves_cloud_on_its_own_origin(self):
+        # No MCP origin is rendered, so Cloud advertises no MCP (it never falls back to
+        # APPFLOWY_BASE_URL); the Admin console's MCP page, not the chart, turns MCP off.
+        documents = self.render(overrides=('appflowy-mcp.enabled=false',))
+        self.assertFalse(any(item['metadata']['name'] == 'appflowy-ci-mcp' for item in documents))
+        cloud = self.environment(documents, 'cloud')
+        self.assertTrue(cloud.get('APPFLOWY_BASE_URL'))
+        for name in ('APPFLOWY_MCP_BASE_URL', REMOVED_SWITCH, OAUTH_IP_LIMIT):
+            self.assertNotIn(name, cloud)
+        self.assertNotIn('APPFLOWY_MCP_BASE_URL', self.environment(documents, 'web'))
 
     def test_unsafe_mcp_configurations_fail_rendering(self):
         for value, error in (

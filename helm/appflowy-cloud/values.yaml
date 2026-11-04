@@ -634,7 +634,8 @@ appflowy-ai:
 # service (see ingress.mcp), and Cloud advertises the origin to AppFlowy Web and Desktop.
 appflowy-mcp:
   # false removes the bundled service. Set config.publicBaseUrl to the origin of an MCP service
-  # deployed elsewhere; left empty, Cloud keeps AI apps off (Admin shows "Managed by deployment").
+  # deployed elsewhere. Left empty, Cloud gets no MCP origin and advertises no MCP, so AppFlowy
+  # Web and Desktop hide their MCP settings.
   enabled: true
   replicaCount: 1
   # Must exceed MCP's 75-second shutdown drain (requests in flight, bounded by the 60-second
@@ -661,17 +662,14 @@ appflowy-mcp:
 
   config:
     rustLog: "info"
-    # AI apps are off until an administrator turns them on in Admin -> AI apps (MCP). Leave
-    # empty so Admin controls it. false keeps AI apps off whatever Admin stores; true only
-    # turns them on until an administrator changes it there. Cloud receives the same value, also
-    # for an MCP deployed outside this chart (enabled: false with publicBaseUrl).
-    enabledOverride: ""
+    # MCP is on by default and needs a One, Team or Enterprise license. The Admin console's MCP
+    # page turns it off or on, and the setting saved there always decides; no value here does.
     # Public origin without /mcp, which MCP, Cloud and AppFlowy Web all use. Empty uses
     # global.scheme://global.domain while enabled. It is also the OAuth issuer: changing it
     # makes every connected AI app reconnect. Remote AI apps such as claude.ai and ChatGPT need
     # a public HTTPS origin. With enabled: false, it is the origin of the MCP service deployed
-    # elsewhere, and Cloud also receives enabledOverride, oauthIpRateLimitPerMinute and the
-    # email allowlists below, which must then match that service's own settings.
+    # elsewhere, and Cloud also receives oauthIpRateLimitPerMinute and the email allowlists
+    # below, which must then match that service's own settings.
     publicBaseUrl: ""
     # Proxies whose X-Forwarded-For/X-Real-IP MCP trusts for its per-IP OAuth rate limit and
     # audit address. MCP believes only the right-most X-Forwarded-For entry, the one the proxy

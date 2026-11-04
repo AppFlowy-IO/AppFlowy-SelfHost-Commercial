@@ -197,11 +197,11 @@ or the pod restarts. See [docs/OIDC.md](../../docs/OIDC.md).
 ClusterIP Service on port 8002) and serves it on `global.domain`, so users paste
 `https://<global.domain>/mcp` into Claude, ChatGPT, Cursor, Claude Code or another MCP client. Cloud
 advertises the same origin to AppFlowy Web and Desktop (Settings → MCP), and Admin shows it.
-AI apps are off until an administrator turns them on in Admin → AI apps (MCP), and they need a
-One, Team or Enterprise license. The same page sets who may use them and their rate limits; changes
-apply within seconds,
-without a restart. Users, approvals and the email allowlist work as described in
-[the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
+MCP is on by default, after installing and after upgrading, and needs a One, Team or Enterprise
+license. An administrator turns it off or on, and sets who may use it and its rate limits, on the
+Admin console's MCP page; changes apply within seconds, without a restart. The setting saved there
+always decides, and no chart value turns MCP on or off. Users, approvals and the email allowlist
+work as described in [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
 
 A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP, written as
 anchored regular expressions with `pathType: ImplementationSpecific`:
@@ -233,9 +233,8 @@ authentication, and route the same paths yourself.
 
 | Value | Default and purpose |
 | --- | --- |
-| `appflowy-mcp.enabled` | `true`. Deploys MCP; AI apps still stay off until Admin turns them on. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port; unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then keeps AI apps off whatever Admin stores (Admin shows "Managed by deployment"). |
-| `appflowy-mcp.config.enabledOverride` | Empty, so Admin → AI apps (MCP) turns AI apps on and off. `false` keeps them off whatever Admin stores (Admin shows "Managed by deployment"); `true` turns them on until an administrator changes it there. Cloud and MCP receive the same value. |
-| `appflowy-mcp.config.publicBaseUrl` | Empty, meaning `global.scheme://global.domain`. Must be an http(s) origin without `/mcp` or another path. MCP, Cloud and AppFlowy Web all use it. It is the OAuth issuer: changing it makes every connected AI app reconnect. The chart's Ingress always routes `global.domain`. With `enabled=false`, set it to the origin of an MCP service deployed outside this chart: Cloud and Web advertise it, and Cloud also receives `enabledOverride`, `oauthIpRateLimitPerMinute` and the email allowlists, which must match that service's own settings. |
+| `appflowy-mcp.enabled` | `true`. Deploys MCP, which is on by default. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port. Unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then gets no `APPFLOWY_MCP_BASE_URL` and advertises no MCP (it never falls back to its own origin), so AppFlowy Web and Desktop hide their MCP settings and the Admin console's MCP page shows no endpoint. Turning MCP off on that page does not hide MCP in Web or Desktop. |
+| `appflowy-mcp.config.publicBaseUrl` | Empty, meaning `global.scheme://global.domain`. Must be an http(s) origin without `/mcp` or another path. MCP, Cloud and AppFlowy Web all use it. It is the OAuth issuer: changing it makes every connected AI app reconnect. The chart's Ingress always routes `global.domain`. With `enabled=false`, set it to the origin of an MCP service deployed outside this chart: Cloud and Web advertise it, and Cloud also receives `oauthIpRateLimitPerMinute` and the email allowlists, which must match that service's own settings. |
 | `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. Behind a CDN or load balancer, have the controller resolve the client with `use-forwarded-headers` and `proxy-real-ip-cidr`, as described for LDAP above. |
 | `appflowy-mcp.config.allowedClientIds` / `allowedRedirectHosts` | Empty. Optional server-wide client governance; workspace owners still approve apps for their workspace. |
 | `appflowy-mcp.config.allowedEmailDomains` / `allowedEmails` | Empty, allowing every account. Lists saved in Admin → AI apps (MCP) take precedence. |
