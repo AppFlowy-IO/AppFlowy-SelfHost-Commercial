@@ -328,7 +328,7 @@ services:
         constraints:
         - node.labels.appflowy.data == true
   appflowy_web:
-    image: appflowyinc/appflowy_web:0.20.8@sha256:f9abdc0870873dcfef413c9a8382827fde1bc3503c786dd22130dc26426c1a69
+    image: appflowyinc/appflowy_web:0.20.9@sha256:7b028c135db30452dc8bac18ceef00d87e2ecd688843504256c0cccc594a0b21
     environment:
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
