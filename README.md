@@ -69,7 +69,35 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.4 (Latest)
+### 🚀 v0.20.5 (Latest)
+
+#### New Features
+
+- **Progressive search API** — Added an opt-in streaming endpoint for API clients to receive keyword matches while semantic retrieval continued, followed by final ranked results. Each published snapshot rechecked read access.
+- **Content indexing dashboard** — Added a dedicated Grafana dashboard for indexing queues, image and PDF processing, cache reuse, provider work, and resource pressure.
+
+#### Improvements
+
+- **Content indexing defaults** — Enabled native PDF text indexing and structural backlinks by default without requiring AI, while preserving existing Admin overrides. PDF OCR and AI-based graph enrichment remained opt-in.
+- **Database PDF exports** — Kept wide tables readable across pages, with repeated headers and primary columns. Added A4, A3, Letter, and Legal paper options and portrait or landscape orientation to the export API. Incomplete row loading now failed the export instead of silently omitting rows.
+- **Indexing efficiency** — Reduced repeated keyword-index reads for repetitive text, admitted embedding writes in queue order, and retained deferred writes for retry during database contention.
+- **Recovery backups** — Excluded temporary import files, diagnostic archives, and verified expired or retired objects while retaining saved content, attachments, and history. Restores cancelled unfinished imports, which required a fresh upload to restart.
+
+#### Bug Fixes
+
+- Rejected attachment uploads with declared-size mismatches and prevented delayed cleanup from deleting replacement files.
+- Fixed AI failures with providers that rejected temperature settings and corrected ignored imported presentation layouts.
+- Filtered newer notification types from older clients' inboxes and realtime updates to prevent decoding failures.
+- Stopped repeated processing of oversized assignment sources and unchanged database views with unreadable row-order data.
+- Removed credentials, authentication payloads, and signed URLs from additional service logs and verbose driver diagnostics.
+
+#### ⚠️ Action Required
+
+- **Attachment storage upgrade** — Pause uploads, apply the database migrations, and upgrade all attachment readers and writers, including Cloud, Worker, Search, and Backup, before resuming uploads. Older binaries cannot read newly stored file generations; any rollback must also use images that support the new storage layout.
+
+**Baseline:** [`afeba0248679d10d1c8a68f3cde4502eb8d20214`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/afeba0248679d10d1c8a68f3cde4502eb8d20214)
+
+### 🚀 v0.20.4
 
 #### Improvements
 
