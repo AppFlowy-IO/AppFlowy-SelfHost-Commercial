@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -104,11 +105,38 @@ class ReleaseImageTests(unittest.TestCase):
         self.assertIn('| appflowy_mcp |', with_mcp)
         self.assertIn('server commit the publisher run built', with_mcp)
         self.assertNotIn('MCP', without_mcp)
-        for path, _ in release.MCP_COPIES:
+        self.assertIn('- [ ] `docker/nginx/nginx.conf`: the MCP locations (server: `nginx/nginx.conf`)', with_mcp)
+        self.assertIn('- [ ] `docker-compose.yml`: the `appflowy_mcp` environment\n', with_mcp)
+        for path, _, _ in release.MCP_COPIES:
             with self.subTest(path=path):
                 self.assertIn(f'- [ ] `{path}`', with_mcp)
                 # A moved or renamed copy must not leave the checklist pointing nowhere.
                 self.assertIn('mcp', (release.ROOT / path).read_text().lower())
+
+    def test_mcp_copies_include_the_settings_and_guides_and_match_the_release_guide(self):
+        paths = [path for path, _, _ in release.MCP_COPIES]
+        self.assertEqual(len(paths), len(set(paths)))
+        # The deploy.env settings and the Compose and chart guides describe MCP's routes and settings.
+        for path in ('deploy.env', 'docs/docker-compose.md', 'helm/appflowy-cloud/README.md'):
+            self.assertIn(path, paths)
+        guide = (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text()
+        section = guide.partition('\n## MCP copies\n')[2].partition('\n### ')[0]
+        listed = re.findall(r'^- `([^`]+)`: ', section, re.M)
+        self.assertEqual(listed, paths)
+
+    def test_mcp_updates_link_the_deliberate_differences_and_ask_for_a_separate_port(self):
+        changes, _ = self.update('cloud', services=['appflowy_mcp'])
+        body = release.pull_request_body('cloud', '0.20.0', '', changes)
+        self.assertIn(f'({release.MCP_DIFFERENCES_URL})', body)
+        # GitHub's anchor for the guide's heading.
+        guide = (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text()
+        self.assertTrue(release.MCP_DIFFERENCES_URL.endswith(
+            '/blob/main/docs/RELEASE_IMAGES.md#deliberate-differences-from-the-server'))
+        self.assertIn('\n### Deliberate differences from the server\n', guide)
+        # Commits pushed to the automation branch are lost when a repeated notification rebuilds it.
+        for text in (body, guide):
+            self.assertIn('separate PR', text)
+            self.assertIn('rebuilds', text)
 
     def test_mcp_updates_name_the_recorded_copy_baseline_until_mcp_is_pinned(self):
         self.assertRegex(release.MCP_COPIES_BASELINE, r'^[0-9a-f]{40}$')

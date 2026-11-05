@@ -79,7 +79,7 @@ jobs:
             docker-swarm/docker-stack.backup.yml
             helm/appflowy-cloud/values.yaml
       - name: Merge the image update after required CI checks pass
-        # An MCP image change stays open until a reviewer ports the copied MCP files (RELEASE_IMAGES.md).
+        # An MCP image change stays open until a separate PR ports the copied MCP files (RELEASE_IMAGES.md).
         if: >-
           steps.update.outputs.auto_merge == 'true' &&
           steps.pr.outputs.pull-request-number && steps.pr.outputs.pull-request-operation != 'closed'

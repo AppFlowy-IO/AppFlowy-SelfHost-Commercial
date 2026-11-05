@@ -28,19 +28,28 @@ DEFAULT_SERVICES = {
     'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'],
     'web': ['appflowy_web'],
 }
-# MCP's routes and settings are copied from the same paths in AppFlowy-Cloud-Premium, except Nginx
-# (the server's nginx/nginx.conf), and must match the appflowy_mcp image that serves them. Nothing
-# compares the repositories, so a PR that changes that image asks its reviewer to.
+# MCP's routes and settings, and the guides that describe them, follow AppFlowy-Cloud-Premium files
+# and must match the appflowy_mcp image that serves them. Each entry is (path here, the part that is
+# MCP's, the server source when it is not the same path). Nothing compares the repositories, so a
+# PR that changes that image asks its reviewer to port the server's changes in a separate PR first.
+# docs/RELEASE_IMAGES.md lists the same copies and their deliberate differences from the server.
 MCP_COPIES = (
-    ('docker/nginx/nginx.conf', 'the MCP locations'),
-    ('helm/appflowy-cloud/templates/ingress-mcp.yaml', 'the whole file'),
-    ('helm/appflowy-cloud/templates/_helpers.tpl', 'the `appflowy.mcp.*` helpers'),
-    ('helm/appflowy-cloud/templates/appflowy-mcp/deployment.yaml', 'the whole file'),
-    ('helm/appflowy-cloud/templates/appflowy-mcp/service.yaml', 'the whole file'),
-    ('helm/appflowy-cloud/templates/observability/servicemonitor-appflowy-mcp.yaml', 'the whole file'),
-    ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`'),
-    ('docker-compose.yml', 'the `appflowy_mcp` environment'),
+    ('docker/nginx/nginx.conf', 'the MCP locations', '`nginx/nginx.conf`'),
+    ('helm/appflowy-cloud/templates/ingress-mcp.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/_helpers.tpl', 'the `appflowy.mcp.*` helpers', None),
+    ('helm/appflowy-cloud/templates/appflowy-mcp/deployment.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/appflowy-mcp/service.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/observability/servicemonitor-appflowy-mcp.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`', None),
+    ('docker-compose.yml', 'the `appflowy_mcp` environment', None),
+    ('deploy.env', 'the MCP section', None),
+    ('docs/docker-compose.md', 'the MCP route table and settings',
+     "the MCP locations in `nginx/nginx.conf` and `deploy.env`'s MCP section"),
+    ('helm/appflowy-cloud/README.md', 'the MCP Ingress path table and `appflowy-mcp` rows',
+     "`ingress-mcp.yaml` and `values.yaml`'s `appflowy-mcp`"),
 )
+MCP_DIFFERENCES_URL = ('https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/main/docs/RELEASE_IMAGES.md'
+                       '#deliberate-differences-from-the-server')
 # The AppFlowy-Cloud-Premium commit (PR #1521's merge into main) the copies were last compared with.
 # It is the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
 MCP_COPIES_BASELINE = '0fda6b6188273cc8e355714d3ab133827c7462db'
@@ -190,7 +199,7 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
 
 
 def auto_merge(changes):
-    """An MCP image change waits for a reviewer to port the copied MCP routes and settings."""
+    """An MCP image change waits for a separate PR that ports the copied MCP routes and settings."""
     return all(service != 'appflowy_mcp' for service, _, _ in changes)
 
 
@@ -204,14 +213,20 @@ def pull_request_body(source, tag, url, changes):
              ('Web-only image updates run source validation and skip deployment/Backup integration.'
               if source == 'web' else
               'The integration checks use the proposed pins without CI baseline image overrides.'),
-             ('Auto-merge is off because the MCP image changed: merge after porting the MCP copies below. '
-              if mcp else 'Auto-merge waits for the required CI checks. ') + 'This PR does not deploy services.', '']
+             ('Auto-merge is off because the MCP image changed: merge it after the PR that ports the MCP '
+              'copies below. ' if mcp else 'Auto-merge waits for the required CI checks. ')
+             + 'This PR does not deploy services.', '']
     if mcp:
-        body += ['The MCP image changed. These MCP routes and settings are copies of AppFlowy-Cloud-Premium files '
-                 '(Nginx: `nginx/nginx.conf`). Compare them with the server commit the publisher run built, '
-                 "not the server tag with the same number, and port the server's changes before merging:", '']
-        body += [f'- [ ] `{path}`: {part}' for path, part in MCP_COPIES]
-        body += ['']
+        body += ['The MCP image changed. These MCP routes and settings, and the guides that describe them, follow '
+                 'AppFlowy-Cloud-Premium files at the same paths unless a line names the server source. Compare '
+                 'them with the server commit the publisher run built, not the server tag with the same number:', '']
+        body += [f'- [ ] `{path}`: {part}' + (f' (server: {server})' if server else '')
+                 for path, part, server in MCP_COPIES]
+        body += ['', f'Keep the [deliberate differences from the server]({MCP_DIFFERENCES_URL}).', '',
+                 "Port the server's changes in a separate PR against the default branch and merge it before this one. "
+                 'Do not push them to this branch: a repeated notification for these images rebuilds it from the '
+                 'default branch and drops commits added by hand. Once the port has merged, update this branch '
+                 'from the default branch so the checks run with the ported files, then merge it.', '']
         if not DIGEST.search(mcp[0]):
             body += ['The previous MCP image is unpinned. The copies were last compared with server commit '
                      f'`{MCP_COPIES_BASELINE}` (PR #1521), so port the server changes since that commit.', '']

@@ -28,13 +28,17 @@ NAME = 'appflowy-ci'
 NAMESPACE = NAME
 STAGES = [['postgres', 'redis', 'minio'], ['gotrue'], ['appflowy_cloud'],
           ['appflowy_search', 'appflowy_worker', 'appflowy_mcp', 'appflowy_web', 'admin_frontend', 'nginx']]
+# OpenAI's domain-verification token, which CI gives MCP in Compose, Swarm (render) and Helm
+# (ci/helm-values.yaml). It is not a secret: MCP serves it to anyone.
+OPENAI_APPS_CHALLENGE = 'ci-challenge-token'
 # One request per same-domain MCP route: each Nginx location and each Ingress path. MCP is on by
 # default, but CI installs no One, Team or Enterprise license, so MCP refuses as if it were off and
-# answers each with its own 503 `mcp_disabled`. While it serves, it answers with the status and
-# JSON fields (None: any value) below: its 401 for a missing token, which also carries its Bearer
-# challenge naming its resource metadata, its error for an unknown client, or the route's
-# discovery document. A bare 200 proves nothing: AppFlowy Web's catch-all answers 200 HTML for
-# any path the proxy fails to send to MCP.
+# answers each JSON route with its own 503 `mcp_disabled`. While it serves, it answers with the
+# status and JSON fields (None: any value) below: its 401 for a missing token, which also carries
+# its Bearer challenge naming its resource metadata, its error for an unknown client, or the
+# route's discovery document. A string is a plain-text body instead: OpenAI's domain challenge,
+# which MCP serves whether it is on or off, so no 503 passes there. A bare 200 proves nothing:
+# AppFlowy Web's catch-all answers 200 HTML for any path the proxy fails to send to MCP.
 MCP_ROUTE_PROBES = {
     '/mcp': (401, {'error': 'invalid_token'}),
     '/api/mcp': (401, {'error': 'invalid_token'}),
@@ -43,6 +47,7 @@ MCP_ROUTE_PROBES = {
     '/.well-known/oauth-protected-resource': (200, {'resource': None, 'authorization_servers': None}),
     '/.well-known/oauth-protected-resource/mcp': (200, {'resource': None, 'authorization_servers': None}),
     '/.well-known/mcp.json': (200, {'endpoint': None}),
+    '/.well-known/openai-apps-challenge': (200, OPENAI_APPS_CHALLENGE),
 }
 MCP_TURNED_OFF = (503, {'error': 'mcp_disabled'})
 # Other services answer 401 too; only MCP's Bearer challenge names its OAuth resource metadata.
@@ -286,6 +291,7 @@ class Deployment:
             'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
             'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': self.base_url + '/minio-api',
             'APPFLOWY_MAILER_SMTP_TLS_KIND': 'none',
+            'APPFLOWY_MCP_OPENAI_APPS_CHALLENGE': OPENAI_APPS_CHALLENGE,
             'APPFLOWY_BACKUP_PROFILE': 'backup' if self.backup else '',
         }
         if self.backup:
@@ -417,9 +423,14 @@ class Deployment:
 
     @staticmethod
     def mcp_replied(path, reply):
-        """Whether `reply` to `path`, a urlopen response or HTTPError, is one MCP itself sends: its
-        503 `mcp_disabled` while it refuses, or the route's MCP_ROUTE_PROBES reply while it serves."""
-        status, fields = MCP_TURNED_OFF if reply.status == MCP_TURNED_OFF[0] else MCP_ROUTE_PROBES[path]
+        """Whether `reply` to `path`, a urlopen response or HTTPError, is one MCP itself sends: the
+        route's MCP_ROUTE_PROBES reply, or on a JSON route its 503 `mcp_disabled` while it refuses."""
+        status, fields = MCP_ROUTE_PROBES[path]
+        if isinstance(fields, str):
+            return (reply.status == status and reply.headers.get_content_type() == 'text/plain'
+                    and reply.read(65536) == fields.encode())
+        if reply.status == MCP_TURNED_OFF[0]:
+            status, fields = MCP_TURNED_OFF
         if reply.status != status or reply.headers.get_content_type() != 'application/json':
             return False
         if status == 401 and not MCP_CHALLENGE.match(reply.headers.get('WWW-Authenticate', '')):

@@ -19,14 +19,16 @@ import urllib.error
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
+from deployment import (Deployment, HELM_KEYS, HELM_WORKLOADS, MCP_ROUTE_PROBES, OPENAI_APPS_CHALLENGE,
+                        normalized_image_reference, private_write, sanitize)
 from images import CORE, ROOT, clean_environment
 from configuration import source_fingerprint
 
 
+CHALLENGE_PATH = '/.well-known/openai-apps-challenge'
 MCP_PATHS = ('/mcp', '/api/mcp', '/api/mcp/clients?client_id=ci', '/.well-known/oauth-authorization-server',
              '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp',
-             '/.well-known/mcp.json')
+             '/.well-known/mcp.json', CHALLENGE_PATH)
 MCP_DOCUMENTS = {'/.well-known/oauth-authorization-server': {'issuer': 'http://127.0.0.1',
                                                              'authorization_endpoint': 'http://127.0.0.1/api/mcp/authorize'},
                  '/.well-known/oauth-protected-resource': {'resource': 'http://127.0.0.1/mcp',
@@ -53,7 +55,8 @@ def http_reply(status, body, content_type):
 def http_error(status, body, content_type='application/json', challenge=None):
     """A urlopen stand-in raising HTTPError `status` with `body`, `content_type` and `challenge`."""
     headers = email.message.Message()
-    headers['Content-Type'] = content_type
+    if content_type:
+        headers['Content-Type'] = content_type
     if challenge:
         headers['WWW-Authenticate'] = challenge
 
@@ -70,13 +73,20 @@ def web_page(url):
 mcp_turned_off = http_error(503, b'{"error":"mcp_disabled","reason":"mcp_disabled","retryable":false}')
 
 
+def openai_apps_challenge(url):
+    """MCP's reply on the domain challenge with CI's token, the same whether MCP is on or off."""
+    return http_reply(200, OPENAI_APPS_CHALLENGE.encode(), 'text/plain; charset=utf-8')
+
+
 def public_routes(**mcp_replies):
-    """urlopen stand-in: Web for the non-MCP routes, `mcp_replies[path]` or AI apps off for MCP's."""
+    """urlopen stand-in: Web for the non-MCP routes, and `mcp_replies[path]` for MCP's, by default
+    MCP while it refuses: `mcp_disabled`, except on the domain challenge, which it serves anyway."""
     def urlopen(url, timeout):
         path = url.removeprefix('http://127.0.0.1')
         if path not in MCP_PATHS:
             return web_page(url)
-        return mcp_replies.get(path, mcp_turned_off)(url)
+        refusing = openai_apps_challenge if path == CHALLENGE_PATH else mcp_turned_off
+        return mcp_replies.get(path, refusing)(url)
     return urlopen
 
 
@@ -685,6 +695,10 @@ class RuntimeSafetyTests(unittest.TestCase):
                 self.assertEqual(metadata['base_url'], base_url)
                 cloud = rendered['services']['appflowy_cloud']['environment']
                 self.assertEqual(cloud['APPFLOWY_BASE_URL'], base_url)
+                # The token the domain-challenge probe expects reaches MCP only.
+                mcp = rendered['services']['appflowy_mcp']['environment']
+                self.assertEqual(mcp['APPFLOWY_MCP_OPENAI_APPS_CHALLENGE'], OPENAI_APPS_CHALLENGE)
+                self.assertNotIn('APPFLOWY_MCP_OPENAI_APPS_CHALLENGE', cloud)
                 self.assertEqual(cloud['APPFLOWY_WEB_URL'], base_url)
                 self.assertEqual(cloud['APPFLOWY_S3_PRESIGNED_URL_ENDPOINT'], base_url + '/minio-api')
                 web = rendered['services']['appflowy_web']['environment']
@@ -750,6 +764,7 @@ class RuntimeSafetyTests(unittest.TestCase):
         replies['/mcp'] = replies['/api/mcp'] = http_error(401, MCP_MISSING_TOKEN, challenge=MCP_CHALLENGE)
         replies['/api/mcp/clients?client_id=ci'] = http_error(
             404, b'{"error":"invalid_client","error_description":"Unknown client_id","reason":"unknown_client"}')
+        replies[CHALLENGE_PATH] = openai_apps_challenge
         self.assertEqual(set(replies), set(MCP_PATHS))
         # One attempt per route, so a refused reply fails at once instead of after 180 s.
         with patch('deployment.urllib.request.urlopen', side_effect=public_routes(**replies)), \
@@ -768,14 +783,47 @@ class RuntimeSafetyTests(unittest.TestCase):
             'challenge without resource metadata': http_error(401, MCP_MISSING_TOKEN, challenge='Bearer realm="OAuth"'),
             'JSON without MCP metadata': lambda url: http_reply(200, b'{"status":"ok"}', 'application/json'),
         }
-        for path in MCP_PATHS:
-            for name, reply in not_mcp.items():
-                with self.subTest(path=path, reply=name), \
-                     patch('deployment.urllib.request.urlopen', side_effect=public_routes(**{path: reply})), \
-                     patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
-                     patch('deployment.time.sleep'):
-                    with self.assertRaisesRegex(RuntimeError, re.escape('http://127.0.0.1' + path + '; ')):
-                        instance.wait_http()
+        # MCP serves the domain challenge whether it is on or off, as the token CI configured: its
+        # 503, its 404 while no token is configured, another token or another type is not it.
+        not_the_challenge = {
+            'MCP turned off': mcp_turned_off,
+            'MCP without a token': http_error(404, b'', None),
+            'another token': lambda url: http_reply(200, b'another-token', 'text/plain; charset=utf-8'),
+            'the token as HTML': lambda url: http_reply(200, OPENAI_APPS_CHALLENGE.encode(), 'text/html'),
+        }
+        cases = [(path, name, reply) for path in MCP_PATHS for name, reply in not_mcp.items()]
+        cases += [(CHALLENGE_PATH, name, reply) for name, reply in not_the_challenge.items()]
+        for path, name, reply in cases:
+            with self.subTest(path=path, reply=name), \
+                 patch('deployment.urllib.request.urlopen', side_effect=public_routes(**{path: reply})), \
+                 patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
+                 patch('deployment.time.sleep'):
+                with self.assertRaisesRegex(RuntimeError, re.escape('http://127.0.0.1' + path + '; ')):
+                    instance.wait_http()
+
+    def test_every_same_domain_mcp_route_has_a_readiness_probe(self):
+        # Each Nginx location that sends requests to MCP, and each path of the chart's MCP Ingress
+        # (matched as ingress-nginx does, `^<path>`), must be reached by at least one probe.
+        probes = [path.partition('?')[0] for path in MCP_ROUTE_PROBES]
+        nginx = (ROOT / 'docker/nginx/nginx.conf').read_text()
+        locations = re.findall(r'location (=|\^~) (\S+) \{[^}]*proxy_pass \$appflowy_mcp_backend;', nginx)
+        self.assertIn(('=', CHALLENGE_PATH), locations)
+        for kind, location in locations:
+            with self.subTest(location=location):
+                self.assertTrue(any(probe == location if kind == '=' else probe.startswith(location)
+                                    for probe in probes))
+        ingress = (ROOT / 'helm/appflowy-cloud/templates/ingress-mcp.yaml').read_text()
+        paths = re.findall(r'^\s*- path: (\S+)$', ingress, re.M)
+        self.assertIn(CHALLENGE_PATH + '$', paths)
+        for path in paths:
+            with self.subTest(ingress_path=path):
+                self.assertTrue(any(re.match('^' + path, probe) for probe in probes))
+
+    def test_helm_ci_values_give_mcp_the_token_the_challenge_probe_expects(self):
+        # Compose and Swarm get it from render(); the chart from ci/helm-values.yaml.
+        values = yaml.safe_load((ROOT / 'ci/helm-values.yaml').read_text())
+        self.assertEqual(values['appflowy-mcp']['config']['openaiAppsChallenge'], OPENAI_APPS_CHALLENGE)
+        self.assertEqual(MCP_ROUTE_PROBES[CHALLENGE_PATH], (200, OPENAI_APPS_CHALLENGE))
 
 
 if __name__ == '__main__':

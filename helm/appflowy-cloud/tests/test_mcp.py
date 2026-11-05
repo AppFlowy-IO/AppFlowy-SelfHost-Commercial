@@ -203,7 +203,10 @@ class McpChartTests(unittest.TestCase):
         values = {'openaiAppsChallenge': 'ci-challenge-token',
                   'privacyPolicyUrl': 'https://appflowy.example.test/privacy',
                   'termsOfServiceUrl': 'https://appflowy.example.test/terms'}
-        documents = self.render()
+        # ci/helm-values.yaml sets the challenge CI's readiness probe expects; blank it here.
+        self.assertEqual(self.environment(self.render(), 'mcp')['APPFLOWY_MCP_OPENAI_APPS_CHALLENGE'],
+                         'ci-challenge-token')
+        documents = self.render(strings=('appflowy-mcp.config.openaiAppsChallenge=',))
         for suffix in ('cloud', 'mcp'):
             for name in settings.values():
                 self.assertNotIn(name, self.environment(documents, suffix), suffix)
