@@ -36,9 +36,9 @@
 -}}
 {{- $service := include "appflowy.mcp.fullname" . -}}
 {{- $port := index .Values "appflowy-mcp" "service" "port" -}}
-# AI apps (MCP) on the main host: exactly /mcp and the two root discovery documents, and /api/mcp
-# and protected-resource metadata with everything under them. Everything else keeps the primary
-# Ingress. Once any Ingress of a host uses use-regex or rewrite-target (the GoTrue and MinIO ones
+# MCP on the main host: exactly /mcp, the two root discovery documents and OpenAI's
+# domain-verification challenge, and /api/mcp and protected-resource metadata with everything
+# under them. Everything else keeps the primary Ingress. Once any Ingress of a host uses use-regex or rewrite-target (the GoTrue and MinIO ones
 # do), ingress-nginx matches every path of that host as a case-insensitive regex prefix, `~*
 # "^<path>"`, whatever its pathType: an Exact /mcp would also take /mcpx and /mcp/x, such as a
 # published site's namespace. The paths are therefore anchored regexes, and use-regex is set here
@@ -97,6 +97,14 @@ spec:
                 port:
                   number: {{ $port }}
           - path: /.well-known/mcp.json$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          # OpenAI's plugin portal checks the MCP origin's domain-verification token here.
+          - path: /.well-known/openai-apps-challenge$
             pathType: ImplementationSpecific
             backend:
               service:

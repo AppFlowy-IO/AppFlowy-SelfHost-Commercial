@@ -73,6 +73,19 @@ class McpConfigurationTests(unittest.TestCase):
                     self.assertNotIn('APPFLOWY_MCP_MAX_BODY_BYTES', cloud)
                     self.assertNotIn('APPFLOWY_MCP_OUTER_PROXY_CIDRS', cloud)
 
+    def test_plugin_directory_settings_reach_mcp_only(self):
+        # Blank publishes nothing: MCP answers 404 for the challenge and omits op_policy_uri/op_tos_uri.
+        configured = {'APPFLOWY_MCP_OPENAI_APPS_CHALLENGE': 'ci-challenge-token',
+                      'APPFLOWY_MCP_PRIVACY_POLICY_URL': 'https://appflowy.example.test/privacy',
+                      'APPFLOWY_MCP_TERMS_OF_SERVICE_URL': 'https://appflowy.example.test/terms'}
+        for file in COMPOSE_FILES:
+            for values in ({}, configured):
+                with self.subTest(file=file, values=values):
+                    cloud, mcp = self.compose_environments(file, **values)
+                    for name in configured:
+                        self.assertEqual(mcp.get(name), values.get(name, ''))
+                        self.assertNotIn(name, cloud)
+
     def test_oauth_ip_limit_is_left_to_the_server_default_unless_configured(self):
         # A deployment value, even one equal to the server default, makes Admin label the limit
         # "From deployment"; Cloud and MCP must also resolve the same limit.

@@ -334,6 +334,7 @@ The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) sends exactl
 | `/.well-known/oauth-authorization-server` | exact |
 | `/.well-known/oauth-protected-resource` and its sub-paths | prefix |
 | `/.well-known/mcp.json` | exact |
+| `/.well-known/openai-apps-challenge` | exact (OpenAI plugin-portal domain verification) |
 
 `/oauth/*` stays on AppFlowy Web, which serves the consent page. MCP's health, metrics, and root
 `/sse` endpoints are not published. If you use your own reverse proxy, route the same paths and,
@@ -347,6 +348,13 @@ MCP answers CORS requests itself. By default it mirrors the request origin; AppF
 Admin console on this domain need nothing more. To limit which other browser origins may call MCP
 directly, list them (scheme, host and optional port, comma-separated) in
 `APPFLOWY_CORS_ALLOWED_ORIGINS` and recreate `appflowy_mcp`.
+
+To list this server's MCP in OpenAI's plugin directory, set `APPFLOWY_MCP_OPENAI_APPS_CHALLENGE`
+to the domain-verification token the portal shows; MCP serves it as plain text at
+`<APPFLOWY_MCP_BASE_URL>/.well-known/openai-apps-challenge`, whether MCP is on or off, and answers
+404 while it is blank. `APPFLOWY_MCP_PRIVACY_POLICY_URL` and `APPFLOWY_MCP_TERMS_OF_SERVICE_URL`
+(http or https URLs) appear in MCP's OAuth metadata as `op_policy_uri` and `op_tos_uri`. A
+malformed value stops MCP at startup. Recreate `appflowy_mcp` after changing them.
 
 Unauthenticated OAuth and client-registration requests are limited per client address to 60 a
 minute, the server default, until Admin → AI apps (MCP) sets another limit; that page also sets

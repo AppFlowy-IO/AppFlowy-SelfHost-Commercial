@@ -89,6 +89,18 @@ spec:
             - name: APPFLOWY_AUDIT_ENABLE
               value: {{ . | quote }}
             {{- end }}
+            {{- with $mcp.config.openaiAppsChallenge }}
+            - name: APPFLOWY_MCP_OPENAI_APPS_CHALLENGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $mcp.config.privacyPolicyUrl }}
+            - name: APPFLOWY_MCP_PRIVACY_POLICY_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $mcp.config.termsOfServiceUrl }}
+            - name: APPFLOWY_MCP_TERMS_OF_SERVICE_URL
+              value: {{ . | quote }}
+            {{- end }}
 
             # Database configuration: a small pool of its own, not Cloud's.
             - name: POSTGRES_USER

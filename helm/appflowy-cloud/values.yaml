@@ -696,6 +696,13 @@ appflowy-mcp:
     # Browser origins other than global.domain that call MCP directly. Empty mirrors the
     # request origin; Web and Admin on global.domain need no entry.
     corsAllowedOrigins: ""
+    # Plugin-directory listing settings. openaiAppsChallenge is the domain-verification token
+    # OpenAI's plugin portal shows, served at <publicBaseUrl>/.well-known/openai-apps-challenge
+    # (404 while empty). privacyPolicyUrl and termsOfServiceUrl appear in MCP's OAuth metadata.
+    # A malformed value stops MCP at startup.
+    openaiAppsChallenge: ""
+    privacyPolicyUrl: ""
+    termsOfServiceUrl: ""
     # MCP keeps its own small pool rather than appflowy-cloud.config.databaseMaxConnections.
     databaseMaxConnections: 8
     databaseMinConnections: 1

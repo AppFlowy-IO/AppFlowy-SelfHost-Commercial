@@ -191,8 +191,27 @@ class McpChartTests(unittest.TestCase):
             ('/.well-known/oauth-authorization-server$', 'ImplementationSpecific'),
             ('/.well-known/oauth-protected-resource(/|$)', 'ImplementationSpecific'),
             ('/.well-known/mcp.json$', 'ImplementationSpecific'),
+            ('/.well-known/openai-apps-challenge$', 'ImplementationSpecific'),
         ])
         self.assertEqual({path['backend']['service']['port']['number'] for path in paths}, {8002})
+
+    def test_plugin_directory_settings_reach_mcp_only_when_set(self):
+        # Blank publishes nothing: MCP answers 404 for the challenge and omits op_policy_uri/op_tos_uri.
+        settings = {'openaiAppsChallenge': 'APPFLOWY_MCP_OPENAI_APPS_CHALLENGE',
+                    'privacyPolicyUrl': 'APPFLOWY_MCP_PRIVACY_POLICY_URL',
+                    'termsOfServiceUrl': 'APPFLOWY_MCP_TERMS_OF_SERVICE_URL'}
+        values = {'openaiAppsChallenge': 'ci-challenge-token',
+                  'privacyPolicyUrl': 'https://appflowy.example.test/privacy',
+                  'termsOfServiceUrl': 'https://appflowy.example.test/terms'}
+        documents = self.render()
+        for suffix in ('cloud', 'mcp'):
+            for name in settings.values():
+                self.assertNotIn(name, self.environment(documents, suffix), suffix)
+        documents = self.render(strings=tuple(f'appflowy-mcp.config.{key}={value}' for key, value in values.items()))
+        mcp = self.environment(documents, 'mcp')
+        for key, name in settings.items():
+            self.assertEqual(mcp.get(name), values[key])
+            self.assertNotIn(name, self.environment(documents, 'cloud'))
 
     def test_mcp_listens_everywhere_bounds_bodies_and_outlasts_its_shutdown_drain(self):
         documents = self.render()

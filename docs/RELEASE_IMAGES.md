@@ -74,10 +74,10 @@ environment. CI does not compare the two repositories. When an update PR changes
 the publisher run built, not the server tag with the same number, and port the server's changes in
 that PR. Such a PR does not enable auto-merge; merge it once the copies match.
 Until `appflowy_mcp` is pinned, the copies' baseline is server commit
-`8ff4927afde695fc01918a12ef9221127f440f73`, the head of PR #1521, which they were last compared
-with; they differ from it only where this repository's deployments deliberately differ. The first
-MCP image-update PR names it. Once `appflowy_mcp` is pinned, the pinned image's build commit
-replaces it as the baseline.
+`0fda6b6188273cc8e355714d3ab133827c7462db`, the commit that merged PR #1521 into main, which they
+were last compared with; they differ from it only where this repository's deployments deliberately
+differ. The first MCP image-update PR names it. Once `appflowy_mcp` is pinned, the pinned image's
+build commit replaces it as the baseline.
 
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job

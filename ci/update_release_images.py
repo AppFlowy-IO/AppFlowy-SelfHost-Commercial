@@ -41,9 +41,9 @@ MCP_COPIES = (
     ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`'),
     ('docker-compose.yml', 'the `appflowy_mcp` environment'),
 )
-# The AppFlowy-Cloud-Premium commit (the head of PR #1521) the copies were last compared with. It is
-# the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
-MCP_COPIES_BASELINE = '8ff4927afde695fc01918a12ef9221127f440f73'
+# The AppFlowy-Cloud-Premium commit (PR #1521's merge into main) the copies were last compared with.
+# It is the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
+MCP_COPIES_BASELINE = '0fda6b6188273cc8e355714d3ab133827c7462db'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
