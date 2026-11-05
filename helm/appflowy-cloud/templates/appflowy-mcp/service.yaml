@@ -1,0 +1,24 @@
+{{- if index .Values "appflowy-mcp" "enabled" }}
+{{- $mcp := index .Values "appflowy-mcp" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "appflowy.mcp.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-mcp
+  {{- if and $mcp.metrics.enabled $mcp.metrics.serviceAnnotations }}
+  annotations:
+    {{- toYaml $mcp.metrics.serviceAnnotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $mcp.service.type }}
+  ports:
+    - port: {{ $mcp.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "appflowy.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-mcp
+{{- end }}

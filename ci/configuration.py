@@ -14,7 +14,8 @@ SOURCE_FILES = (
     'docker-swarm/docker-stack.backup.yml',
     'docker/backup/source-ai.env', 'docker/backup/source-appflowy_cloud.env',
     'docker/backup/source-appflowy_worker.env', 'docker/backup/source-appflowy_search.env',
-    'docker/backup/source-appflowy_backup.env', 'helm/appflowy-cloud/values.yaml',
+    'docker/backup/source-appflowy_backup.env', 'docker/backup/source-appflowy_mcp.env',
+    'helm/appflowy-cloud/values.yaml',
     'helm/appflowy-cloud/Chart.yaml', 'helm/appflowy-cloud/Chart.lock', 'ci/helm-values.yaml',
 ) + tuple(sorted(str(path.relative_to(ROOT)) for path in
                  (ROOT / 'helm/appflowy-cloud/templates').rglob('*') if path.is_file()))

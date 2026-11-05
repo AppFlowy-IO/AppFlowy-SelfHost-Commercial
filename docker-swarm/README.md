@@ -6,12 +6,12 @@ The [root docker-compose.yml](../docker-compose.yml) is the source of truth. Thi
 
 ## Deployment files
 
-- [docker-stack.yml](docker-stack.yml) preserves the 11 application services, including AI, with the same application images, environment variables, commands, health checks, ports, and volumes.
+- [docker-stack.yml](docker-stack.yml) preserves the 12 application services, including AI and MCP, with the same application images, environment variables, commands, health checks, ports, and volumes.
 - [docker-stack.backup.yml](docker-stack.backup.yml) adds opt-in Backup with the Swarm coordinator and Cloud readiness gate. It starts at zero replicas until the application is ready.
 - [docker-stack.bootstrap.yml](docker-stack.bootstrap.yml) initially scales application services to zero so infrastructure and migrations can start in order. It does not change application settings.
 - `.local/swarm.env` is the operator's private configuration for the direct Docker guide. It is copied from [deploy.env](../deploy.env), edited, and explicitly loaded into the shell before deployment.
 
-The guide uses stack `appflowy-swarm` and ports `18081`/`18444`. It leaves AI at zero replicas with AI features disabled. To use AI, configure the provider credentials and enable the service as described in the guide. All 11 services remain in the configuration.
+The guide uses stack `appflowy-swarm` and ports `18081`/`18444`. It leaves AI at zero replicas with AI features disabled. To use AI, configure the provider credentials and enable the service as described in the guide. All 12 services remain in the configuration.
 
 The Swarm counterpart makes these explicit compatibility changes:
 
@@ -22,11 +22,13 @@ The Swarm counterpart makes these explicit compatibility changes:
 - Constrains PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
 - Converts Nginx's configuration and certificate mounts to Swarm configs, and its TLS private key mount to a Swarm secret. Source paths are relative to this folder.
 
+Nginx keeps the Compose port syntax, which Swarm publishes through its routing mesh. The mesh does not preserve client source addresses, so MCP's per-address OAuth limit and audit log, and LDAP sign-in throttling, see one address for every client. See [client addresses](../docs/docker-swarm.md#client-addresses) before exposing a Swarm installation to the internet.
+
 Redis matches the root Compose configuration: the image's default command, with no explicit AOF settings, named Redis data volume, or health check. The base stack does not guarantee that Redis-backed queues or pending work survive replacement. See [storage and Redis](../docs/docker-compose.md#storage-and-redis).
 
 ## Startup and storage
 
-`docker stack deploy` submits a deployment; it does not establish application readiness or automatically load `.env`. The guide explicitly loads a trusted shell-compatible environment file, deploys the original YAML files once, and waits for each stage: PostgreSQL/Redis/MinIO, GoTrue, Cloud and its migrations, then Worker/Search/Web/Admin/Nginx. AI is optional. Passing an already interpolated Compose rendering through another interpolation step can change literal dollar signs, including those in Search's health check.
+`docker stack deploy` submits a deployment; it does not establish application readiness or automatically load `.env`. The guide explicitly loads a trusted shell-compatible environment file, deploys the original YAML files once, and waits for each stage: PostgreSQL/Redis/MinIO, GoTrue, Cloud and its migrations, then Worker/Search/MCP/Web/Admin/Nginx. AI is optional. Passing an already interpolated Compose rendering through another interpolation step can change literal dollar signs, including those in Search's health check.
 
 The bootstrap override is for initial startup or a planned restart: applying it to a running stack scales application services down. For release upgrades, follow the migration and rollout requirements in the [root deployment instructions](../README.md). A generic Swarm rolling update does not implement that sequence, and the local tests have not validated release upgrades.
 
@@ -36,7 +38,7 @@ Label one designated data node `appflowy.data=true`. Docker's local volumes do n
 
 The opt-in [Backup stack overlay](docker-stack.backup.yml) requires a Backup image containing the Swarm deployment adapter and matching Cloud/Worker/Search images. Its deployment and storage contract is described in [the setup guide](../docs/docker-swarm.md#backup-and-restore). The base stack does not start Backup, even if the Compose `APPFLOWY_BACKUP_PROFILE` setting is enabled.
 
-The adapter supports **one ready manager**, labeled `appflowy.data=true`, with at most one replica per service. Cloud, GoTrue, Worker, and Search must be running before restoration; AI may remain disabled at zero replicas. The supported inventory contains the 11 application/infrastructure services plus Backup. Additional writer services and global services require a reviewed adapter extension.
+The adapter supports **one ready manager**, labeled `appflowy.data=true`, with at most one replica per service. Cloud, GoTrue, Worker, and Search must be running before restoration; AI may remain disabled at zero replicas. The supported inventory contains the 11 application/infrastructure services that preceded MCP plus Backup. MCP (`appflowy_mcp`) is a writer service outside that inventory: until a Backup image whose adapter includes it is named here, keep it at zero replicas while the Backup overlay is deployed, as [the setup guide](../docs/docker-swarm.md#backup-and-restore) describes. Additional writer services and global services require a reviewed adapter extension.
 
 Online full backups, portable exports, and prepared backup/ZIP restoration use the existing backup engine. Restore saves service identities and specifications, scales every writer service to zero, waits for its tasks to stop, and then uses the shared database activation journal. Service updates use the Docker Engine's version check so a concurrent update cannot be overwritten. Cloud starts behind `/api/ready` validation before the remaining writers resume. The coordinator controls its worker through a private socket, preserving the coordinator while draining Backup's database connections.
 
@@ -70,7 +72,7 @@ python3 docker-swarm/generate.py --check
 
 The [local.py](local.py) test harness also requires the Docker Compose plugin. It is separate from the direct Docker installation above and uses a different stack namespace, ports, credentials, and volumes. [prepare.py](prepare.py) derives its configuration from the committed Swarm file and [deploy.env](../deploy.env); it never reads your root `.env` or `.local/swarm.env`.
 
-The test profile runs 10 services with AI omitted and semantic embedding workers disabled. Keyword search remains enabled. It generates test credentials, uses local-only SMTP settings, applies smaller resource settings, adds startup health checks, and pins native-platform images to registry digests. Redis retains the base stack's configuration; this profile does not add Redis persistence. Runtime files and evidence live in the ignored `.local/` directory. Keep it private and retain credentials when retaining the test volumes.
+The test profile runs 11 services with AI omitted and semantic embedding workers disabled. Keyword search remains enabled. It generates test credentials, uses local-only SMTP settings, applies smaller resource settings, adds startup health checks, and pins native-platform images to registry digests. Redis retains the base stack's configuration; this profile does not add Redis persistence. Runtime files and evidence live in the ignored `.local/` directory. Keep it private and retain credentials when retaining the test volumes.
 
 With the optional Python environment active:
 
@@ -142,7 +144,7 @@ Volumes are retained. `python3 docker-swarm/local.py down --leave-swarm` additio
 
 ## Recorded local evidence
 
-On 2026-10-06, the current Swarm files passed a fresh local Linux ARM64 run with 10 services active and AI disabled. Redis retained the root Compose defaults without added AOF settings, a named volume, or a health check. All running application image IDs matched the recorded native image lock.
+On 2026-10-06, the Swarm files of that date, before MCP was added, passed a fresh local Linux ARM64 run with 10 services active and AI disabled. The stack with `appflowy_mcp` has not had a recorded local run yet. Redis retained the root Compose defaults without added AOF settings, a named volume, or a health check. All running application image IDs matched the recorded native image lock.
 
 The run passed authentication, document operations, database row creation/edit/readback, attachment byte equality, Worker HTML import, and keyword search. Two browser clients exchanged edits, reconnected after Cloud replacement, and retained matching content after reload and in a fresh browser context. After PostgreSQL, MinIO, Redis, Search, and Worker replacement, existing application data remained readable and fresh imports and search indexing passed. Temporary service interruptions are expected during replacement.
 

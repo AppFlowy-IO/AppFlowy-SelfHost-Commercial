@@ -1,7 +1,10 @@
 """Release notifications must never promote test, partial, or stale image sets."""
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -77,7 +80,8 @@ class ReleaseImageTests(unittest.TestCase):
 
     def test_cloud_updates_only_successfully_published_services_including_optional_ones(self):
         original = self.compose()
-        services = ['gotrue', 'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_backup', 'ai']
+        services = ['gotrue', 'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp',
+                    'appflowy_backup', 'ai']
         changes, _ = self.update('cloud', services=services)
         self.assertEqual({row[0] for row in changes}, set(services))
         updated = self.compose()
@@ -90,6 +94,89 @@ class ReleaseImageTests(unittest.TestCase):
                 self.assertEqual(image['digest'], self.digest)
             else:
                 self.assertEqual(updated['services'][service], original['services'][service])
+
+    def test_mcp_image_updates_ask_the_reviewer_to_compare_the_copied_mcp_routes(self):
+        def body(services):
+            changes, _ = self.update('cloud', services=services)
+            return release.pull_request_body('cloud', '0.20.0', '', changes)
+
+        without_mcp = body(['appflowy_cloud', 'appflowy_worker', 'appflowy_search'])
+        with_mcp = body(['appflowy_mcp'])
+        self.assertIn('| appflowy_mcp |', with_mcp)
+        self.assertIn('server commit the publisher run built', with_mcp)
+        self.assertNotIn('MCP', without_mcp)
+        self.assertIn('- [ ] `docker/nginx/nginx.conf`: the MCP locations (server: `nginx/nginx.conf`)', with_mcp)
+        self.assertIn('- [ ] `docker-compose.yml`: the `appflowy_mcp` environment\n', with_mcp)
+        for path, _, _ in release.MCP_COPIES:
+            with self.subTest(path=path):
+                self.assertIn(f'- [ ] `{path}`', with_mcp)
+                # A moved or renamed copy must not leave the checklist pointing nowhere.
+                self.assertIn('mcp', (release.ROOT / path).read_text().lower())
+
+    def test_mcp_copies_include_the_settings_and_guides_and_match_the_release_guide(self):
+        paths = [path for path, _, _ in release.MCP_COPIES]
+        self.assertEqual(len(paths), len(set(paths)))
+        # The deploy.env settings and the Compose and chart guides describe MCP's routes and settings.
+        for path in ('deploy.env', 'docs/docker-compose.md', 'helm/appflowy-cloud/README.md'):
+            self.assertIn(path, paths)
+        guide = (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text()
+        section = guide.partition('\n## MCP copies\n')[2].partition('\n### ')[0]
+        listed = re.findall(r'^- `([^`]+)`: ', section, re.M)
+        self.assertEqual(listed, paths)
+
+    def test_mcp_updates_link_the_deliberate_differences_and_ask_for_a_separate_port(self):
+        changes, _ = self.update('cloud', services=['appflowy_mcp'])
+        body = release.pull_request_body('cloud', '0.20.0', '', changes)
+        self.assertIn(f'({release.MCP_DIFFERENCES_URL})', body)
+        # GitHub's anchor for the guide's heading.
+        guide = (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text()
+        self.assertTrue(release.MCP_DIFFERENCES_URL.endswith(
+            '/blob/main/docs/RELEASE_IMAGES.md#deliberate-differences-from-the-server'))
+        self.assertIn('\n### Deliberate differences from the server\n', guide)
+        # Commits pushed to the automation branch are lost when a repeated notification rebuilds it.
+        for text in (body, guide):
+            self.assertIn('separate PR', text)
+            self.assertIn('rebuilds', text)
+
+    def test_mcp_updates_name_the_recorded_copy_baseline_until_mcp_is_pinned(self):
+        self.assertRegex(release.MCP_COPIES_BASELINE, r'^[0-9a-f]{40}$')
+        changes, _ = self.update('cloud', services=['appflowy_mcp'])
+        self.assertIn(release.MCP_COPIES_BASELINE, release.pull_request_body('cloud', '0.20.0', '', changes))
+        # Once MCP is pinned, the build of the pinned image is the baseline.
+        changes, _ = self.update('cloud', tag='0.20.1', services=['appflowy_mcp'])
+        self.assertIn('@sha256:', changes[0][1])
+        pinned = release.pull_request_body('cloud', '0.20.1', '', changes)
+        self.assertIn('server commit the publisher run built', pinned)
+        self.assertNotIn(release.MCP_COPIES_BASELINE, pinned)
+        # The release guide records the same baseline while the shipped MCP image is unpinned.
+        image = yaml.safe_load((release.ROOT / 'docker-compose.yml').read_text())['services']['appflowy_mcp']['image']
+        if not release.DIGEST.search(image):
+            self.assertIn(release.MCP_COPIES_BASELINE, (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text())
+
+    def test_mcp_image_updates_are_left_for_review_instead_of_auto_merging(self):
+        # Auto-merge would land a new MCP image before its copied routes and settings are ported.
+        for source, services, merges in (('web', None, True),
+                                         ('cloud', ['appflowy_cloud', 'appflowy_worker', 'appflowy_search'], True),
+                                         ('cloud', release.DEFAULT_SERVICES['cloud'], False)):
+            with self.subTest(source=source, services=services):
+                changes, _ = self.update(source, services=services)
+                self.assertTrue(changes)
+                self.assertEqual(release.auto_merge(changes), merges)
+                body = release.pull_request_body(source, '0.20.0', '', changes)
+                self.assertEqual('Auto-merge waits for the required CI checks.' in body, merges)
+                self.assertEqual('Auto-merge is off because the MCP image changed' in body, not merges)
+        changes = [('appflowy_mcp', 'appflowyinc/appflowy_mcp:latest', 'appflowyinc/appflowy_mcp:0.20.0@' + self.digest)]
+        with tempfile.TemporaryDirectory() as directory:
+            event, body, output = (Path(directory) / name for name in ('event.json', 'body.md', 'output'))
+            event.write_text('{}')
+            environment = {'GITHUB_EVENT_NAME': 'repository_dispatch', 'GITHUB_OUTPUT': str(output)}
+            with patch.dict(os.environ, environment), \
+                 patch('sys.argv', ['update_release_images.py', '--event', str(event), '--body', str(body)]), \
+                 patch.object(release, 'notification', return_value=('cloud', '0.20.0', ['appflowy_mcp'], '')), \
+                 patch.object(release, 'prepare_update', return_value=(changes, 'Prepared exact image pins')), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                release.main()
+            self.assertIn('auto_merge=false\n', output.read_text())
 
     def test_duplicate_events_and_release_retries_are_idempotent(self):
         self.update()
@@ -191,6 +278,13 @@ class RegistryIndexTests(unittest.TestCase):
 
 
 class WorkflowImageSelectionTests(unittest.TestCase):
+    def test_update_prs_enable_auto_merge_only_when_the_updater_allows_it(self):
+        workflow = yaml.safe_load((release.ROOT / '.github/workflows/update-release-images.yml').read_text())
+        steps = workflow['jobs']['update']['steps']
+        merge = next(step for step in steps if 'gh pr merge' in step.get('run', ''))
+        self.assertIn("steps.update.outputs.auto_merge == 'true'", merge['if'])
+        self.assertIn('update', [step.get('id') for step in steps])
+
     def test_release_pr_checks_do_not_substitute_the_qualification_baseline(self):
         for filename, step_name in (
                 ('deployment-test.yml', 'Resolve exact linux/amd64 image digests once'),

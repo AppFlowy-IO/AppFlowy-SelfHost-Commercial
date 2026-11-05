@@ -23,6 +23,9 @@ services:
   appflowy_search:
     deploy:
       replicas: 0
+  appflowy_mcp:
+    deploy:
+      replicas: 0
   appflowy_web:
     deploy:
       replicas: 0

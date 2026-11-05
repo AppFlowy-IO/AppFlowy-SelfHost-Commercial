@@ -1,23 +1,93 @@
 """Safety and rendering contracts for the runtime harness (never start services)."""
 import base64
+import email.message
 import hashlib
 import io
+import itertools
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+import urllib.error
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from deployment import Deployment, HELM_KEYS, HELM_WORKLOADS, normalized_image_reference, private_write, sanitize
+from deployment import (Deployment, HELM_KEYS, HELM_WORKLOADS, MCP_ROUTE_PROBES, OPENAI_APPS_CHALLENGE,
+                        normalized_image_reference, private_write, sanitize)
 from images import CORE, ROOT, clean_environment
 from configuration import source_fingerprint
+
+
+CHALLENGE_PATH = '/.well-known/openai-apps-challenge'
+MCP_PATHS = ('/mcp', '/api/mcp', '/api/mcp/clients?client_id=ci', '/.well-known/oauth-authorization-server',
+             '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp',
+             '/.well-known/mcp.json', CHALLENGE_PATH)
+MCP_DOCUMENTS = {'/.well-known/oauth-authorization-server': {'issuer': 'http://127.0.0.1',
+                                                             'authorization_endpoint': 'http://127.0.0.1/api/mcp/authorize'},
+                 '/.well-known/oauth-protected-resource': {'resource': 'http://127.0.0.1/mcp',
+                                                           'authorization_servers': ['http://127.0.0.1']},
+                 '/.well-known/oauth-protected-resource/mcp': {'resource': 'http://127.0.0.1/mcp',
+                                                               'authorization_servers': ['http://127.0.0.1']},
+                 '/.well-known/mcp.json': {'name': 'AppFlowy', 'endpoint': 'http://127.0.0.1/mcp'}}
+MCP_CHALLENGE = ('Bearer realm="OAuth", resource_metadata="http://127.0.0.1/.well-known/oauth-protected-resource", '
+                 'error="invalid_token", error_description="Missing or invalid access token"')
+MCP_MISSING_TOKEN = b'{"error":"invalid_token","error_description":"Missing or invalid access token"}'
+
+
+def http_reply(status, body, content_type):
+    """A urlopen context manager answering with `status`, `body` and `content_type`."""
+    headers = email.message.Message()
+    headers['Content-Type'] = content_type
+    response = MagicMock()
+    response.__enter__.return_value.status = status
+    response.__enter__.return_value.headers = headers
+    response.__enter__.return_value.read.side_effect = lambda size=-1: body
+    return response
+
+
+def http_error(status, body, content_type='application/json', challenge=None):
+    """A urlopen stand-in raising HTTPError `status` with `body`, `content_type` and `challenge`."""
+    headers = email.message.Message()
+    if content_type:
+        headers['Content-Type'] = content_type
+    if challenge:
+        headers['WWW-Authenticate'] = challenge
+
+    def reply(url):
+        raise urllib.error.HTTPError(url, status, 'HTTP error', headers, io.BytesIO(body))
+    return reply
+
+
+def web_page(url):
+    """AppFlowy Web's catch-all, which answers any path the proxy does not send elsewhere."""
+    return http_reply(200, b'<!doctype html><html></html>', 'text/html')
+
+
+mcp_turned_off = http_error(503, b'{"error":"mcp_disabled","reason":"mcp_disabled","retryable":false}')
+
+
+def openai_apps_challenge(url):
+    """MCP's reply on the domain challenge with CI's token, the same whether MCP is on or off."""
+    return http_reply(200, OPENAI_APPS_CHALLENGE.encode(), 'text/plain; charset=utf-8')
+
+
+def public_routes(**mcp_replies):
+    """urlopen stand-in: Web for the non-MCP routes, and `mcp_replies[path]` for MCP's, by default
+    MCP while it refuses: `mcp_disabled`, except on the domain challenge, which it serves anyway."""
+    def urlopen(url, timeout):
+        path = url.removeprefix('http://127.0.0.1')
+        if path not in MCP_PATHS:
+            return web_page(url)
+        refusing = openai_apps_challenge if path == CHALLENGE_PATH else mcp_turned_off
+        return mcp_replies.get(path, refusing)(url)
+    return urlopen
 
 
 class RuntimeSafetyTests(unittest.TestCase):
@@ -51,7 +121,7 @@ class RuntimeSafetyTests(unittest.TestCase):
     def test_requires_every_core_service_and_matching_source(self):
         self.payload['services'].pop('appflowy_search')
         self.lock.write_text(json.dumps(self.payload))
-        with self.assertRaisesRegex(RuntimeError, 'ten core services'):
+        with self.assertRaisesRegex(RuntimeError, 'eleven core services'):
             self.deployment()
         self.payload['services']['appflowy_search'] = {}
         self.payload['compose_sha256'] = 'different'
@@ -202,7 +272,7 @@ class RuntimeSafetyTests(unittest.TestCase):
                 patch.object(instance, 'run', return_value=json.dumps(controller)):
             instance.check_images('running-images.json')
         evidence = json.loads((instance.artifacts / 'running-images.json').read_text())
-        self.assertEqual(len(evidence), 10)
+        self.assertEqual(len(evidence), 11)
         admin = next(row for row in evidence if row['service'] == 'admin_frontend')
         expected = instance.helm_images['admin_frontend']
         self.assertEqual(admin['image'], normalized_image_reference(expected['image']))
@@ -625,6 +695,10 @@ class RuntimeSafetyTests(unittest.TestCase):
                 self.assertEqual(metadata['base_url'], base_url)
                 cloud = rendered['services']['appflowy_cloud']['environment']
                 self.assertEqual(cloud['APPFLOWY_BASE_URL'], base_url)
+                # The token the domain-challenge probe expects reaches MCP only.
+                mcp = rendered['services']['appflowy_mcp']['environment']
+                self.assertEqual(mcp['APPFLOWY_MCP_OPENAI_APPS_CHALLENGE'], OPENAI_APPS_CHALLENGE)
+                self.assertNotIn('APPFLOWY_MCP_OPENAI_APPS_CHALLENGE', cloud)
                 self.assertEqual(cloud['APPFLOWY_WEB_URL'], base_url)
                 self.assertEqual(cloud['APPFLOWY_S3_PRESIGNED_URL_ENDPOINT'], base_url + '/minio-api')
                 web = rendered['services']['appflowy_web']['environment']
@@ -655,19 +729,101 @@ class RuntimeSafetyTests(unittest.TestCase):
                 else:
                     instance.run(*instance.compose, 'config', '--quiet')
 
+    def test_backup_redeploy_compares_every_restored_writer_selection(self):
+        instance = self.deployment()
+        writers = ('appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp')
+        rows = [{'Config': {'Env': ['APPFLOWY_S3_BUCKET=restored', 'APPFLOWY_REDIS_URI=redis://redis/3']}}]
+        with patch.object(instance, 'docker_containers', return_value=rows) as containers:
+            selected = instance.backup_selection()
+        self.assertEqual([call.args[0] for call in containers.call_args_list], list(writers))
+        self.assertEqual(set(selected), set(writers))
+        self.assertNotIn('restored', json.dumps(selected))
+
     def test_swarm_public_readiness_uses_ipv4_and_reports_last_error(self):
         instance = self.deployment('swarm')
-        with patch('deployment.urllib.request.urlopen') as request:
-            request.return_value.__enter__.return_value.status = 200
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes()) as request:
             instance.wait_http()
             self.assertEqual([call.args[0] for call in request.call_args_list],
                              ['http://127.0.0.1' + path for path in
-                              ('/api/health', '/gotrue/health', '/', '/console')])
+                              ('/api/health', '/gotrue/health', '/', '/console') + MCP_PATHS])
         with patch('deployment.urllib.request.urlopen', side_effect=TimeoutError('timed out')), \
              patch('deployment.time.monotonic', side_effect=[0, 0, 181]), \
              patch('deployment.time.sleep'):
             with self.assertRaisesRegex(RuntimeError, r'http://127\.0\.0\.1/api/health; TimeoutError: timed out'):
                 instance.wait_http()
+
+    def test_public_readiness_accepts_mcp_replies_with_ai_apps_off_or_on(self):
+        instance = self.deployment('swarm')
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes()):
+            instance.wait_http()
+        # With AI apps on, MCP challenges a request without a token, refuses an unknown client and
+        # serves its discovery documents.
+        replies = {path: (lambda document: lambda url: http_reply(
+            200, json.dumps(document).encode(), 'application/json'))(document)
+            for path, document in MCP_DOCUMENTS.items()}
+        replies['/mcp'] = replies['/api/mcp'] = http_error(401, MCP_MISSING_TOKEN, challenge=MCP_CHALLENGE)
+        replies['/api/mcp/clients?client_id=ci'] = http_error(
+            404, b'{"error":"invalid_client","error_description":"Unknown client_id","reason":"unknown_client"}')
+        replies[CHALLENGE_PATH] = openai_apps_challenge
+        self.assertEqual(set(replies), set(MCP_PATHS))
+        # One attempt per route, so a refused reply fails at once instead of after 180 s.
+        with patch('deployment.urllib.request.urlopen', side_effect=public_routes(**replies)), \
+             patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
+             patch('deployment.time.sleep'):
+            instance.wait_http()
+
+    def test_mcp_readiness_fails_on_any_route_mcp_did_not_answer(self):
+        instance = self.deployment('swarm')
+        not_mcp = {
+            'Web catch-all page': web_page,
+            'proxy 503 page': http_error(503, b'<html>503 Service Temporarily Unavailable</html>', 'text/html'),
+            'other 503': http_error(503, b'{"error":"other"}'),
+            'Cloud 404': http_error(404, b'{"code":1000,"message":"Not Found"}'),
+            '401 without a challenge': http_error(401, MCP_MISSING_TOKEN),
+            'challenge without resource metadata': http_error(401, MCP_MISSING_TOKEN, challenge='Bearer realm="OAuth"'),
+            'JSON without MCP metadata': lambda url: http_reply(200, b'{"status":"ok"}', 'application/json'),
+        }
+        # MCP serves the domain challenge whether it is on or off, as the token CI configured: its
+        # 503, its 404 while no token is configured, another token or another type is not it.
+        not_the_challenge = {
+            'MCP turned off': mcp_turned_off,
+            'MCP without a token': http_error(404, b'', None),
+            'another token': lambda url: http_reply(200, b'another-token', 'text/plain; charset=utf-8'),
+            'the token as HTML': lambda url: http_reply(200, OPENAI_APPS_CHALLENGE.encode(), 'text/html'),
+        }
+        cases = [(path, name, reply) for path in MCP_PATHS for name, reply in not_mcp.items()]
+        cases += [(CHALLENGE_PATH, name, reply) for name, reply in not_the_challenge.items()]
+        for path, name, reply in cases:
+            with self.subTest(path=path, reply=name), \
+                 patch('deployment.urllib.request.urlopen', side_effect=public_routes(**{path: reply})), \
+                 patch('deployment.time.monotonic', side_effect=itertools.count(0, 100)), \
+                 patch('deployment.time.sleep'):
+                with self.assertRaisesRegex(RuntimeError, re.escape('http://127.0.0.1' + path + '; ')):
+                    instance.wait_http()
+
+    def test_every_same_domain_mcp_route_has_a_readiness_probe(self):
+        # Each Nginx location that sends requests to MCP, and each path of the chart's MCP Ingress
+        # (matched as ingress-nginx does, `^<path>`), must be reached by at least one probe.
+        probes = [path.partition('?')[0] for path in MCP_ROUTE_PROBES]
+        nginx = (ROOT / 'docker/nginx/nginx.conf').read_text()
+        locations = re.findall(r'location (=|\^~) (\S+) \{[^}]*proxy_pass \$appflowy_mcp_backend;', nginx)
+        self.assertIn(('=', CHALLENGE_PATH), locations)
+        for kind, location in locations:
+            with self.subTest(location=location):
+                self.assertTrue(any(probe == location if kind == '=' else probe.startswith(location)
+                                    for probe in probes))
+        ingress = (ROOT / 'helm/appflowy-cloud/templates/ingress-mcp.yaml').read_text()
+        paths = re.findall(r'^\s*- path: (\S+)$', ingress, re.M)
+        self.assertIn(CHALLENGE_PATH + '$', paths)
+        for path in paths:
+            with self.subTest(ingress_path=path):
+                self.assertTrue(any(re.match('^' + path, probe) for probe in probes))
+
+    def test_helm_ci_values_give_mcp_the_token_the_challenge_probe_expects(self):
+        # Compose and Swarm get it from render(); the chart from ci/helm-values.yaml.
+        values = yaml.safe_load((ROOT / 'ci/helm-values.yaml').read_text())
+        self.assertEqual(values['appflowy-mcp']['config']['openaiAppsChallenge'], OPENAI_APPS_CHALLENGE)
+        self.assertEqual(MCP_ROUTE_PROBES[CHALLENGE_PATH], (200, OPENAI_APPS_CHALLENGE))
 
 
 if __name__ == '__main__':

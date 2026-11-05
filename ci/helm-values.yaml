@@ -38,6 +38,15 @@ appflowy-worker:
   resources:
     requests: {cpu: 50m, memory: 128Mi}
     limits: {cpu: 500m, memory: 512Mi}
+# Same-domain AI-app routes stay enabled so the kind Ingress exercises them.
+appflowy-mcp:
+  config:
+    # OPENAI_APPS_CHALLENGE in ci/deployment.py: MCP serves it at /.well-known/openai-apps-challenge,
+    # which the readiness probe checks.
+    openaiAppsChallenge: ci-challenge-token
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
 postgresql:
   primary:
     persistence:

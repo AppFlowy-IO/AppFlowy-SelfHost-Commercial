@@ -41,7 +41,8 @@ fails, or any selected integration job fails, is cancelled, or is unexpectedly s
 Workflow-level path filters are intentionally absent so documentation PRs can satisfy these
 required checks. Branch protection and the repository's auto-merge setting are configured
 separately from the workflow files. Automated image-update PRs enable squash auto-merge after
-both gates pass; other PRs do not opt in automatically. See [Release image updates](RELEASE_IMAGES.md).
+both gates pass, except those that change the MCP image, which wait for a separate PR that ports
+the copied MCP files; other PRs do not opt in automatically. See [Release image updates](RELEASE_IMAGES.md).
 
 ## What a passing run verifies
 
@@ -57,9 +58,10 @@ Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whos
 
 The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. It does not resolve or pull the Backup image. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
 
-Standard qualification uses the published `0.20.0` Cloud, Worker, Search, and optional
-Backup images with Web `0.19.30`. Both workflows pass `--server-tag 0.20.0 --web-tag 0.19.30`
-to the image resolver, so the server and Web baseline cannot drift independently. GoTrue,
+Standard qualification applies the `0.20.0` server tag to the Cloud, Worker, Search, MCP, and
+optional Backup images with Web `0.19.30`. Both workflows pass `--server-tag 0.20.0 --web-tag 0.19.30`
+to the image resolver, so the server and Web baseline cannot drift independently. The baseline
+must name a server release that also publishes `appflowyinc/appflowy_mcp`. GoTrue,
 Admin, and infrastructure images use their configured references. Installation defaults
 remain `latest`. For each override, the image lock records the selected reference and
 its original `configured_source`, preserving the Helm source checks before applying the test
@@ -71,7 +73,15 @@ They qualify the exact references in the proposed deployment files. See
 
 All runtime jobs must verify:
 
-- Service readiness and the public API, authentication, Web, and Admin routes.
+- Service readiness and the public API, authentication, Web, Admin, and AI-app (MCP) routes.
+  Every MCP route (`/mcp`, `/api/mcp`, `/api/mcp/...`, the OAuth and MCP discovery documents,
+  and `/.well-known/openai-apps-challenge`) must answer with MCP's own reply. MCP is on by
+  default, but CI installs no One, Team or Enterprise license, so MCP refuses as if it were off:
+  its `mcp_disabled` 503. While MCP serves, that is its 401 Bearer challenge naming its resource
+  metadata on `/mcp` and `/api/mcp`, its unknown-client error on `/api/mcp/clients`, and its
+  discovery metadata on the discovery documents. CI gives MCP the domain-challenge token
+  `ci-challenge-token`, which MCP must serve as plain text whether it is on or off. AppFlowy
+  Web's 200 page for an unrouted path fails.
 - Administrator authentication, ordinary-user provisioning, login, and workspace access.
 - Document creation/readback, database creation, and row creation/edit/readback.
 - Attachment upload/download with byte equality, completed Worker HTML import, and keyword search.

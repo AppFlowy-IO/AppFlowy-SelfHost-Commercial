@@ -25,3 +25,9 @@ appflowy-ai:
     enabled: true
     serviceMonitor:
       enabled: true
+
+appflowy-mcp:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true

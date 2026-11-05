@@ -4,7 +4,7 @@
 
 Run a fresh AppFlowy installation on a local, single-node Docker Swarm using Docker commands directly. You need a running Docker Desktop or Docker Engine and a shell; no Python, extra packages, or setup script is required. Run these commands from the repository root.
 
-The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 11 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 10 services, leaving optional AI at zero replicas.
+The [Swarm stack](../docker-swarm/docker-stack.yml) preserves the 12 application services from the root [docker-compose.yml](../docker-compose.yml). This walkthrough starts 11 services, leaving optional AI at zero replicas.
 
 ## 1. Prepare your configuration
 
@@ -92,19 +92,20 @@ Repeat the `docker ps` check until GoTrue is **healthy**, then start Cloud:
 docker service scale appflowy-swarm_appflowy_cloud=1
 ```
 
-Wait until Cloud is **healthy**, so startup and database migrations finish before Worker and Search start. Then run:
+Wait until Cloud is **healthy**, so startup and database migrations finish before Worker, Search, and MCP start. Then run:
 
 ```bash
 docker service scale \
   appflowy-swarm_appflowy_worker=1 \
   appflowy-swarm_appflowy_search=1 \
+  appflowy-swarm_appflowy_mcp=1 \
   appflowy-swarm_appflowy_web=1 \
   appflowy-swarm_admin_frontend=1 \
   appflowy-swarm_nginx=1
 docker stack services appflowy-swarm
 ```
 
-Wait for 10 services to show `1/1`, with AI at `0/0`, and for Search to show **healthy** in `docker ps`. A successful deploy command or `1/1` alone does not establish application readiness. Swarm does not implement Compose's `depends_on` ordering.
+Wait for 11 services to show `1/1`, with AI at `0/0`, and for Search to show **healthy** in `docker ps`. A successful deploy command or `1/1` alone does not establish application readiness. Swarm does not implement Compose's `depends_on` ordering.
 
 For failures, inspect the affected service:
 
@@ -144,6 +145,15 @@ To enable AI later, configure its provider credentials, set `AI_ENABLED=true`, a
 
 See [docker-swarm/README.md](../docker-swarm/README.md) for optional automated tests and parity maintenance, and [deployment CI](deployment-ci.md) for automated Compose, Swarm, and Helm checks. This single-node guide does not establish multi-node operation, high availability, or safe release upgrades.
 
+## Client addresses
+
+The stack publishes Nginx's ports through Swarm's routing mesh (ingress mode), which does not keep the client's source address: Nginx sees the same address for every client. Everything that tells clients apart by address then treats all clients as one:
+
+- MCP's limit on unauthenticated OAuth and client-registration requests (60 a minute per address by default) becomes one limit for the whole installation. A single client that exceeds it makes every user's AI-app sign-in and token refresh fail with HTTP 429 until the minute passes.
+- LDAP sign-in throttling likewise becomes one limit, and MCP's audit log records that one address for every user.
+
+Before exposing a Swarm installation to the internet, publish Nginx's ports in host mode (the long port syntax with `mode: host`) so that Nginx sees each client's address. The local tests in this repository have not validated host-mode publishing.
+
 ## Backup and restore
 
 Backup is opt-in and requires an image built with the Swarm deployment adapter. Use matching release images for Backup, Cloud, Worker, and Search. The adapter implementation and unit tests do not replace a full restore acceptance run against the final image; the existing Swarm CI deployment excludes Backup.
@@ -166,7 +176,16 @@ if [ ! -e "$APPFLOWY_SWARM_BACKUP_RUNTIME_DIR/docker-stack.restore.json" ]; then
 fi
 ```
 
-Use all four files in place of the deployment command in step 3, then follow the same staged startup:
+MCP stays at zero replicas with Backup (see below). Cloud advertises `/mcp` only while its
+`APPFLOWY_MCP_BASE_URL` is set, and the stack passes it the value from `swarm.env`, which the
+bundled `deploy.env` sets to `${APPFLOWY_BASE_URL}`. So Cloud keeps advertising `/mcp`, which
+nothing serves meanwhile, and AppFlowy Web and Desktop show MCP as unavailable until you scale MCP
+back up; turning MCP off on the Admin console's MCP page does not change that. (With
+`APPFLOWY_MCP_BASE_URL` blank in `swarm.env`, Cloud would advertise nothing and Web and Desktop
+would hide MCP, until you set it again and redeploy.) Turn MCP off on that page only if it must
+stay off once you scale it back up. No environment variable turns MCP off. Use all four files in
+place of the deployment command in step 3, then follow the same staged startup, leaving out
+`appflowy-swarm_appflowy_mcp=1`:
 
 ```bash
 docker stack deploy \
@@ -177,6 +196,8 @@ docker stack deploy \
   "$APPFLOWY_SWARM_STACK"
 ```
 
+At the end of step 3, wait for 10 services to show `1/1`, with AI, MCP and Backup at `0/0`.
+
 The Backup overlay starts its service at zero replicas. When Cloud, Worker and Search are healthy, start it:
 
 ```bash
@@ -184,7 +205,13 @@ docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_backup=1"
 docker service logs --tail 100 "${APPFLOWY_SWARM_STACK}_appflowy_backup"
 ```
 
-Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. It manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
+Open the Admin console's Backup page and verify that its readiness checks enable backup and restore. The adapter requires exactly one ready manager labeled `appflowy.data=true`, the supplied service inventory, shared Backup/Search storage, and one replica per active service. AI can stay at zero replicas. MCP (`appflowy_mcp`) also writes to the database, Redis, and object storage, and this guide does not yet name a Backup image whose Swarm adapter includes MCP in its writer inventory. An adapter without MCP in its inventory cannot be relied on to stop MCP before the database switch or to move it to the restored bucket and Redis database. Keep MCP at zero replicas, and turned off on the Admin console's MCP page, for as long as the Backup overlay is deployed:
+
+```bash
+docker service scale "${APPFLOWY_SWARM_STACK}_appflowy_mcp=0"
+```
+
+After a restore, MCP's service still names the original bucket and Redis database, so keep it at zero replicas then as well. The restored database also brings back the MCP setting the backup holds: if the Admin console's MCP page then shows MCP on, turn it off again. The adapter manages Swarm desired replicas during restoration; stopping individual task containers is insufficient because Swarm replaces them.
 
 Every later deployment must include the persisted selection overlay. Keep the `backup_work` volume and runtime directory across upgrades, task replacement, and planned shutdowns. Bootstrap retains the host directory group; generated selections use mode `0640` so that group can read them for redeployment. The runtime file may contain Redis credentials; protect it like the deployment environment. Follow the release migration order for upgrades and restart Backup only after application readiness. Do not change service definitions or replica counts while a restore is active.
 

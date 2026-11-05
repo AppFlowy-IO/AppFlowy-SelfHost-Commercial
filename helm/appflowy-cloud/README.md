@@ -1,6 +1,6 @@
 # AppFlowy Cloud Helm Chart
 
-This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker, search and AI) with PostgreSQL, Redis and MinIO. Configure credentials and TLS before a public deployment. The repository's deployment CI installs the chart in a disposable kind cluster using [ci/helm-values.yaml](../../ci/helm-values.yaml), then exercises the same application tests as Compose and Swarm.
+This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker, search, AI and MCP for AI apps) with PostgreSQL, Redis and MinIO. Configure credentials and TLS before a public deployment. The repository's deployment CI installs the chart in a disposable kind cluster using [ci/helm-values.yaml](../../ci/helm-values.yaml), then exercises the same application tests as Compose and Swarm.
 
 ## What is deployed
 
@@ -11,6 +11,7 @@ This chart bundles the AppFlowy Cloud services (API, auth, web, admin, worker, s
 - AppFlowy Worker (background jobs)
 - AppFlowy Search with a persistent keyword index
 - AppFlowy AI 
+- AppFlowy MCP (AI apps), served on the main domain at `/mcp`
 - PostgreSQL (pgvector), Redis, and MinIO
 - Optional kube-prometheus-stack (Prometheus Operator + Grafana) and ServiceMonitors when you enable monitoring
 
@@ -49,6 +50,7 @@ Optional but common:
 - `appflowy-search.enabled`: controls deployment of Search and Cloud's service URL. When `false`, the chart explicitly clears `APPFLOWY_SEARCH_SERVICE_URL`. With automatic Search admission in the server image, an empty URL stops new work; configured Search is checked every 10 seconds, pauses after 60 seconds of observed unhealthiness, and resumes after two consecutive healthy checks. Existing queued work is retained subject to Redis storage and queue retention; recovery reconciles changes made while paused. There is no Admin enable/disable switch; Admin reports health and admission state.
 - `*.image.digest`: pins an application or infrastructure image to an immutable registry digest; when set, it takes precedence over `image.tag`.
 - `ingress.scim.enabled`: defaults to `true` and adds the `/scim` route for SCIM provisioning; set it to `false` when SCIM is unused or must use a separate edge (see below).
+- `appflowy-mcp.*` and `ingress.mcp.*`: AI apps (MCP) on `https://<global.domain>/mcp`, enabled by default; see [AI apps (MCP)](#ai-apps-mcp).
 
 **Server compatibility:** Empty-URL suppression and automatic health pause/recovery require a server
 release with URL-derived Search admission and the health coordinator. No numbered published release
@@ -59,7 +61,7 @@ value derived only from `appflowy-search.enabled`. New Cloud ignores this retire
 not a separate user-controlled setting. New configured installations wait for two healthy checks;
 upgrades preserve existing enabled admission while the initial checks run.
 
-Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the chart derives the release's Service names. Leave them empty when using bundled infrastructure. Init containers wait for PostgreSQL, GoTrue and Cloud migrations before background workers start. Search uses one replica, a PVC and `Recreate` updates so two processes never write its keyword index concurrently. Redis persists its AOF on its PVC.
+Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the chart derives the release's Service names. Leave them empty when using bundled infrastructure. Init containers wait for PostgreSQL, GoTrue and Cloud migrations before background workers and MCP start. Search uses one replica, a PVC and `Recreate` updates so two processes never write its keyword index concurrently. Redis persists its AOF on its PVC.
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
@@ -73,7 +75,8 @@ acceptance requirement before production use.
 
 The current Kubernetes adapter supports online backup, schedules, export and ZIP restoration for
 one replica of each chart-managed writer, bundled persistent PostgreSQL, and persistent Search.
-Cloud, Worker, Search, GoTrue and enabled AI are included in the writer inventory. Cloud and GoTrue
+Cloud, Worker, Search, GoTrue and enabled AI and MCP are included in the writer inventory that the
+chart passes to the adapter, and Backup requires one replica of each. Cloud and GoTrue
 autoscalers must be disabled. Workloads managed by Argo CD, Flux or KEDA are rejected: running a
 second controller during database cutover can restart a writer. Do not run Helm upgrades, rollouts,
 manual scaling or another deployment reconciler while a restore is pending. Legacy physical
@@ -188,6 +191,67 @@ HTTPS issuer that stays reachable from the GoTrue pod: each sign-in exchanges th
 token endpoint, and the discovery document is fetched again whenever GoTrue's one-hour cache expires
 or the pod restarts. See [docs/OIDC.md](../../docs/OIDC.md).
 
+## AI apps (MCP)
+
+`appflowy-mcp` is enabled by default. The chart deploys `<fullname>-mcp` (a Deployment and a
+ClusterIP Service on port 8002) and serves it on `global.domain`, so users paste
+`https://<global.domain>/mcp` into Claude, ChatGPT, Cursor, Claude Code or another MCP client. Cloud
+advertises the same origin to AppFlowy Web and Desktop (Settings → MCP), and Admin shows it.
+MCP is on by default, after installing and after upgrading, and needs a One, Team or Enterprise
+license. An administrator turns it off or on, and sets who may use it and its rate limits, on the
+Admin console's MCP page; changes apply within seconds, without a restart. The setting saved there
+always decides, and no chart value turns MCP on or off. Users, approvals and the email allowlist
+work as described in [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
+
+A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP, written as
+anchored regular expressions with `pathType: ImplementationSpecific`:
+
+| Routes | Ingress path |
+| --- | --- |
+| `/mcp` (Streamable HTTP; `GET` holds a server-sent event stream open) | `/mcp$` |
+| `/api/mcp` and everything under it | `/api/mcp(/\|$)` |
+| `/.well-known/oauth-authorization-server` | `/.well-known/oauth-authorization-server$` |
+| `/.well-known/oauth-protected-resource` and its sub-paths | `/.well-known/oauth-protected-resource(/\|$)` |
+| `/.well-known/mcp.json` | `/.well-known/mcp.json$` |
+| `/.well-known/openai-apps-challenge` (OpenAI plugin-portal domain verification) | `/.well-known/openai-apps-challenge$` |
+
+The GoTrue and MinIO Ingresses on the same host use regular expressions, and ingress-nginx then
+matches every path of that host as a case-insensitive regex prefix, whatever its `pathType`; an
+`Exact` `/mcp` would also send `/mcpx` and `/mcp/x` (such as a published site's namespace) to MCP.
+The anchors keep the routes equal to the bundled Nginx's, except that matching stays
+case-insensitive.
+
+`/oauth/*` stays on AppFlowy Web, which serves the consent page, and MCP's health, metrics and root
+`/sse` endpoints are not published. The Ingress inherits `ingress.annotations` except
+`upstream-hash-by*` and `limit-*`: MCP keeps no session, and client-address affinity or the primary
+per-IP limits would put every user behind one NAT or AI vendor's egress on one replica and one
+connection budget, which each open `GET /mcp` stream counts against. Set limits meant for MCP in
+`ingress.mcp.annotations`, which it adds. It always sets `use-regex: true`, `proxy-buffering: off`,
+`proxy-http-version: 1.1`, read and send timeouts of `ingress.mcp.proxyTimeoutSeconds` (default
+3600, minimum 60) and a body limit of `ingress.mcp.bodySize` (default `8m`). Set
+`ingress.mcp.enabled=false` when the inherited annotations apply browser or external
+authentication, and route the same paths yourself.
+
+| Value | Default and purpose |
+| --- | --- |
+| `appflowy-mcp.enabled` | `true`. Deploys MCP, which is on by default. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port. Unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then gets no `APPFLOWY_MCP_BASE_URL` and advertises no MCP (it never falls back to its own origin), so AppFlowy Web and Desktop hide their MCP settings and the Admin console's MCP page shows no endpoint. Turning MCP off on that page does not hide MCP in Web or Desktop. |
+| `appflowy-mcp.config.publicBaseUrl` | Empty, meaning `global.scheme://global.domain`. Must be an http(s) origin without `/mcp` or another path. MCP, Cloud and AppFlowy Web all use it. It is the OAuth issuer: changing it makes every connected AI app reconnect. The chart's Ingress always routes `global.domain`. With `enabled=false`, set it to the origin of an MCP service deployed outside this chart: Cloud and Web advertise it, and Cloud also receives `oauthIpRateLimitPerMinute` and the email allowlists, which must match that service's own settings. |
+| `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. Behind a CDN or load balancer, have the controller resolve the client with `use-forwarded-headers` and `proxy-real-ip-cidr`, as described for LDAP above. |
+| `appflowy-mcp.config.allowedClientIds` / `allowedRedirectHosts` | Empty. Optional server-wide client governance; workspace owners still approve apps for their workspace. |
+| `appflowy-mcp.config.allowedEmailDomains` / `allowedEmails` | Empty, allowing every account. Lists saved in Admin → AI apps (MCP) take precedence. |
+| `appflowy-mcp.config.openaiAppsChallenge` / `privacyPolicyUrl` / `termsOfServiceUrl` | Empty. Optional plugin-directory listing settings. `openaiAppsChallenge` is the domain-verification token OpenAI's plugin portal shows; MCP serves it as plain text at `<publicBaseUrl>/.well-known/openai-apps-challenge`, whether MCP is on or off, and answers 404 while it is empty. `privacyPolicyUrl` and `termsOfServiceUrl` are http(s) URLs that MCP's OAuth metadata names as `op_policy_uri` and `op_tos_uri`. A malformed value stops MCP at startup. |
+| `appflowy-mcp.config.databaseMaxConnections` / `databaseMinConnections` | `8` / `1` per replica, separate from Cloud's pool; include them in the PostgreSQL connection budget. |
+| `appflowy-mcp.config.maxBodyBytes` | `1048576` (1 MiB). Largest request body; a tool call carries what a model writes in one response. Every call in flight (`maxInFlight`, 128) holds its parsed body, which MCP refuses with 413 above twice this size, and MCP logs an error at startup when `maxInFlight` × `maxBodyBytes` exceeds a quarter of the memory limit. |
+| `appflowy-mcp.terminationGracePeriodSeconds` | `90`. On shutdown MCP ends its `GET /mcp` streams at once, then waits up to 75 seconds for requests in flight (its 60-second request timeout plus 5), its policy watchers and its audit queue (5 each); the chart refuses to render 75 or less. |
+| `appflowy-mcp.metrics` | Off. MCP always serves `/metrics` on its Service port (in-flight and SSE saturation, rate-limit denials, policy state); the MCP Ingress never publishes it. `metrics.enabled` with `metrics.serviceMonitor.enabled` emits a ServiceMonitor, as the metrics overlays below do. |
+| `appflowy-mcp.resources` / `replicaCount` | 50m/128Mi requests, 500m/512Mi limits, one replica. Backup requires one replica. |
+
+MCP's search tools use the bundled Search Service when `appflowy-search.enabled` is true. Remote AI
+apps such as claude.ai and ChatGPT need a public HTTPS origin with a trusted certificate. With
+`networkPolicy.enabled`, the ingress policy opens port 8002 to the ingress controller namespace while
+MCP is enabled; MCP reaches PostgreSQL, Redis, MinIO, GoTrue and Search through the same-release
+rules.
+
 ## Local minikube quick start
 
 1. **Prepare your tooling and values**
@@ -245,7 +309,7 @@ Metrics are off by default so your cluster stays lightweight.
 
 | Overlay | Effect | Requirements |
 | --- | --- | --- |
-| `values/features/metrics.yaml` | Turns on `/metrics` plus ServiceMonitors for AppFlowy Cloud, the worker, and AI services. | A Prometheus Operator already installed (ServiceMonitor CRD must exist). |
+| `values/features/metrics.yaml` | Turns on `/metrics` plus ServiceMonitors for AppFlowy Cloud, the worker, AI, and MCP services. | A Prometheus Operator already installed (ServiceMonitor CRD must exist). |
 | `values/features/monitoring.yaml` | Enables `kube-prometheus-stack`, its ServiceMonitor CRDs, and the same AppFlowy ServiceMonitors with the stack. | Nothing else—this overlay installs Prometheus, Alertmanager, and Grafana for you. |
 
 Enable metrics-only ServiceMonitors:
@@ -344,7 +408,7 @@ For a PowerScale-specific example, see [`doc/DELL_POWERSCALE_S3.md`](../../doc/D
 | `helm upgrade --install appflowy-test helm/appflowy-cloud -n default -f helm/appflowy-cloud/values-test.yaml -f helm/appflowy-cloud/values/features/metrics.yaml --create-namespace --dependency-update` | Same as above but applies `values/features/metrics.yaml` (enables ServiceMonitors). |
 | `helm upgrade --install appflowy-test helm/appflowy-cloud -n default -f helm/appflowy-cloud/values-test.yaml -f helm/appflowy-cloud/values/features/monitoring.yaml --create-namespace --dependency-update` | Applies the monitoring overlay; installs kube-prometheus-stack + ServiceMonitors. |
 | `kubectl get pods -n default`<br>`kubectl get ingress -n default` | Shows pods and ingress objects for quick health checks. |
-| `kubectl logs -n default -f deployment/appflowy-test-appflowy-cloud-<component>` | Streams logs from `appflowy-cloud-<component>` deployments (`cloud`, `worker`, `gotrue`, `web`, `admin`, `ai`). |
+| `kubectl logs -n default -f deployment/appflowy-test-appflowy-cloud-<component>` | Streams logs from `appflowy-cloud-<component>` deployments (`cloud`, `worker`, `gotrue`, `web`, `admin`, `ai`, `mcp`). |
 | `kubectl get ingress -n default` | Lists ingress rules for local testing (`http://localhost/`, `http://localhost/console`, `http://localhost/api`). |
 | `kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-web 8080:80`<br>`kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-admin 8081:3000`<br>`kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-cloud 8082:8000` | Port-forwards core services for local access (Web:8080, Admin:8081, API:8082); run each command in its own terminal. |
 | `kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-web 8080:80`<br>`kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-admin 8081:3000`<br>`kubectl port-forward -n default svc/appflowy-test-appflowy-cloud-cloud 8082:8000`<br>`kubectl port-forward -n default svc/appflowy-test-grafana 8083:80` | Port-forwards all services including Grafana (Web:8080, Admin:8081, API:8082, Grafana:8083); run each command in its own terminal. |

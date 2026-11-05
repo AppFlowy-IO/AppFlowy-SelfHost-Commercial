@@ -27,14 +27,39 @@ from configuration import SOURCE_FILES, check_compose, isolated_source, source_f
 NAME = 'appflowy-ci'
 NAMESPACE = NAME
 STAGES = [['postgres', 'redis', 'minio'], ['gotrue'], ['appflowy_cloud'],
-          ['appflowy_search', 'appflowy_worker', 'appflowy_web', 'admin_frontend', 'nginx']]
+          ['appflowy_search', 'appflowy_worker', 'appflowy_mcp', 'appflowy_web', 'admin_frontend', 'nginx']]
+# OpenAI's domain-verification token, which CI gives MCP in Compose, Swarm (render) and Helm
+# (ci/helm-values.yaml). It is not a secret: MCP serves it to anyone.
+OPENAI_APPS_CHALLENGE = 'ci-challenge-token'
+# One request per same-domain MCP route: each Nginx location and each Ingress path. MCP is on by
+# default, but CI installs no One, Team or Enterprise license, so MCP refuses as if it were off and
+# answers each JSON route with its own 503 `mcp_disabled`. While it serves, it answers with the
+# status and JSON fields (None: any value) below: its 401 for a missing token, which also carries
+# its Bearer challenge naming its resource metadata, its error for an unknown client, or the
+# route's discovery document. A string is a plain-text body instead: OpenAI's domain challenge,
+# which MCP serves whether it is on or off, so no 503 passes there. A bare 200 proves nothing:
+# AppFlowy Web's catch-all answers 200 HTML for any path the proxy fails to send to MCP.
+MCP_ROUTE_PROBES = {
+    '/mcp': (401, {'error': 'invalid_token'}),
+    '/api/mcp': (401, {'error': 'invalid_token'}),
+    '/api/mcp/clients?client_id=ci': (404, {'error': 'invalid_client', 'reason': 'unknown_client'}),
+    '/.well-known/oauth-authorization-server': (200, {'issuer': None, 'authorization_endpoint': None}),
+    '/.well-known/oauth-protected-resource': (200, {'resource': None, 'authorization_servers': None}),
+    '/.well-known/oauth-protected-resource/mcp': (200, {'resource': None, 'authorization_servers': None}),
+    '/.well-known/mcp.json': (200, {'endpoint': None}),
+    '/.well-known/openai-apps-challenge': (200, OPENAI_APPS_CHALLENGE),
+}
+MCP_TURNED_OFF = (503, {'error': 'mcp_disabled'})
+# Other services answer 401 too; only MCP's Bearer challenge names its OAuth resource metadata.
+MCP_CHALLENGE = re.compile(r'Bearer\s.*\bresource_metadata=', re.I)
 HELM_KEYS = {'appflowy_cloud': 'appflowy-cloud', 'appflowy_worker': 'appflowy-worker',
-             'appflowy_search': 'appflowy-search', 'appflowy_web': 'appflowy-web',
-             'admin_frontend': 'admin-frontend', 'gotrue': 'gotrue',
+             'appflowy_search': 'appflowy-search', 'appflowy_mcp': 'appflowy-mcp',
+             'appflowy_web': 'appflowy-web', 'admin_frontend': 'admin-frontend', 'gotrue': 'gotrue',
              'postgres': 'postgresql', 'redis': 'redis', 'minio': 'minio'}
 HELM_WORKLOADS = {'appflowy_cloud': 'deployment/appflowy-ci-cloud',
                   'appflowy_worker': 'deployment/appflowy-ci-worker',
                   'appflowy_search': 'deployment/appflowy-ci-search',
+                  'appflowy_mcp': 'deployment/appflowy-ci-mcp',
                   'appflowy_web': 'deployment/appflowy-ci-web',
                   'admin_frontend': 'deployment/appflowy-ci-admin',
                   'gotrue': 'deployment/appflowy-ci-gotrue',
@@ -95,7 +120,7 @@ class Deployment:
         self.lock = json.loads(lock.read_text())
         self.images = self.lock['services']
         if set(self.images) != CORE:
-            raise RuntimeError('Image lock does not cover exactly all ten core services')
+            raise RuntimeError('Image lock does not cover exactly all eleven core services')
         source_root = self.runtime / 'deployment' if installed_source else ROOT
         if installed_source and (not backup or mode != 'compose' or not self.lock.get('source_files')):
             raise RuntimeError('Installed source validation requires a recorded Compose Backup manifest')
@@ -266,6 +291,7 @@ class Deployment:
             'APPFLOWY_KEYWORD_INDEX_MAP_SIZE_BYTES': '268435456',
             'APPFLOWY_S3_PRESIGNED_URL_ENDPOINT': self.base_url + '/minio-api',
             'APPFLOWY_MAILER_SMTP_TLS_KIND': 'none',
+            'APPFLOWY_MCP_OPENAI_APPS_CHALLENGE': OPENAI_APPS_CHALLENGE,
             'APPFLOWY_BACKUP_PROFILE': 'backup' if self.backup else '',
         }
         if self.backup:
@@ -340,7 +366,7 @@ class Deployment:
                     overlay['healthcheck'] = {'start_period': '180s'}
                 if name == 'appflowy_backup':
                     overlay['environment'] = {'APPFLOWY_BACKUP_COMPOSE_WRITERS': json.dumps(
-                        ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search'])}
+                        ['appflowy_cloud', 'gotrue', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'])}
                 overrides['services'][name] = overlay
             self.write_backup_override(overrides)
             private_write(self.source / '.env', '\n'.join(lines) + '\n')
@@ -395,23 +421,52 @@ class Deployment:
             time.sleep(3)
         raise RuntimeError('Service readiness timed out: ' + json.dumps(last))
 
+    @staticmethod
+    def mcp_replied(path, reply):
+        """Whether `reply` to `path`, a urlopen response or HTTPError, is one MCP itself sends: the
+        route's MCP_ROUTE_PROBES reply, or on a JSON route its 503 `mcp_disabled` while it refuses."""
+        status, fields = MCP_ROUTE_PROBES[path]
+        if isinstance(fields, str):
+            return (reply.status == status and reply.headers.get_content_type() == 'text/plain'
+                    and reply.read(65536) == fields.encode())
+        if reply.status == MCP_TURNED_OFF[0]:
+            status, fields = MCP_TURNED_OFF
+        if reply.status != status or reply.headers.get_content_type() != 'application/json':
+            return False
+        if status == 401 and not MCP_CHALLENGE.match(reply.headers.get('WWW-Authenticate', '')):
+            return False
+        try:
+            body = json.loads(reply.read(65536))
+        except ValueError:
+            return False
+        return isinstance(body, dict) and all(key in body and (value is None or body[key] == value)
+                                              for key, value in fields.items())
+
     def wait_http(self):
-        for path in ('/api/health', '/gotrue/health', '/', '/console'):
+        # Each MCP probe passes only on a reply MCP itself sent, so a missing or shadowed Nginx
+        # location or Ingress path for any MCP route fails readiness.
+        for path in ('/api/health', '/gotrue/health', '/', '/console', *MCP_ROUTE_PROBES):
             deadline = time.monotonic() + 180
             last_error = 'no response'
             while time.monotonic() < deadline:
                 try:
                     with urllib.request.urlopen(self.base_url + path, timeout=10) as response:
-                        if response.status == 200:
+                        if (self.mcp_replied(path, response) if path in MCP_ROUTE_PROBES
+                                else response.status == 200):
                             break
                         last_error = 'HTTP ' + str(response.status)
+                        if path in MCP_ROUTE_PROBES:
+                            last_error += ' that MCP did not send'
                 except Exception as error:
+                    if (path in MCP_ROUTE_PROBES and isinstance(error, urllib.error.HTTPError)
+                            and self.mcp_replied(path, error)):
+                        break
                     last_error = type(error).__name__ + ': ' + str(error)
                 time.sleep(3)
             else:
                 raise RuntimeError('Public route failed: ' + self.base_url + path + '; '
                                    + sanitize(last_error, self.runtime))
-        print('Public API, authentication, Web and Admin routes are ready', flush=True)
+        print('Public API, authentication, Web, Admin and AI-app (MCP) routes are ready', flush=True)
 
     def up(self):
         self.guard()
@@ -709,7 +764,7 @@ class Deployment:
     def backup_selection(self):
         """Hash effective resource selections, retaining no connection credentials in evidence."""
         selected = {}
-        for name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search'):
+        for name in ('appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'):
             rows = self.docker_containers(name)
             if len(rows) != 1:
                 raise RuntimeError('Backup redeploy requires exactly one ' + name)
