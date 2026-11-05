@@ -57,7 +57,7 @@ View logs for a specific service:
 GoTrue Admin:
   Email: {{ .Values.gotrue.config.adminEmail }}
   Password: Retrieve from secret:
-    kubectl get secret {{ include "appflowy.gotrue.fullname" . }}-secret -n {{ .Release.Namespace }} -o jsonpath="{.data.admin-password}" | base64 -d
+    kubectl get secret {{ include "appflowy.gotrue.secretName" . }} -n {{ .Release.Namespace }} -o jsonpath="{.data.admin-password}" | base64 -d
 {{- end }}
 
 {{- if .Values.postgresql.enabled }}

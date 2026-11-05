@@ -219,11 +219,16 @@ gotrue:
       memory: 512Mi
       cpu: 500m
 
+  # Existing secret containing gotrue credentials (e.g., admin-password, smtp-password)
+  # When set, the release gotrue-secret resource is omitted and this secret is referenced.
+  existingSecret: ""
+
   # GoTrue specific configuration
   config:
-    # Admin credentials (created on first startup)
+    # Admin credentials (initial admin account created on first startup)
     adminEmail: "admin@example.com"
-    adminPassword: "password"  # Should be set via secret
+    # Initial account password when existingSecret is not provided; can later be changed independently.
+    adminPassword: "password"
 
     # JWT settings (uses global.jwt by default)
     jwtExp: 604800
