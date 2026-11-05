@@ -1,4 +1,6 @@
 """Release notifications must never promote test, partial, or stale image sets."""
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -123,6 +125,31 @@ class ReleaseImageTests(unittest.TestCase):
         if not release.DIGEST.search(image):
             self.assertIn(release.MCP_COPIES_BASELINE, (release.ROOT / 'docs/RELEASE_IMAGES.md').read_text())
 
+    def test_mcp_image_updates_are_left_for_review_instead_of_auto_merging(self):
+        # Auto-merge would land a new MCP image before its copied routes and settings are ported.
+        for source, services, merges in (('web', None, True),
+                                         ('cloud', ['appflowy_cloud', 'appflowy_worker', 'appflowy_search'], True),
+                                         ('cloud', release.DEFAULT_SERVICES['cloud'], False)):
+            with self.subTest(source=source, services=services):
+                changes, _ = self.update(source, services=services)
+                self.assertTrue(changes)
+                self.assertEqual(release.auto_merge(changes), merges)
+                body = release.pull_request_body(source, '0.20.0', '', changes)
+                self.assertEqual('Auto-merge waits for the required CI checks.' in body, merges)
+                self.assertEqual('Auto-merge is off because the MCP image changed' in body, not merges)
+        changes = [('appflowy_mcp', 'appflowyinc/appflowy_mcp:latest', 'appflowyinc/appflowy_mcp:0.20.0@' + self.digest)]
+        with tempfile.TemporaryDirectory() as directory:
+            event, body, output = (Path(directory) / name for name in ('event.json', 'body.md', 'output'))
+            event.write_text('{}')
+            environment = {'GITHUB_EVENT_NAME': 'repository_dispatch', 'GITHUB_OUTPUT': str(output)}
+            with patch.dict(os.environ, environment), \
+                 patch('sys.argv', ['update_release_images.py', '--event', str(event), '--body', str(body)]), \
+                 patch.object(release, 'notification', return_value=('cloud', '0.20.0', ['appflowy_mcp'], '')), \
+                 patch.object(release, 'prepare_update', return_value=(changes, 'Prepared exact image pins')), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                release.main()
+            self.assertIn('auto_merge=false\n', output.read_text())
+
     def test_duplicate_events_and_release_retries_are_idempotent(self):
         self.update()
         pinned = self.contents()
@@ -223,6 +250,13 @@ class RegistryIndexTests(unittest.TestCase):
 
 
 class WorkflowImageSelectionTests(unittest.TestCase):
+    def test_update_prs_enable_auto_merge_only_when_the_updater_allows_it(self):
+        workflow = yaml.safe_load((release.ROOT / '.github/workflows/update-release-images.yml').read_text())
+        steps = workflow['jobs']['update']['steps']
+        merge = next(step for step in steps if 'gh pr merge' in step.get('run', ''))
+        self.assertIn("steps.update.outputs.auto_merge == 'true'", merge['if'])
+        self.assertIn('update', [step.get('id') for step in steps])
+
     def test_release_pr_checks_do_not_substitute_the_qualification_baseline(self):
         for filename, step_name in (
                 ('deployment-test.yml', 'Resolve exact linux/amd64 image digests once'),

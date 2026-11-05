@@ -1,0 +1,32 @@
+name: Cancel merged PR CI
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: cancel-merged-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cancel:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Only execute code from the trusted base revision, never the PR head.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Cancel unfinished CI for this merged PR
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const cancel = require('./.github/scripts/cancel-merged-pr-runs.cjs');
+            await cancel({ github, context, core });

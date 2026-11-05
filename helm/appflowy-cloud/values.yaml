@@ -286,8 +286,8 @@ appflowy-backup:
   enabled: false
   image:
     repository: appflowyinc/appflowy_backup
-    tag: "0.20.2"
-    digest: sha256:75a938425a8557d7fb9945b39b094bc66eb4b0058e8c3dd29cbce0f20c64daaf
+    tag: "0.20.6"
+    digest: sha256:a51fe56ec4951f2bbb3a271ff4d1e0abc6be14a4c333abc9b2e671118f944d91
     pullPolicy: IfNotPresent
   # Exact kubernetes.io/hostname shared with Search's local LMDB volume.
   nodeName: ""
@@ -314,8 +314,8 @@ appflowy-cloud:
 
   image:
     repository: appflowyinc/appflowy_cloud
-    tag: "0.20.2"
-    digest: sha256:1596f58b2c94059da6a3471a2fdb0a7eae8f11d143c44bb29260d490598fcf8b
+    tag: "0.20.5"
+    digest: sha256:4c45a647ae892783afdc8af175c9f2e75d54085a47e62aea1a347a562e0345f3
     pullPolicy: IfNotPresent
 
   service:
@@ -409,8 +409,8 @@ appflowy-worker:
 
   image:
     repository: appflowyinc/appflowy_worker
-    tag: "0.20.2"
-    digest: sha256:c95a43dc014a7a2c570f2d412a6bc0a7ca7de595574c2a7fba2ad53ee726ba9e
+    tag: "0.20.5"
+    digest: sha256:0caf64f96f7c805daf82700d0b7fe2468934c41732076341fd915ada9b3067f5
     pullPolicy: IfNotPresent
 
   service:
@@ -456,8 +456,8 @@ appflowy-search:
   replicaCount: 1
   image:
     repository: appflowyinc/appflowy_search
-    tag: "0.20.2"
-    digest: sha256:0d170a8a50fc2dde402f6fd4252de8a495515f5a19e0166179b1ee1ea409cf4e
+    tag: "0.20.5"
+    digest: sha256:fb37fca6d4e4da966be6712be957667a804d7fe22f7b811ff88e7a4813b522bd
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -491,8 +491,8 @@ appflowy-web:
 
   image:
     repository: appflowyinc/appflowy_web
-    tag: "0.20.1"
-    digest: sha256:83e7fee360ce4ff87df75bceb4fec3d608b4f16f817aa75633b9e50d0a37d3c3
+    tag: "0.20.11"
+    digest: sha256:e71d5d314b9a7972cf6c765460f6dbca6b6183709ec2425dc8cb6d19610c7acb
     pullPolicy: IfNotPresent
 
   service:
@@ -579,8 +579,8 @@ appflowy-ai:
 
   image:
     repository: appflowyinc/appflowy_ai
-    tag: "0.20.2"
-    digest: sha256:d9ca0852a14d1c7dbbdbb4f2cb42f5e95547fb71286c4e9e351235f6052e4109
+    tag: "0.20.5"
+    digest: sha256:dd613a9a85fe80dd4302bb5d27ca769e57a9dd6495c7d0d604075d33b07581dc
     pullPolicy: IfNotPresent
 
   service:

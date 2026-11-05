@@ -189,15 +189,23 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
     return changes, 'Prepared exact image pins' if changes else 'Images are already pinned'
 
 
+def auto_merge(changes):
+    """An MCP image change waits for a reviewer to port the copied MCP routes and settings."""
+    return all(service != 'appflowy_mcp' for service, _, _ in changes)
+
+
 def pull_request_body(source, tag, url, changes):
     body = [f'Update the published {source} images to `{tag}` with immutable multi-platform digests.', '',
             f'Publisher: [{SOURCES[source]}]({url or "https://github.com/" + SOURCES[source]})', '',
             '| Service | Previous image | Proposed image |', '| --- | --- | --- |']
     body += [f'| {service} | `{before}` | `{after}` |' for service, before, after in changes]
-    body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
-             'The deployment checks use the proposed pins without CI baseline image overrides.',
-             'Review compatibility and migration requirements before merging. This PR does not deploy services.', '']
     mcp = [before for service, before, _ in changes if service == 'appflowy_mcp']
+    body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
+             ('Web-only image updates run source validation and skip deployment/Backup integration.'
+              if source == 'web' else
+              'The integration checks use the proposed pins without CI baseline image overrides.'),
+             ('Auto-merge is off because the MCP image changed: merge after porting the MCP copies below. '
+              if mcp else 'Auto-merge waits for the required CI checks. ') + 'This PR does not deploy services.', '']
     if mcp:
         body += ['The MCP image changed. These MCP routes and settings are copies of AppFlowy-Cloud-Premium files '
                  '(Nginx: `nginx/nginx.conf`). Compare them with the server commit the publisher run built, '
@@ -227,7 +235,8 @@ def main():
         with open(output, 'a') as stream:
             stream.write('changed=' + str(bool(changes)).lower() + '\n')
             if changes:
-                stream.write(f'source={source}\ntag={tag}\nbranch={update_branch(source, tag, services)}\n')
+                stream.write(f'source={source}\ntag={tag}\nbranch={update_branch(source, tag, services)}\n'
+                             f'auto_merge={str(auto_merge(changes)).lower()}\n')
 
 
 if __name__ == '__main__':

@@ -27,6 +27,9 @@ For a real version tag, the receiver:
    the matching Helm tag/digest, and regenerates the Swarm files.
 4. Opens or refreshes `automation/image-updates/<source>-<tag>[-<services>]` as a PR. The version
    remains readable, while the digest prevents tag replacement from changing a deployment.
+5. Enables squash auto-merge for that PR's exact head commit. GitHub waits for the required
+   **Deployment tests** and **Backup tests** checks before merging it. A PR that changes the
+   `appflowy_mcp` image is left for a reviewer instead; see the MCP copies below.
 
 Repeated publication/release notifications for the same image selection reuse the same PR.
 Cloud branches also identify the selected services, so a GoTrue-only publication cannot
@@ -34,9 +37,10 @@ replace an open Cloud/Worker/Search update for the same version. Notifications o
 the selected services' current versions are ignored. Reusing an already pinned version
 with different image contents fails; publish a new version instead.
 
-The PR does not merge itself, publish a self-hosted release, or deploy an installation.
-Review the deployment results, supported client versions, and migration requirements
-before merging. Optional features and upgrades still need their release-specific checks.
+Only PRs opened or refreshed by the image-update workflow opt into auto-merge. Other PRs
+remain manual unless a maintainer enables auto-merge individually. A merge does not publish
+a self-hosted release or deploy an installation. Supported client versions, migration
+requirements, optional features, and upgrades still need their release-specific checks.
 The [deployment CI coverage](deployment-ci.md) describes the runtime checks and limitations;
 the image-index check does not substitute for ARM64 runtime qualification.
 
@@ -48,10 +52,18 @@ override that reference. Use an explicit Compose override for development qualif
 
 ## Deployment checks
 
-On image-update PRs, both deployment workflows use the images configured in the proposed
-Compose files. They omit the standard `0.20.0` server/Backup and `0.19.30` Web baseline
-overrides, so a green result cannot be produced by substituting different component images.
-Other branches use that fixed qualification baseline.
+Web-image-only updates run source validation, Swarm parity, Helm lint/rendering tests,
+unit tests, and image resolution, without starting deployments or running integration tests.
+The detector compares the actual Compose, Swarm, and Helm configuration and requires all
+three Web pins to agree. Documentation can accompany a Web image update. A change to any
+other service, deployment setting, or code still requires full integration. This applies to
+the PR and its post-merge push, regardless of the branch name.
+
+On other image-update PRs, both integration workflows use the images configured in the
+proposed Compose files. They omit the standard `0.20.0` server/Backup and `0.19.30` Web
+baseline overrides, so a green result cannot be produced by substituting different component
+images. Other branches use that fixed qualification baseline. Incompatible Cloud/Backup
+images must be corrected at publication; CI does not replace proposed pins to hide a failure.
 
 MCP's routes and settings are copies of AppFlowy-Cloud-Premium files and must match the
 `appflowy_mcp` image that serves them: the MCP locations in `docker/nginx/nginx.conf` (the
@@ -60,7 +72,7 @@ server's `nginx/nginx.conf`), the chart's `ingress-mcp.yaml`, `appflowy.mcp.*` h
 environment. CI does not compare the two repositories. When an update PR changes the
 `appflowy_mcp` image, its description lists these files: compare them with the server commit that
 the publisher run built, not the server tag with the same number, and port the server's changes in
-that PR.
+that PR. Such a PR does not enable auto-merge; merge it once the copies match.
 Until `appflowy_mcp` is pinned, the copies' baseline is server commit
 `8ff4927afde695fc01918a12ef9221127f440f73`, the head of PR #1521, which they were last compared
 with; they differ from it only where this repository's deployments deliberately differ. The first
@@ -83,6 +95,13 @@ and Pull requests write. A classic token for these public repositories can use `
 a fine-grained token or GitHub App can grant the repository permissions above.
 Using an App/PAT token for PR creation allows normal deployment checks to start automatically.
 The workflows never print the token or require a local credential to be copied into GitHub.
+
+Repository settings must allow auto-merge. The `main` branch must require **Deployment tests**
+and **Backup tests** from GitHub Actions, including for administrators. Both are always-running
+aggregate checks: documentation and Web image updates get explicit, validated skips; failed
+change detection or a missing, failed, or cancelled required test cannot satisfy the gates.
+Configure these requirements before enabling auto-merge in the publisher workflow, so a PR
+cannot merge while its first CI run is still being scheduled.
 
 For a missing notification, use **Actions → Update release image pins → Run workflow**.
 Choose `cloud` or `web` and enter the published tag. Cloud defaults to Cloud, Worker, Search

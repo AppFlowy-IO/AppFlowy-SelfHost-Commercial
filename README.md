@@ -73,7 +73,74 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.0 (Latest)
+### 🚀 v0.20.5 (Latest)
+
+#### New Features
+
+- **Progressive search API** — Added an opt-in streaming endpoint for API clients to receive keyword matches while semantic retrieval continued, followed by final ranked results. Each published snapshot rechecked read access.
+- **Content indexing dashboard** — Added a dedicated Grafana dashboard for indexing queues, image and PDF processing, cache reuse, provider work, and resource pressure.
+
+#### Improvements
+
+- **Content indexing defaults** — Enabled native PDF text indexing and structural backlinks by default without requiring AI, while preserving existing Admin overrides. PDF OCR and AI-based graph enrichment remained opt-in.
+- **Database PDF exports** — Kept wide tables readable across pages, with repeated headers and primary columns. Added A4, A3, Letter, and Legal paper options and portrait or landscape orientation to the export API. Incomplete row loading now failed the export instead of silently omitting rows.
+- **Indexing efficiency** — Reduced repeated keyword-index reads for repetitive text, admitted embedding writes in queue order, and retained deferred writes for retry during database contention.
+- **Recovery backups** — Excluded temporary import files, diagnostic archives, and verified expired or retired objects while retaining saved content, attachments, and history. Restores cancelled unfinished imports, which required a fresh upload to restart.
+
+#### Bug Fixes
+
+- Rejected attachment uploads with declared-size mismatches and prevented delayed cleanup from deleting replacement files.
+- Fixed AI failures with providers that rejected temperature settings and corrected ignored imported presentation layouts.
+- Filtered newer notification types from older clients' inboxes and realtime updates to prevent decoding failures.
+- Stopped repeated processing of oversized assignment sources and unchanged database views with unreadable row-order data.
+- Removed credentials, authentication payloads, and signed URLs from additional service logs and verbose driver diagnostics.
+
+#### ⚠️ Action Required
+
+- **Attachment storage upgrade** — Pause uploads, apply the database migrations, and upgrade all attachment readers and writers, including Cloud, Worker, Search, and Backup, before resuming uploads. Older binaries cannot read newly stored file generations; any rollback must also use images that support the new storage layout.
+
+**Baseline:** [`afeba0248679d10d1c8a68f3cde4502eb8d20214`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/afeba0248679d10d1c8a68f3cde4502eb8d20214)
+
+### 🚀 v0.20.4
+
+#### Improvements
+
+- **AI search summaries** — Added a 1.5-second vector-query budget when usable keyword matches were available, allowing summaries to continue from those matches if semantic retrieval was slow or failed. Added `APPFLOWY_SEARCH_SUMMARY_VECTOR_BUDGET_MS` for tuning; `0` disabled the budget.
+- **Realtime sync** — Increased the default per-workspace allowance for queued and active updates from 256 to 1,024 to absorb brief reconnect bursts, and added saturation counters and capacity panels to the realtime diagnostics dashboard.
+
+#### Bug Fixes
+
+- Fixed Improve Writing and Spelling/Grammar replies that lost generated answers or explanations when the AI stream ended.
+- Corrected AI-summary citations, including duplicate references to the same database row and its page.
+
+
+**Baseline:** [`8f3948d23e1016b7e801ee05b6f81da4e2eec281`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/8f3948d23e1016b7e801ee05b6f81da4e2eec281)
+
+### 🚀 v0.20.2
+
+#### New Features
+
+- **Presentation and mind-map APIs** — Added server APIs to generate, save, and version slides and mind maps from authorized workspace content, reuse unchanged results, review imported PowerPoint styles, and export editable PowerPoint files. AI generation required AI to be enabled and included in the installation license; structural maps were available without AI.
+- **Image search (opt-in)** — Added keyword matching for image descriptions and recognized text in documents and database Files & media cells. Processing required AI and an enabled default vision model; existing content entered processing after its next edit.
+- **Native-update policy API** — Added the `desktop_auto_update_enabled` Admin setting, enabled by default, to control automatic-update feeds per server for compatible macOS and Windows clients. Discovery validated platform-specific feeds while retaining minimum-version enforcement and manual downloads.
+
+#### Improvements
+
+- **Semantic indexing** — Isolated and paced pgvector writes to reduce competition with interactive database requests, skipped unchanged vectors, and added optional resumable batch ingestion for large documents.
+- **Attachment search** — Reused image analysis and PDF parses within each workspace, waited for edits to settle before processing files, and extended PDF text search to database-row attachments.
+- **Page history** — Made version generation and restore protection always active. `APPFLOWY_PAGE_HISTORY_ENABLE` and domain feature rules no longer disabled page history; database history remained opt-in.
+
+#### Bug Fixes
+
+- Fixed database-field creation failures during brief storage contention and saved complete hidden row-template content without adding template sources to visible rows.
+- Fixed cases where shared navigation showed entries beneath trashed parents, corrected MCP discovery permission checks, and bounded MCP query and OAuth request work.
+- Retained snapshot retries while creator admission was unavailable and prevented abandoned background tasks from being starved by other pending work.
+- Fixed Search crashes or hangs on malformed documents and row lists, unnecessary service restarts after background timeouts, and missed image/PDF uploads that arrived after their page was saved.
+- Removed credentials from Worker startup and GoTrue request-failure logs.
+
+**Baseline:** [`ff94f4c3563e7252b5e08e6d980e3063129febd7`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/ff94f4c3563e7252b5e08e6d980e3063129febd7)
+
+### 🚀 v0.20.0
 
 #### New Features
 
