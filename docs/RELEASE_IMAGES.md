@@ -13,6 +13,12 @@ Cloud, GoTrue, and the other services the same version number.
 | --- | --- | --- |
 | [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, GoTrue, AI, and Backup images |
 | [AppFlowy-Web](https://github.com/AppFlowy-IO/AppFlowy-Web/releases) | After Web's version manifest is published, and when a GitHub release is published | Web |
+| [Admin frontend Docker CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/admin_frontend_docker.yml) | After public version manifests are published with both AMD64 and ARM64 enabled | Admin frontend |
+
+Admin notifications use the separate `admin` source and update only the public
+`appflowyinc/admin_frontend` image. Set `push_public` and `build_arm64` to `true` in
+the Admin build; premium-only and AMD64-only builds do not request deployment updates.
+The `tag_latest` option does not affect version-pin updates.
 
 **Tags ending in `_test` never dispatch an update.** The receiving workflow and its
 update script also reject these tags before accessing the registry or modifying files.
@@ -74,8 +80,8 @@ The receiver must be on this repository's default branch before enabling the pub
 changes. GitHub only delivers `repository_dispatch` workflows from the default branch.
 Merge the accompanying changes in AppFlowy-Docker-CI and AppFlowy-Web afterward.
 
-All three workflows use the existing organization secret `PUBLIC_REPO_TOKEN`. Its token
-must have access to AppFlowy-SelfHost-Commercial with Contents write (dispatch and branches)
+The publisher and receiver workflows use the existing organization secret `PUBLIC_REPO_TOKEN`.
+Its token must have access to AppFlowy-SelfHost-Commercial with Contents write (dispatch and branches)
 and Pull requests write. A classic token for these public repositories can use `public_repo`;
 a fine-grained token or GitHub App can grant the repository permissions above.
 Using an App/PAT token for PR creation allows normal deployment checks to start automatically.
@@ -89,6 +95,7 @@ Configure these requirements before enabling auto-merge in the publisher workflo
 cannot merge while its first CI run is still being scheduled.
 
 For a missing notification, use **Actions → Update release image pins → Run workflow**.
-Choose `cloud` or `web` and enter the published tag. Cloud defaults to Cloud, Worker and
-Search; override the service list to match the images actually published, for example
+Choose `cloud`, `web`, or `admin` and enter the published tag. Admin defaults to
+`admin_frontend`. Cloud defaults to Cloud, Worker and Search; override the service list
+to match the images actually published, for example
 `appflowy_backup` for a Backup-only release. Manual `_test` requests are also ignored.
