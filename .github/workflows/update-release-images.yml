@@ -9,7 +9,7 @@ on:
       source:
         description: Publisher to update
         type: choice
-        options: [cloud, web]
+        options: [cloud, web, admin]
         required: true
       tag:
         description: Published version tag (tags ending in _test are ignored)
