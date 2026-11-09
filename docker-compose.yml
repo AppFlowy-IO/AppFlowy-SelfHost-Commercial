@@ -169,7 +169,7 @@ services:
       # and rely on the whitelist + invitations to gate who can sign up.
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:0.20.5@sha256:4c45a647ae892783afdc8af175c9f2e75d54085a47e62aea1a347a562e0345f3
+    image: appflowyinc/appflowy_cloud:0.20.7@sha256:2a29e56a611d6e00162226129d5bd16c3e0b36e24eb4cf409db2c8a6fc3a9b08
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -200,7 +200,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.20.5@sha256:dd613a9a85fe80dd4302bb5d27ca769e57a9dd6495c7d0d604075d33b07581dc
+    image: appflowyinc/appflowy_ai:0.20.7@sha256:3bbc28c54cdf1dd6888db80e5922eb097cd6406fc20912177e744903c476e34e
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -237,7 +237,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.20.5@sha256:0caf64f96f7c805daf82700d0b7fe2468934c41732076341fd915ada9b3067f5
+    image: appflowyinc/appflowy_worker:0.20.7@sha256:06d4f95b5c25e3a070686266fff9345c1897b53ea2ac2b61f2564f1e5f0c715e
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -270,7 +270,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.20.5@sha256:fb37fca6d4e4da966be6712be957667a804d7fe22f7b811ff88e7a4813b522bd
+    image: appflowyinc/appflowy_search:0.20.7@sha256:48bd0ffcc67ec0f816988f0945c3864279ada01622b4ff5747fa4a7ec66b9f99
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -325,7 +325,7 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:0.20.6@sha256:a51fe56ec4951f2bbb3a271ff4d1e0abc6be14a4c333abc9b2e671118f944d91
+    image: appflowyinc/appflowy_backup:0.20.7@sha256:d8c047827e7aa01fdef98362210378040c05c164fad2b16acc0bcb19f176e6d9
     restart: unless-stopped
 
   appflowy_web:
