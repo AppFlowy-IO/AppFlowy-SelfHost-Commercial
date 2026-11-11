@@ -69,12 +69,14 @@ global:
     # Presigned URL endpoint (external access)
     presignedUrlEndpoint: ""
 
-  # JWT configuration (shared between GoTrue and AppFlowy Cloud)
+  # JWT configuration shared by GoTrue, AppFlowy Cloud and MCP
   jwt:
     secret: "hello456"  # MUST be set - authentication will fail without this
     existingSecret: ""
     secretKey: "jwt-secret"
     expiration: 604800  # 7 days in seconds
+    # Keep the audience already used by the installation's GoTrue accounts.
+    audience: ""
 
 # -----------------------------------------------------------------------------
 # Infrastructure Dependencies
@@ -714,8 +716,9 @@ appflowy-mcp:
     # quarter of resources.limits.memory.
     maxBodyBytes: 1048576
     collabS3Threshold: 8000
-    # Must match GoTrue's JWT audience.
-    gotrueExpectedAudiences: "authenticated"
+    # Empty derives from global.jwt.audience. An explicit list must include the
+    # bundled GoTrue audience when the chart deploys GoTrue.
+    gotrueExpectedAudiences: ""
 
   # Metrics (Prometheus/Grafana). MCP always serves /metrics on its http port (in-flight and SSE
   # saturation, rate-limit denials, policy state); the MCP Ingress never publishes it.

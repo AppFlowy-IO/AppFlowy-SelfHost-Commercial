@@ -58,12 +58,11 @@ Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whos
 
 The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. It does not resolve or pull the Backup image. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
 
-Standard qualification applies the `0.20.0` server tag to the Cloud, Worker, Search, MCP, and
+Standard qualification applies the `0.20.0` server tag to the Cloud, Worker, Search, and
 optional Backup images with Web `0.19.30`. Both workflows pass `--server-tag 0.20.0 --web-tag 0.19.30`
-to the image resolver, so the server and Web baseline cannot drift independently. The baseline
-must name a server release that also publishes `appflowyinc/appflowy_mcp`. GoTrue,
-Admin, and infrastructure images use their configured references. Installation defaults
-remain `latest`. For each override, the image lock records the selected reference and
+to the image resolver. MCP, GoTrue, Admin, and infrastructure images use their configured
+references. The MCP image must support the configured GoTrue audience. For each override,
+the image lock records the selected reference and
 its original `configured_source`, preserving the Helm source checks before applying the test
 image digests.
 
@@ -83,6 +82,9 @@ All runtime jobs must verify:
   `ci-challenge-token`, which MCP must serve as plain text whether it is on or off. AppFlowy
   Web's 200 page for an unrouted path fails.
 - Administrator authentication, ordinary-user provisioning, login, and workspace access.
+- Authenticated MCP settings for the ordinary workspace owner, including after workload
+  replacement and Backup restore. This request uses the GoTrue access token and exercises
+  MCP's audience validation even when the fixture has no MCP license.
 - Document creation/readback, database creation, and row creation/edit/readback.
 - Attachment upload/download with byte equality, completed Worker HTML import, and keyword search.
 - Two browser clients exchanging document edits, reconnecting after Cloud replacement, and retaining content after reload and in a fresh browser context.

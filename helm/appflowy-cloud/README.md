@@ -203,6 +203,11 @@ Admin console's MCP page; changes apply within seconds, without a restart. The s
 always decides, and no chart value turns MCP on or off. Users, approvals and the email allowlist
 work as described in [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
 
+The bundled GoTrue and MCP share `global.jwt.audience`. Its empty default preserves the
+audience on existing GoTrue accounts during upgrades. Use a commercial MCP image that supports
+verifying an explicitly empty GoTrue audience. If you already use a custom audience, set the
+shared value to that audience. Changing it requires a coordinated account migration.
+
 A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP, written as
 anchored regular expressions with `pathType: ImplementationSpecific`:
 
@@ -239,6 +244,7 @@ authentication, and route the same paths yourself.
 | `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. Behind a CDN or load balancer, have the controller resolve the client with `use-forwarded-headers` and `proxy-real-ip-cidr`, as described for LDAP above. |
 | `appflowy-mcp.config.allowedClientIds` / `allowedRedirectHosts` | Empty. Optional server-wide client governance; workspace owners still approve apps for their workspace. |
 | `appflowy-mcp.config.allowedEmailDomains` / `allowedEmails` | Empty, allowing every account. Lists saved in Admin → AI apps (MCP) take precedence. |
+| `appflowy-mcp.config.gotrueExpectedAudiences` | Empty derives the verifier audience from `global.jwt.audience`. An explicit list can match an external GoTrue issuer. For bundled GoTrue, the list must accept the shared audience. |
 | `appflowy-mcp.config.openaiAppsChallenge` / `privacyPolicyUrl` / `termsOfServiceUrl` | Empty. Optional plugin-directory listing settings. `openaiAppsChallenge` is the domain-verification token OpenAI's plugin portal shows; MCP serves it as plain text at `<publicBaseUrl>/.well-known/openai-apps-challenge`, whether MCP is on or off, and answers 404 while it is empty. `privacyPolicyUrl` and `termsOfServiceUrl` are http(s) URLs that MCP's OAuth metadata names as `op_policy_uri` and `op_tos_uri`. A malformed value stops MCP at startup. |
 | `appflowy-mcp.config.databaseMaxConnections` / `databaseMinConnections` | `8` / `1` per replica, separate from Cloud's pool; include them in the PostgreSQL connection budget. |
 | `appflowy-mcp.config.maxBodyBytes` | `1048576` (1 MiB). Largest request body; a tool call carries what a model writes in one response. Every call in flight (`maxInFlight`, 128) holds its parsed body, which MCP refuses with 413 above twice this size, and MCP logs an error at startup when `maxInFlight` × `maxBodyBytes` exceeds a quarter of the memory limit. |

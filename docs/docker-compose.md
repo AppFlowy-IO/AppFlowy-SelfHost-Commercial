@@ -270,6 +270,16 @@ After an upgrade, MCP is on unless an administrator already saved a setting on t
 keeps deciding; to keep MCP off, turn it off there. While MCP is off, existing connections are
 kept, and they resume once it is on again, unless an app's 30-day sign-in expired meanwhile.
 
+### GoTrue session audience
+
+GoTrue and MCP share `GOTRUE_JWT_AUD` from `.env`. The default empty value preserves
+the audience stored on existing GoTrue accounts, so a regular upgrade needs no account
+migration. Use a commercial MCP image that supports verifying an explicitly empty GoTrue
+audience. If your installation already uses a custom audience, set `GOTRUE_JWT_AUD` to
+that same value in `.env`. Use a single audience without commas or surrounding spaces.
+Changing an existing audience requires a coordinated account migration because GoTrue uses
+it to look up accounts at sign-in.
+
 ### Public URL and HTTPS
 
 `APPFLOWY_MCP_BASE_URL` in `.env` defaults to `${APPFLOWY_BASE_URL}`. Set the origin only, without

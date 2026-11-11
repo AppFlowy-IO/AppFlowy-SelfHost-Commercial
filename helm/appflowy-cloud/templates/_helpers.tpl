@@ -317,6 +317,29 @@ JWT secret key
 {{- .Values.global.jwt.secretKey | default "jwt-secret" }}
 {{- end }}
 
+{{- define "appflowy.jwt.audience" -}}
+{{- $audience := .Values.global.jwt.audience | default "" | toString -}}
+{{- if or (contains "," $audience) (ne $audience (trim $audience)) (eq $audience `""`) -}}
+{{- fail "global.jwt.audience must be empty or a single audience without commas or surrounding whitespace" -}}
+{{- end -}}
+{{- $audience -}}
+{{- end -}}
+
+{{- define "appflowy.mcp.gotrueExpectedAudiences" -}}
+{{- $expected := include "appflowy.jwt.audience" . | default `""` -}}
+{{- $override := index .Values "appflowy-mcp" "config" "gotrueExpectedAudiences" | default "" | trim -}}
+{{- if and .Values.gotrue.enabled $override -}}
+{{- $matches := eq $override $expected -}}
+{{- if ne $expected `""` -}}
+{{- $matches = has $expected (regexSplit "[[:space:]]*,[[:space:]]*" $override -1) -}}
+{{- end -}}
+{{- if not $matches -}}
+{{- fail "appflowy-mcp.config.gotrueExpectedAudiences must accept global.jwt.audience when GoTrue is bundled" -}}
+{{- end -}}
+{{- end -}}
+{{- default $expected $override -}}
+{{- end -}}
+
 {{/*
 =============================================================================
 URL Helpers

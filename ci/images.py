@@ -16,7 +16,9 @@ from configuration import check_compose, isolated_source, source_fingerprint
 ROOT = Path(__file__).resolve().parents[1]
 CORE = {'nginx', 'postgres', 'redis', 'minio', 'gotrue', 'appflowy_cloud',
         'appflowy_worker', 'appflowy_search', 'appflowy_mcp', 'appflowy_web', 'admin_frontend'}
-SERVER = {'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp', 'appflowy_backup'}
+# MCP's first commercial release needs the matching audience implementation.
+# Qualify its configured image independently of the older server fixture tag.
+SERVER = {'appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_backup'}
 
 
 def clean_environment():
@@ -107,7 +109,7 @@ def chart_redis_image():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search, MCP and optional Backup')
+    parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search and optional Backup')
     parser.add_argument('--web-tag', help='CI-only Web tag paired with the qualification server baseline')
     parser.add_argument('--backup', action='store_true', help='Resolve the optional Backup image too')
     parser.add_argument('--backup-image', help='Explicit Backup build to qualify; recorded in the image lock')

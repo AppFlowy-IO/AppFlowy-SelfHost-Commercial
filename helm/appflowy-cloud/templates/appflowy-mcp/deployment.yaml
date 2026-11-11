@@ -141,7 +141,7 @@ spec:
                   name: {{ include "appflowy.jwt.secretName" . }}
                   key: {{ include "appflowy.jwt.secretKey" . }}
             - name: APPFLOWY_GOTRUE_EXPECTED_AUDIENCES
-              value: {{ $mcp.config.gotrueExpectedAudiences | default "authenticated" | quote }}
+              value: {{ include "appflowy.mcp.gotrueExpectedAudiences" . | quote }}
 
             # S3/MinIO configuration
             - name: APPFLOWY_S3_USE_MINIO

@@ -32,6 +32,17 @@ class McpConfigurationTests(unittest.TestCase):
         services = self.compose_services(file, **values)
         return services['appflowy_cloud']['environment'], services['appflowy_mcp']['environment']
 
+    def test_gotrue_and_mcp_share_the_session_audience(self):
+        for file in COMPOSE_FILES:
+            for configured in (None, '', 'custom-tenant'):
+                with self.subTest(file=file, configured=configured):
+                    values = {} if configured is None else {'GOTRUE_JWT_AUD': configured}
+                    services = self.compose_services(file, **values)
+                    self.assertEqual(services['gotrue']['environment']['GOTRUE_JWT_AUD'],
+                                     configured or '')
+                    self.assertEqual(services['appflowy_mcp']['environment']['APPFLOWY_GOTRUE_EXPECTED_AUDIENCES'],
+                                     configured or '""')
+
     def test_no_service_receives_an_mcp_on_off_variable(self):
         # The setting saved in Admin always decides, so neither deploy.env nor a value left in the
         # shell from an older release may reach Cloud, MCP or any other service.

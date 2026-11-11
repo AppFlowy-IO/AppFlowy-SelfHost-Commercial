@@ -30,6 +30,10 @@ Set your own `POSTGRES_PASSWORD`, `GOTRUE_ADMIN_EMAIL`, `GOTRUE_ADMIN_PASSWORD`,
 AI_ENABLED=false
 ```
 
+GoTrue and MCP share `GOTRUE_JWT_AUD` from `swarm.env`. Keep the audience used by your
+installation when reusing its data. The default empty audience requires a compatible commercial
+MCP image. See [GoTrue session audience](docker-compose.md#gotrue-session-audience).
+
 This file will be loaded by the shell. Keep it as trusted shell assignments, quote literal secrets with single quotes (for example, `GOTRUE_ADMIN_PASSWORD='your-password'`), and retain the template's `${...}` references so dependent URLs expand. Never commit this file; `.local/` is ignored by Git. Keep it when reusing the stack's data.
 
 Load it in the current terminal:

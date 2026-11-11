@@ -40,6 +40,26 @@ class McpChartTests(unittest.TestCase):
         return next(item for item in documents if item['kind'] == 'Ingress'
                     and item['metadata']['name'] == 'appflowy-ci-mcp')
 
+    def test_gotrue_and_mcp_share_the_session_audience(self):
+        for audience in ('', 'custom-tenant'):
+            with self.subTest(audience=audience):
+                strings = ('global.jwt.audience=' + audience,) if audience else ()
+                documents = self.render(strings=strings)
+                self.assertEqual(self.environment(documents, 'gotrue')['GOTRUE_JWT_AUD'], audience)
+                self.assertEqual(self.environment(documents, 'mcp')['APPFLOWY_GOTRUE_EXPECTED_AUDIENCES'],
+                                 audience or '""')
+
+    def test_explicit_verifier_audience_covers_the_bundled_issuer(self):
+        override = r'appflowy-mcp.config.gotrueExpectedAudiences=other\, custom-tenant'
+        documents = self.render(strings=('global.jwt.audience=custom-tenant', override))
+        self.assertEqual(self.environment(documents, 'mcp')['APPFLOWY_GOTRUE_EXPECTED_AUDIENCES'],
+                         'other, custom-tenant')
+        self.assertIn('must accept global.jwt.audience', self.render(strings=(override,), success=False))
+
+        documents = self.render(overrides=('gotrue.enabled=false',), strings=(override,))
+        self.assertEqual(self.environment(documents, 'mcp')['APPFLOWY_GOTRUE_EXPECTED_AUDIENCES'],
+                         'other, custom-tenant')
+
     def test_no_container_receives_an_mcp_on_off_variable(self):
         # MCP is on by default and the setting saved in Admin always decides, so neither Cloud nor
         # MCP may receive APPFLOWY_MCP_ENABLED: not by default, not with an external or no MCP

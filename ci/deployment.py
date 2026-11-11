@@ -658,14 +658,36 @@ class Deployment:
             with urllib.request.urlopen(request, timeout=30) as response:
                 result = json.loads(response.read())
         except urllib.error.HTTPError as error:
-            raise RuntimeError(f'Fixture cleanup request failed: {method} {path}: HTTP {error.code}') from None
+            raise RuntimeError(f'Fixture request failed: {method} {path}: HTTP {error.code}') from None
         except Exception as error:
-            raise RuntimeError(f'Fixture cleanup request failed: {method} {path}: {type(error).__name__}') from None
-        if path.startswith('/api/'):
+            raise RuntimeError(f'Fixture request failed: {method} {path}: {type(error).__name__}') from None
+        if path.startswith('/api/') and not path.startswith('/api/mcp/'):
             if not isinstance(result, dict) or result.get('code') != 0 or 'data' not in result:
-                raise RuntimeError(f'Fixture cleanup application request failed: {method} {path}')
+                raise RuntimeError(f'Fixture application request failed: {method} {path}')
             return result['data']
         return result
+
+    def check_mcp_settings(self):
+        """Prove the browser-facing MCP settings route accepts a real GoTrue session."""
+        ordinary = json.loads((self.runtime / 'ordinary-user.json').read_text())
+        ownership = json.loads((self.runtime / 'ordinary-user-ownership.json').read_text())
+        user_id = str(uuid.UUID(ownership['user_id']))
+        workspace_id = str(uuid.UUID(json.loads((self.runtime / 'api-state.json').read_text())['workspace_id']))
+        if ordinary['email'] != ownership['email']:
+            raise RuntimeError('MCP settings fixture account does not match the created user')
+        login = self.fixture_request('POST', '/gotrue/token?grant_type=password', credentials=ordinary)
+        user = login.get('user', {})
+        token = login.get('access_token')
+        if (user.get('id') != user_id or user.get('email') != ordinary['email']
+                or not isinstance(token, str) or not token):
+            raise RuntimeError('MCP settings login did not return a session for the fixture user')
+
+        # A deployment without an MCP license can still report member settings with enabled=false.
+        member = self.fixture_request('GET', f'/api/mcp/me/workspaces/{workspace_id}', token=token)
+        if (not isinstance(member, dict) or member.get('workspace_id') != workspace_id
+                or member.get('role') != 'owner' or member.get('endpoint') != self.base_url + '/mcp'
+                or type(member.get('enabled')) is not bool):
+            raise RuntimeError('MCP settings did not return the fixture workspace owner status')
 
     def cleanup_fixture(self):
         # This destructive fixture cleanup is deliberately CI-only. The local
@@ -735,11 +757,13 @@ class Deployment:
         for name in ('core-acceptance.json', 'acceptance.json'):
             (self.artifacts / name).unlink(missing_ok=True)
         self.smoke('create')
+        self.check_mcp_settings()
         self.browser()
         for service in ('postgres', 'minio', 'redis', 'appflowy_search', 'appflowy_worker'):
             self.replace(service)
         self.wait_http()
         self.smoke('verify')
+        self.check_mcp_settings()
         # Readback alone cannot prove a replaced Worker consumes jobs or Search
         # indexes new content. Use separate fixture state and require both again.
         output = self.run(sys.executable, str(ROOT / 'docker-swarm/tests/api_smoke.py'), 'create',
@@ -750,13 +774,14 @@ class Deployment:
         if self.backup:
             from backup_smoke import BackupSmoke
             from backup_observer import ComposeRestoreObserver
-            backup_result = BackupSmoke(self.runtime, self.base_url, verify=None,
+            backup_result = BackupSmoke(self.runtime, self.base_url, verify=self.check_mcp_settings,
                 redeploy=self.backup_redeploy, evidence=self.evidence,
                 observe=ComposeRestoreObserver(self.runtime, self.run, self.docker_containers, self.evidence),
                 timeout=1800).run()
         self.evidence('core-acceptance.json', {'passed': True, 'mode': self.mode,
                       'backup': backup_result,
-                      'coverage': ['auth', 'document', 'database row create/edit', 'attachment bytes', 'worker import',
+                      'coverage': ['auth', 'authenticated MCP settings', 'document', 'database row create/edit',
+                                   'attachment bytes', 'worker import',
                                    'keyword search', 'browser realtime', 'WebSocket reconnect', 'durable application state'],
                       'excluded': ['external AI providers', 'semantic search', 'SMTP', 'TLS', 'upgrades',
                                    'Redis queue persistence', 'multi-node networking', 'node loss', 'HA']})

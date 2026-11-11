@@ -577,6 +577,51 @@ class RuntimeSafetyTests(unittest.TestCase):
         ]
         return instance, files, responses
 
+    def test_mcp_settings_uses_the_fixture_users_real_login(self):
+        instance, files, responses = self.cleanup_fixture_case()
+        workspace = files['api-state.json']['workspace_id']
+        member = {'workspace_id': workspace, 'role': 'owner', 'enabled': False,
+                  'endpoint': instance.base_url + '/mcp'}
+        with patch('deployment.urllib.request.urlopen', side_effect=[
+                http_reply(200, json.dumps(responses[0]).encode(), 'application/json'),
+                http_reply(200, json.dumps(member).encode(), 'application/json'),
+        ]) as urlopen:
+            instance.check_mcp_settings()
+        login, settings = (call.args[0] for call in urlopen.call_args_list)
+        self.assertEqual(login.full_url, instance.base_url + '/gotrue/token?grant_type=password')
+        self.assertEqual(login.get_method(), 'POST')
+        self.assertEqual(json.loads(login.data), files['ordinary-user.json'])
+        self.assertEqual(settings.full_url, instance.base_url + f'/api/mcp/me/workspaces/{workspace}')
+        self.assertEqual(settings.get_method(), 'GET')
+        self.assertEqual(settings.get_header('Authorization'), 'Bearer ordinary-token')
+
+    def test_mcp_settings_rejects_route_only_responses_and_wrong_owner_status(self):
+        instance, _, responses = self.cleanup_fixture_case()
+        cases = (
+            (http_error(401, b'{"reason":"invalid_session"}'), 'HTTP 401'),
+            (mcp_turned_off, 'HTTP 503'),
+            (web_page, 'JSONDecodeError'),
+            (lambda _: http_reply(200, b'{"enabled":false,"role":"member"}', 'application/json'),
+             'fixture workspace owner status'),
+        )
+        for reply, error in cases:
+            with self.subTest(error=error):
+                def open_request(request, timeout):
+                    if request.get_method() == 'POST':
+                        return http_reply(200, json.dumps(responses[0]).encode(), 'application/json')
+                    return reply(request.full_url)
+
+                with patch('deployment.urllib.request.urlopen', side_effect=open_request):
+                    with self.assertRaisesRegex(RuntimeError, error):
+                        instance.check_mcp_settings()
+
+    def test_mcp_settings_rejects_a_login_for_a_different_user(self):
+        instance, _, responses = self.cleanup_fixture_case()
+        with patch.object(instance, 'fixture_request', return_value=responses[1]) as request:
+            with self.assertRaisesRegex(RuntimeError, 'fixture user'):
+                instance.check_mcp_settings()
+        request.assert_called_once()
+
     def test_fixture_cleanup_refuses_local_execution_before_any_api_call(self):
         instance = self.deployment()
         with patch.dict(os.environ, {}, clear=True), patch.object(instance, 'fixture_request') as request:

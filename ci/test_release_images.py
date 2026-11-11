@@ -383,6 +383,8 @@ class QualificationImageTests(unittest.TestCase):
                      patch.object(images, 'resolve_image', side_effect=resolved):
                     images.main()
                 lock = json.loads(output.read_text())
+                self.assertEqual(lock['services']['appflowy_mcp']['source'],
+                                 configured['appflowy_mcp']['image'])
                 for service, config in configured.items():
                     record = lock['services'][service]
                     expected = (service + ':0.20.0' if service in images.SERVER else

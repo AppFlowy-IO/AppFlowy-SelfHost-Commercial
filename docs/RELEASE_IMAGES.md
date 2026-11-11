@@ -120,6 +120,9 @@ Everything else differs only as follows:
 - **Published image.** `docker-compose.yml` runs the published `appflowyinc/appflowy_mcp` image and
   has no `build` section; the server's Compose file names `appflowyinc/appflowy_mcp_premium` and
   builds it from its source tree.
+- **GoTrue audience.** The commercial defaults retain GoTrue's existing empty audience.
+  MCP receives the two-quote setting for that exact claim. Qualify a self-hosted MCP image
+  that supports this setting before publishing the deployment configuration.
 - **Backup selection.** MCP takes its bucket and Redis database from Backup's restore selection,
   like the other writers: Compose through the `appflowy_mcp` `env_file` entries (which the Swarm
   generator turns into environment entries), the chart through `appflowy.backup.bucketSelection`
