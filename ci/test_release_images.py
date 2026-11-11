@@ -52,7 +52,7 @@ class ReleaseImageTests(unittest.TestCase):
         return yaml.safe_load((self.root / self.paths[0]).read_text())
 
     def test_test_notifications_are_no_ops_before_any_registry_access(self):
-        for source in ('cloud', 'web'):
+        for source in ('cloud', 'web', 'admin'):
             for tag in ('0.20.0_test', 'v0.20.0_test', 'arbitrary_test'):
                 with self.subTest(source=source, tag=tag):
                     changes, reason = self.update(source, tag)
@@ -178,6 +178,49 @@ class ReleaseImageTests(unittest.TestCase):
                 release.main()
             self.assertIn('auto_merge=false\n', output.read_text())
 
+    def test_admin_update_pins_only_the_public_admin_image_in_compose_and_helm(self):
+        original = self.compose()
+        original_chart = yaml.safe_load((self.root / self.paths[1]).read_text())
+        (self.root / '.env').write_text('APPFLOWY_ADMIN_FRONTEND_VERSION=should-not-be-read\n')
+        changes, _ = self.update('admin', tag='v1.2.3')
+        self.assertEqual([row[0] for row in changes], ['admin_frontend'])
+        expected = 'appflowyinc/admin_frontend:v1.2.3@' + self.digest
+        original['services']['admin_frontend']['image'] = expected
+        self.assertEqual(self.compose(), original)
+        original_chart['admin-frontend']['image'].update(tag='v1.2.3', digest=self.digest)
+        self.assertEqual(yaml.safe_load((self.root / self.paths[1]).read_text()), original_chart)
+        self.resolve.assert_called_once_with('appflowyinc/admin_frontend:v1.2.3')
+        self.assertEqual((self.root / '.env').read_text(),
+                         'APPFLOWY_ADMIN_FRONTEND_VERSION=should-not-be-read\n')
+
+    def test_admin_notifications_cannot_select_images_owned_by_other_publishers(self):
+        selections = [
+            ('admin', ['appflowy_web']),
+            ('admin', ['appflowy_cloud', 'appflowy_worker']),
+            ('cloud', ['admin_frontend']),
+            ('web', ['admin_frontend']),
+        ]
+        for source, services in selections:
+            with self.subTest(source=source, services=services), self.assertRaisesRegex(ValueError, 'source'):
+                self.update(source, services=services)
+        self.resolve.assert_not_called()
+        self.assertEqual(self.contents(), self.original)
+
+    def test_admin_retries_and_stale_events_preserve_pinned_releases(self):
+        self.update('admin', tag='1.2.3')
+        pinned = self.contents()
+        changes, _ = self.update('admin', tag='1.2.3')
+        self.assertEqual(changes, [])
+        self.resolve.reset_mock()
+        changes, reason = self.update('admin', tag='1.2.2')
+        self.assertEqual(changes, [])
+        self.assertIn('stale', reason)
+        self.resolve.assert_not_called()
+        self.resolve.return_value = 'sha256:' + 'b' * 64
+        with self.assertRaisesRegex(ValueError, 'republished'):
+            self.update('admin', tag='1.2.3')
+        self.assertEqual(self.contents(), pinned)
+
     def test_duplicate_events_and_release_retries_are_idempotent(self):
         self.update()
         pinned = self.contents()
@@ -238,17 +281,20 @@ class ReleaseImageTests(unittest.TestCase):
         self.assertEqual(self.contents(), self.original)
 
     def test_publisher_identity_and_manual_defaults(self):
-        event = {'action': 'selfhost-images-published', 'client_payload': {
-            'source': 'web', 'tag': '0.20.0', 'services': ['appflowy_web'],
-            'source_repository': release.SOURCES['web'],
-            'source_url': 'https://github.com/AppFlowy-IO/AppFlowy-Web/releases/tag/0.20.0'}}
-        self.assertEqual(release.notification('repository_dispatch', event)[:3],
-                         ('web', '0.20.0', ['appflowy_web']))
-        event['client_payload']['source_repository'] = 'someone/else'
-        with self.assertRaisesRegex(ValueError, 'publisher'):
-            release.notification('repository_dispatch', event)
-        manual = {'inputs': {'source': 'cloud', 'tag': '0.20.0'}}
-        self.assertEqual(release.notification('workflow_dispatch', manual)[2], release.DEFAULT_SERVICES['cloud'])
+        for source in ('cloud', 'web', 'admin'):
+            with self.subTest(source=source):
+                event = {'action': 'selfhost-images-published', 'client_payload': {
+                    'source': source, 'tag': '0.20.0', 'services': release.DEFAULT_SERVICES[source],
+                    'source_repository': release.SOURCES[source],
+                    'source_url': 'https://github.com/' + release.SOURCES[source] + '/actions/runs/123'}}
+                self.assertEqual(release.notification('repository_dispatch', event)[:3],
+                                 (source, '0.20.0', release.DEFAULT_SERVICES[source]))
+                event['client_payload']['source_repository'] = 'someone/else'
+                with self.assertRaisesRegex(ValueError, 'publisher'):
+                    release.notification('repository_dispatch', event)
+                manual = {'inputs': {'source': source, 'tag': '0.20.0'}}
+                self.assertEqual(release.notification('workflow_dispatch', manual)[2],
+                                 release.DEFAULT_SERVICES[source])
 
     def test_missing_target_image_line_cannot_rewrite_the_next_service(self):
         path = self.root / self.paths[0]

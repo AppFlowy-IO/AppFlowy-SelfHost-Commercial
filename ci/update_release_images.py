@@ -13,6 +13,7 @@ from images import ROOT, command
 SOURCES = {
     'cloud': 'AppFlowy-IO/AppFlowy-Docker-CI',
     'web': 'AppFlowy-IO/AppFlowy-Web',
+    'admin': 'AppFlowy-IO/AppFlowy-Docker-CI',
 }
 SERVICES = {
     'gotrue': ('gotrue', 'gotrue'),
@@ -23,10 +24,12 @@ SERVICES = {
     'appflowy_backup': ('appflowy_backup', 'appflowy-backup'),
     'ai': ('appflowy_ai', 'appflowy-ai'),
     'appflowy_web': ('appflowy_web', 'appflowy-web'),
+    'admin_frontend': ('admin_frontend', 'admin-frontend'),
 }
 DEFAULT_SERVICES = {
     'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'],
     'web': ['appflowy_web'],
+    'admin': ['admin_frontend'],
 }
 # MCP's routes and settings, and the guides that describe them, follow AppFlowy-Cloud-Premium files
 # and must match the appflowy_mcp image that serves them. Each entry is (path here, the part that is
@@ -136,7 +139,8 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
     if tag.endswith('_test'):
         return [], 'Test image tags are ignored'
     proposed = version_key(tag)
-    allowed = set(SERVICES) - {'appflowy_web'} if source == 'cloud' else {'appflowy_web'}
+    allowed = (set(SERVICES) - {'appflowy_web', 'admin_frontend'} if source == 'cloud'
+               else set(DEFAULT_SERVICES[source]))
     if (not isinstance(services, list) or not services or any(not isinstance(item, str) for item in services)
             or len(services) != len(set(services)) or not set(services) <= allowed):
         raise ValueError('The release must identify unique services published by its source')
