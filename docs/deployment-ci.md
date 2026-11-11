@@ -58,16 +58,11 @@ Swarm's local public origin is `http://127.0.0.1`, avoiding Docker versions whos
 
 The workflow resolves the AppFlowy application's image tags once and passes the same immutable Linux AMD64 image digests to the runtime jobs. It does not resolve or pull the Backup image. Image identity checks compare the actual running images against the lock. Before applying those pins, CI also checks the Helm chart's source image references so an incorrect repository or tag cannot be hidden by CI overrides. Helm retains its chart's Redis image and uses a pinned ingress controller in place of Compose/Swarm's standalone Nginx; these exceptions are recorded separately. The Swarm parity check also fails if its generated files have drifted from the root Compose sources.
 
-Standard qualification applies the `0.20.0` server tag to the Cloud, Worker, Search, and
-optional Backup images with Web `0.19.30`. Both workflows pass `--server-tag 0.20.0 --web-tag 0.19.30`
-to the image resolver. MCP, GoTrue, Admin, and infrastructure images use their configured
-references. The MCP image must support the configured GoTrue audience. For each override,
-the image lock records the selected reference and
-its original `configured_source`, preserving the Helm source checks before applying the test
-image digests.
-
-PRs from `automation/image-updates/` omit the server, Web, and Backup baseline overrides.
-They qualify the exact references in the proposed deployment files. See
+Both workflows qualify the image references in the proposed deployment files. The selected
+Cloud image must include the MCP policy migrations, and MCP must support the configured
+GoTrue audience. For an intentional local qualification, `ci/images.py` accepts
+`--server-tag` and `--web-tag` and records each overridden reference alongside its original
+`configured_source`. See
 [Release image updates](RELEASE_IMAGES.md) for publisher events, `_test` exclusions, and review requirements.
 
 All runtime jobs must verify:
@@ -109,10 +104,10 @@ changes the admission setting. Keyword-search readback remains a separate requir
 ## Backup acceptance
 
 The separate **AppFlowy Backup integration** check qualifies Backup on pull requests and release
-branch pushes. Standard qualification runs use `appflowyinc/appflowy_backup:0.20.0`; manual runs can use the
-`backup_image` input to select a matching release tag or digest. The core images still come from
-the versioned Compose configuration, with the CI server/Web baseline overrides described above. Each run
-resolves the selected tags to digests for reproducibility. Cloud owns the Backup API and database
+branch pushes. It uses the Backup image configured in `docker-compose.backup.yml`.
+A manual run can supply the optional `backup_image` input to test a matching release tag
+or digest alongside the configured core images. Each run resolves the selected tags to
+digests for reproducibility. Cloud owns the Backup API and database
 migrations, so the selected Cloud image must include Backup support too.
 The image publishing process must keep the selected Cloud and Backup builds compatible. These
 deployment workflows consume published images; they do not build or publish replacement images.

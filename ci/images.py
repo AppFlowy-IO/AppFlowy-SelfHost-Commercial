@@ -110,7 +110,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--server-tag', help='CI-only tag for Cloud, Worker, Search and optional Backup')
-    parser.add_argument('--web-tag', help='CI-only Web tag paired with the qualification server baseline')
+    parser.add_argument('--web-tag', help='CI-only Web tag for an explicit qualification run')
     parser.add_argument('--backup', action='store_true', help='Resolve the optional Backup image too')
     parser.add_argument('--backup-image', help='Explicit Backup build to qualify; recorded in the image lock')
     parser.add_argument('--local', action='store_true', help='Pin already installed native images for isolated local qualification')

@@ -331,28 +331,26 @@ class WorkflowImageSelectionTests(unittest.TestCase):
         self.assertIn("steps.update.outputs.auto_merge == 'true'", merge['if'])
         self.assertIn('update', [step.get('id') for step in steps])
 
-    def test_release_pr_checks_do_not_substitute_the_qualification_baseline(self):
-        for filename, step_name in (
-                ('deployment-test.yml', 'Resolve exact linux/amd64 image digests once'),
-                ('backup-test.yml', 'Resolve exact core and Backup image digests')):
+    def test_workflows_use_configured_images_with_an_optional_backup_override(self):
+        for filename, step_name, base_arguments, output, backup_images in (
+                ('deployment-test.yml', 'Resolve exact linux/amd64 image digests once',
+                 [], 'ci-artifacts/image-lock.json', ('',)),
+                ('backup-test.yml', 'Resolve exact core and Backup image digests',
+                 ['--backup'], 'ci-artifacts/compose-backup/image-lock.json',
+                 ('', 'appflowyinc/appflowy_backup:manual-build'))):
             workflow = yaml.safe_load((release.ROOT / '.github/workflows' / filename).read_text())
             step = next(step for job in workflow['jobs'].values() for step in job.get('steps', [])
                         if step.get('name') == step_name)
-            for use_pins in ('true', 'false'):
-                with self.subTest(workflow=filename, use_pins=use_pins), tempfile.TemporaryDirectory() as directory:
+            for backup_image in backup_images:
+                with self.subTest(workflow=filename, backup_image=backup_image), tempfile.TemporaryDirectory() as directory:
                     capture = Path(directory) / 'arguments'
-                    environment = dict(os.environ, USE_RELEASE_PINS=use_pins, CAPTURED_ARGS=str(capture),
-                                       SERVER_IMAGE_TAG='0.20.0', WEB_IMAGE_TAG='0.19.30',
-                                       BACKUP_IMAGE='appflowyinc/appflowy_backup:0.20.0')
+                    environment = dict(os.environ, CAPTURED_ARGS=str(capture), BACKUP_IMAGE=backup_image)
                     subprocess.run(['bash', '-e', '-o', 'pipefail', '-c',
                                     'python() { printf "%s\\n" "$@" > "$CAPTURED_ARGS"; }\n' + step['run']],
                                    env=environment, check=True, capture_output=True)
-                    arguments = capture.read_text().splitlines()
-                    self.assertEqual('--server-tag' in arguments, use_pins == 'false')
-                    self.assertEqual('--web-tag' in arguments, use_pins == 'false')
-                    if filename == 'backup-test.yml':
-                        self.assertIn('--backup', arguments)
-                        self.assertEqual('--backup-image' in arguments, use_pins == 'false')
+                    override = ['--backup-image', backup_image] if backup_image else []
+                    self.assertEqual(capture.read_text().splitlines(),
+                                     ['ci/images.py', *base_arguments, *override, '--output', output])
 
 
 class QualificationImageTests(unittest.TestCase):

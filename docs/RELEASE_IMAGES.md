@@ -65,11 +65,9 @@ three Web pins to agree. Documentation can accompany a Web image update. A chang
 other service, deployment setting, or code still requires full integration. This applies to
 the PR and its post-merge push, regardless of the branch name.
 
-On other image-update PRs, both integration workflows use the images configured in the
-proposed Compose files. They omit the standard `0.20.0` server/Backup and `0.19.30` Web
-baseline overrides, so a green result cannot be produced by substituting different component
-images. Other branches use that fixed qualification baseline. Incompatible Cloud/Backup
-images must be corrected at publication; CI does not replace proposed pins to hide a failure.
+Both integration workflows use the images configured in the proposed Compose files on all
+branches. A manual Backup run may override its Backup image to qualify a matching build.
+Incompatible Cloud, MCP or Backup images must be corrected at publication.
 
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job
