@@ -194,11 +194,12 @@ not stop an already running container.
 
 ## Server logs
 
-**Tools → Server Logs** in Admin can preview retained Docker output and download a support archive
-for Cloud, Worker, Search, AI, GoTrue and Nginx. It requires Cloud and Admin releases that include
-this feature and a compatible `appflowyinc/appflowy_log_collector` image. The optional collector
-is disabled by default. Installations without a configured Docker collector show that server-log
-viewing and export are unsupported; an unreachable configured collector is reported separately.
+**Tools → Server Health → Logs** in Admin can preview retained Docker output and download a
+support archive for Cloud, Worker, Search, AI, GoTrue and Nginx. It requires Cloud and Admin
+releases that include this feature and a compatible `appflowyinc/appflowy_log_collector` image.
+The optional collector is disabled by default. Installations without a configured Docker collector
+show that server-log viewing and export are unsupported; an unreachable configured collector is
+reported separately.
 
 Set these values in the existing root `.env`:
 
