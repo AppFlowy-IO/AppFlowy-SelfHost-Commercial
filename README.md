@@ -69,7 +69,35 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.5 (Latest)
+### 🚀 v0.21.0 (Latest)
+
+#### New Features
+
+- **Managed AI app connections (One, Team, and Enterprise)** — Added live Admin API controls for MCP availability, email and domain access rules, rate limits, and policy history. Added workspace app approval policies and APIs for members to review and disconnect their connections.
+- **MCP workspace authoring** — Added tools to create spaces with access settings, embed database views, edit saved filters and chart or dashboard settings, and configure form questions and sharing links.
+- **SCIM and permission diagnostic exports (Seed plan or higher)** — Added an Admin API to download received directory state and its permission projection for support investigations, optionally scoped to an affected user or page. Excluded user names, email addresses, credentials, and document content.
+
+#### Improvements
+
+- **Mention suggestions** — Ranked matches by quality before recent activity, using recently viewed pages and recently mentioned people to order comparable matches.
+- **AI answers** — Improved workspace evidence selection and passage coverage, retained table text, and preserved source citations when combining workspace retrieval with web search.
+- **Background indexing** — Reused saved image and OCR text after shared caches expired, kept unrelated work moving during workspace lease contention, and paced retries for incomplete database generations and busy embedding writes.
+
+#### Bug Fixes
+
+- Fixed row-creation failures during transient database lock contention, deleted-field references in new views, and MCP row inserts that could discard concurrent rows or view settings.
+- Recovered eligible legacy sidebar rename and move queues, retained the latest delayed synchronization requests, and bounded permission-recovery retries.
+- Fixed SCIM provisioning for authentication accounts without a Cloud profile and legacy mixed-case email addresses.
+- Fixed stale attachment references when republishing renamed pages and full-backup exports failing during temporary-dump cleanup.
+
+#### ⚠️ Action Required
+
+- **MCP setup and policy** — To use AI app connections, deploy the standalone MCP service, set a consistent public origin through `APPFLOWY_MCP_BASE_URL` on Cloud and MCP, and forward its transport, OAuth, discovery, and connection-management routes. Remote AI apps required public HTTPS. MCP defaulted to on for eligible licenses unless a saved Admin policy disabled it; use `/api/admin/mcp/policy` for changes. Environment flags no longer disabled MCP, and generic system-config writes no longer accepted MCP settings.
+- **Existing MCP deployments** — Replace older MCP replicas together to avoid approval-policy incompatibilities. Before rollback to the previous approval model, approve each required client ID in every affected workspace.
+
+**Baseline:** [`a57c982ef2ba2d2362f193e7577efb067e8bc4a3`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/a57c982ef2ba2d2362f193e7577efb067e8bc4a3)
+
+### 🚀 v0.20.5
 
 #### New Features
 
