@@ -12,7 +12,8 @@ from images import ROOT, clean_environment
 
 class ServerLogsConfigurationTests(unittest.TestCase):
     def render(self, backup=False, logs=False, *, token="", project="server-logs-contract",
-               socket="/var/run/docker.sock", ambient_url=None):
+               socket="/var/run/docker.sock", ambient_url=None,
+               image="appflowyinc/appflowy_log_collector:contract-check"):
         # Never read a developer's .env or inherit application credentials.
         with tempfile.TemporaryDirectory(prefix="server-logs-compose-") as directory:
             env_file = Path(directory) / ".env"
@@ -22,11 +23,13 @@ class ServerLogsConfigurationTests(unittest.TestCase):
                 **clean_environment(),
                 "APPFLOWY_BACKUP_PROFILE": "backup" if backup else "",
                 "APPFLOWY_SERVER_LOGS_PROFILE": "server-logs" if logs else "",
-                "APPFLOWY_SERVER_LOGS_IMAGE": "appflowyinc/appflowy_log_collector:contract-check",
-                "APPFLOWY_SERVER_LOGS_DOCKER_SOCKET": socket,
             }
-            if token is not None:
-                env["APPFLOWY_SERVER_LOGS_TOKEN"] = token
+            # None leaves a setting out, as an installation that never configured it would.
+            for name, value in (("APPFLOWY_SERVER_LOGS_IMAGE", image),
+                                ("APPFLOWY_SERVER_LOGS_DOCKER_SOCKET", socket),
+                                ("APPFLOWY_SERVER_LOGS_TOKEN", token)):
+                if value is not None:
+                    env[name] = value
             if ambient_url is not None:
                 env["APPFLOWY_SERVER_LOGS_URL"] = ambient_url
             command = ["docker", "compose", "--env-file", str(env_file)]
@@ -55,6 +58,24 @@ class ServerLogsConfigurationTests(unittest.TestCase):
                              configurations[backup, True].get("volumes"))
             self.assertEqual(configurations[backup, False].get("name"),
                              configurations[backup, True].get("name"))
+
+    def test_enabling_needs_only_the_profile(self):
+        settings = [line.split("=", 1)[0] for line in (ROOT / "deploy.env").read_text().splitlines()
+                    if line.startswith("APPFLOWY_SERVER_LOGS_")]
+        self.assertEqual(settings, ["APPFLOWY_SERVER_LOGS_PROFILE"])
+        result = self.render(logs=True, token=None, socket=None, image=None)
+        cloud = result["services"]["appflowy_cloud"]["environment"]
+        collector = result["services"]["appflowy_log_collector"]
+        # With no token of its own, each side derives the credential from the secret they share.
+        self.assertEqual(cloud["APPFLOWY_SERVER_LOGS_TOKEN"], "")
+        self.assertEqual(collector["environment"]["APPFLOWY_SERVER_LOGS_TOKEN"], "")
+        # Compared without printing: a failure must not echo a deployment secret.
+        self.assertTrue(collector["environment"]["APPFLOWY_GOTRUE_JWT_SECRET"]
+                        and collector["environment"]["APPFLOWY_GOTRUE_JWT_SECRET"]
+                        == cloud["APPFLOWY_GOTRUE_JWT_SECRET"],
+                        "Cloud and the reader must derive from the same nonempty secret")
+        self.assertTrue(collector["image"].startswith("appflowyinc/appflowy_log_collector:"))
+        self.assertEqual(collector["volumes"][0]["source"], "/var/run/docker.sock")
 
     def test_reader_is_internal_and_keeps_docker_access_out_of_cloud_and_admin(self):
         token = "test-only-collector-token-" + "0" * 40

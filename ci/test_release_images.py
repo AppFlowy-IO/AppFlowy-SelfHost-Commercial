@@ -28,8 +28,11 @@ class ReleaseImageTests(unittest.TestCase):
             for service, (repository, helm_key) in release.SERVICES.items():
                 if name == 'docker-compose.yml':
                     tag = '${APPFLOWY_WEB_VERSION:-latest}' if service == 'appflowy_web' else 'latest'
-                    value['services'][service]['image'] = 'appflowyinc/' + repository + ':' + tag
-                else:
+                    image = 'appflowyinc/' + repository + ':' + tag
+                    if service == 'appflowy_log_collector':
+                        image = '${APPFLOWY_SERVER_LOGS_IMAGE:-' + image + '}'
+                    value['services'][service]['image'] = image
+                elif helm_key:
                     value[helm_key]['image']['tag'] = 'latest'
                     value[helm_key]['image'].pop('digest', None)
             target.write_text(yaml.safe_dump(value, sort_keys=False))
@@ -90,6 +93,26 @@ class ReleaseImageTests(unittest.TestCase):
                 self.assertEqual(image['digest'], self.digest)
             else:
                 self.assertEqual(updated['services'][service], original['services'][service])
+
+    def test_the_log_reader_is_pinned_inside_its_override_and_only_in_compose(self):
+        chart = (self.root / self.paths[1]).read_text()
+        services = ['appflowy_cloud', 'appflowy_worker', 'appflowy_log_collector']
+        changes, _ = self.update('cloud', services=services)
+        self.assertEqual({row[0] for row in changes}, set(services))
+        pinned = 'appflowyinc/appflowy_log_collector:0.20.0@' + self.digest
+        # An installation's own image still wins; without one, the release pin is used.
+        self.assertEqual(self.compose()['services']['appflowy_log_collector']['image'],
+                         '${APPFLOWY_SERVER_LOGS_IMAGE:-' + pinned + '}')
+        self.assertIn(('appflowy_log_collector', 'appflowyinc/appflowy_log_collector:latest', pinned),
+                      changes)
+        self.assertNotIn('log_collector', chart)
+        self.assertNotIn('log_collector', (self.root / self.paths[1]).read_text())
+        # A retry is idempotent, an older release is stale, and a republished tag is refused.
+        self.assertEqual(self.update('cloud', services=services)[0], [])
+        self.assertIn('stale', self.update('cloud', tag='0.19.9', services=services)[1])
+        self.resolve.return_value = 'sha256:' + 'b' * 64
+        with self.assertRaisesRegex(ValueError, 'republished'):
+            self.update('cloud', services=['appflowy_log_collector'])
 
     def test_admin_update_pins_only_the_public_admin_image_in_compose_and_helm(self):
         original = self.compose()

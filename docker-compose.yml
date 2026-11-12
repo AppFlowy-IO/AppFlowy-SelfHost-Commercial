@@ -348,7 +348,9 @@ services:
     cpus: "0.50"
     environment:
       - APPFLOWY_SERVER_LOGS_BIND=0.0.0.0:8088
+      # With no token set, Cloud and this reader derive the same credential from the JWT secret.
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_TOKEN:-}
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
       - APPFLOWY_SERVER_LOGS_PROJECT=${COMPOSE_PROJECT_NAME}
       - APPFLOWY_SERVER_LOGS_DOCKER_SOCKET=/var/run/docker.sock
     volumes:
