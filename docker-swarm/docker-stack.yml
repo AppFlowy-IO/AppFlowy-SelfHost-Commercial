@@ -187,7 +187,7 @@ services:
     - AI_ENABLED=${AI_ENABLED:-true}
     - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
     - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:0.20.7@sha256:2a29e56a611d6e00162226129d5bd16c3e0b36e24eb4cf409db2c8a6fc3a9b08
+    image: appflowyinc/appflowy_cloud:0.21.0@sha256:4b44a8116f05b18adf44391a32e5b86833ea39ed689cc897bffbb8b8eb2d2df9
     healthcheck:
       test: curl --fail http://127.0.0.1:8000/api/health || exit 1
       interval: 5s
@@ -211,7 +211,7 @@ services:
         parallelism: 1
         order: stop-first
   ai:
-    image: appflowyinc/appflowy_ai:0.20.7@sha256:3bbc28c54cdf1dd6888db80e5922eb097cd6406fc20912177e744903c476e34e
+    image: appflowyinc/appflowy_ai:0.21.0@sha256:97733df6664cbe7bf8c20aa6c729eb424fe6c76ac5092d9cc0a0290c795c0dfd
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - AI_REDIS_URL=${APPFLOWY_REDIS_URI}
@@ -247,7 +247,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_worker:
-    image: appflowyinc/appflowy_worker:0.20.7@sha256:06d4f95b5c25e3a070686266fff9345c1897b53ea2ac2b61f2564f1e5f0c715e
+    image: appflowyinc/appflowy_worker:0.21.0@sha256:c5da5a4287e927faa2f5c02dfe258da64fc51bfa75ab50dd0b3a8fcec8aa3c59
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_WORKER_REDIS_URL=${APPFLOWY_WORKER_REDIS_URL:-redis://redis:6379}
@@ -275,7 +275,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_search:
-    image: appflowyinc/appflowy_search:0.20.7@sha256:48bd0ffcc67ec0f816988f0945c3864279ada01622b4ff5747fa4a7ec66b9f99
+    image: appflowyinc/appflowy_search:0.21.0@sha256:4d5ddb6e7bc5ec36af6dad86774732cba56b8b0d19757abeeff49a6171773878
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI}
