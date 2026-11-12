@@ -173,7 +173,7 @@ services:
       # No collector dependency or startup probe when server logs are disabled.
       - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
-    image: appflowyinc/appflowy_cloud:0.21.1@sha256:aecde909b5e15a82b2ce703e0ddf34ad50aa5149035c66886c9bceb1e241404e
+    image: appflowyinc/appflowy_cloud:0.21.2@sha256:de6d40493492edb57fd7fee039610de5e5a9990ba0be8d9c9ac76a658294bd61
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -204,7 +204,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.21.1@sha256:4fd72a10ede9c00970f25a67fc01918892f90a1e9126802956a709ff5e0ed2a1
+    image: appflowyinc/appflowy_ai:0.21.2@sha256:d17663863e76e1132edf618653b4042e04534f8edec680a555af75dd341bffd3
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -241,7 +241,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.21.1@sha256:e0509dd6cb40653e7cd2c4350966f95cd30e27d5ceed952b6d7ee6cea080d245
+    image: appflowyinc/appflowy_worker:0.21.2@sha256:7d5d001e47f46c04b5a9963b64944f947f55bac7faf266b466d99eca23be8472
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -274,7 +274,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.21.1@sha256:9ef86b783f3fffb69b3f00ff86d31fc1836d4c70dc80065b94abaec5bd72b974
+    image: appflowyinc/appflowy_search:0.21.2@sha256:f292374e3115d6a642e61338ed48fff3c31ed39c2757c8993fd5b3e5333c6bb9
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
