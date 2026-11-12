@@ -173,7 +173,7 @@ services:
       # No collector dependency or startup probe when server logs are disabled.
       - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
-    image: appflowyinc/appflowy_cloud:0.20.7@sha256:2a29e56a611d6e00162226129d5bd16c3e0b36e24eb4cf409db2c8a6fc3a9b08
+    image: appflowyinc/appflowy_cloud:0.21.1@sha256:aecde909b5e15a82b2ce703e0ddf34ad50aa5149035c66886c9bceb1e241404e
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -204,7 +204,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.20.7@sha256:3bbc28c54cdf1dd6888db80e5922eb097cd6406fc20912177e744903c476e34e
+    image: appflowyinc/appflowy_ai:0.21.1@sha256:4fd72a10ede9c00970f25a67fc01918892f90a1e9126802956a709ff5e0ed2a1
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -241,7 +241,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.20.7@sha256:06d4f95b5c25e3a070686266fff9345c1897b53ea2ac2b61f2564f1e5f0c715e
+    image: appflowyinc/appflowy_worker:0.21.1@sha256:e0509dd6cb40653e7cd2c4350966f95cd30e27d5ceed952b6d7ee6cea080d245
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -274,7 +274,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.20.7@sha256:48bd0ffcc67ec0f816988f0945c3864279ada01622b4ff5747fa4a7ec66b9f99
+    image: appflowyinc/appflowy_search:0.21.1@sha256:9ef86b783f3fffb69b3f00ff86d31fc1836d4c70dc80065b94abaec5bd72b974
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -329,7 +329,7 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:0.20.7@sha256:d8c047827e7aa01fdef98362210378040c05c164fad2b16acc0bcb19f176e6d9
+    image: appflowyinc/appflowy_backup:0.21.1@sha256:9092c21bd173e1b23ce1aca7571b27920446df70e96e633f842667789c3d3505
     restart: unless-stopped
 
   # The only Docker socket added for server-log viewing belongs to this isolated reader.
