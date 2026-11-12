@@ -3,6 +3,7 @@
 # Then run `docker compose up -d`.
 # Backup is disabled by default; set APPFLOWY_BACKUP_PROFILE=backup in .env to enable it.
 # See docs/docker-compose.md#backup for setup.
+# Server logs are optional; see docs/docker-compose.md#server-logs.
 
 services:
   nginx:
@@ -169,6 +170,9 @@ services:
       # and rely on the whitelist + invitations to gate who can sign up.
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
+      # No collector dependency or startup probe when server logs are disabled.
+      - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
+      - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
     image: appflowyinc/appflowy_cloud:0.21.1@sha256:aecde909b5e15a82b2ce703e0ddf34ad50aa5149035c66886c9bceb1e241404e
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
@@ -327,6 +331,38 @@ services:
     profiles: [backup]
     image: appflowyinc/appflowy_backup:0.21.1@sha256:9092c21bd173e1b23ce1aca7571b27920446df70e96e633f842667789c3d3505
     restart: unless-stopped
+
+  # The only Docker socket added for server-log viewing belongs to this isolated reader.
+  # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
+  appflowy_log_collector:
+    profiles: [server-logs]
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:latest}
+    restart: unless-stopped
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: "0.50"
+    environment:
+      - APPFLOWY_SERVER_LOGS_BIND=0.0.0.0:8088
+      - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_TOKEN:-}
+      - APPFLOWY_SERVER_LOGS_PROJECT=${COMPOSE_PROJECT_NAME}
+      - APPFLOWY_SERVER_LOGS_DOCKER_SOCKET=/var/run/docker.sock
+    volumes:
+      - type: bind
+        source: ${APPFLOWY_SERVER_LOGS_DOCKER_SOCKET:-/var/run/docker.sock}
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "appflowy_log_collector", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   appflowy_web:
     restart: on-failure
