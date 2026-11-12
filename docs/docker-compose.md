@@ -253,13 +253,36 @@ host's socket path before enabling the profile. The bind does not create a missi
 Retain the Compose project name when upgrading; the collector derives its scope automatically
 from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-name` override.
 
-In Admin, select services and a preset or custom start/end time, then view the logs and export
-the applied interval. The archive includes readable logs, JSON lines and a manifest recording
-the requested range, source images, observed timestamps and any limits or truncation. Requests
-are bounded to 24 hours, and only currently retained container logs can be read. Rotation,
-deleted containers, unreadable logging drivers and size/line limits can reduce coverage; the
-archive is not a complete historical logging store. Common credentials are masked, but logs may
-still contain personal information. Review the archive before sharing it.
+### View and export in Admin
+
+These screenshots were captured from a local Docker deployment; the preview shows a harmless
+`GET /api/ready?diagnostics-example=1` readiness request.
+
+1. Sign in as an installation administrator and open **Tools → Server Health → Logs**.
+   Choose a service or **All services**, a time range, and any severity or text filter.
+
+   ![Server Health Logs tab with service, time range, severity and text filters](images/server-logs/filters.png)
+
+2. Choose a preset interval or **Custom range**, then enter **From** and **To** dates and times.
+   Custom inputs and displayed timestamps use the browser's named time zone; requests and archive
+   metadata use UTC. The interval must be **24 hours or less**.
+
+   ![Custom log interval with the date picker and browser time zone visible](images/server-logs/custom-range.png)
+
+3. Select **View logs** to apply the filters and load a bounded preview. Open **Coverage details**
+   and check observed timestamps, source images and any truncation or collection limits.
+
+4. Select **Export logs** to download the applied interval. The ZIP contains `logs.txt` (readable
+   output), `logs.jsonl` (structured entries), and `manifest.json` (requested range, source images,
+   observed timestamps and detected limits). **Refresh** and export reuse the applied interval;
+   after editing filters, select **View logs** again before exporting.
+
+   ![Log preview and coverage details with the export action](images/server-logs/preview-export.png)
+
+Only currently retained container logs can be read. Rotation, deleted containers, unreadable
+logging drivers and size/line limits can reduce coverage; the archive is not a complete historical
+logging store. Common credentials are masked on a best-effort basis, but logs may still contain
+personal information or sensitive context. Review the archive before sharing it.
 
 High-volume results come from bounded prefixes of the selected source output, with detected
 limits reported; they do not promise the latest matching lines. The collector limits its consumed
