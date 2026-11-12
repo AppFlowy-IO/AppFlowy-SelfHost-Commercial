@@ -21,6 +21,8 @@ SERVICES = {
     'appflowy_worker': ('appflowy_worker', 'appflowy-worker'),
     'appflowy_search': ('appflowy_search', 'appflowy-search'),
     'appflowy_backup': ('appflowy_backup', 'appflowy-backup'),
+    # Compose only: the Swarm and Helm files do not install the optional log reader.
+    'appflowy_log_collector': ('appflowy_log_collector', None),
     'ai': ('appflowy_ai', 'appflowy-ai'),
     'appflowy_web': ('appflowy_web', 'appflowy-web'),
     'admin_frontend': ('admin_frontend', 'admin-frontend'),
@@ -31,6 +33,8 @@ DEFAULT_SERVICES = {
     'admin': ['admin_frontend'],
 }
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
+# An image an installation may replace: the release pin is the default inside the expression.
+OVERRIDE = re.compile(r'\$\{([A-Z_]+):-([^}]+)\}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
 
@@ -135,10 +139,11 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
     for service in sorted(services):
         repository, helm_key = SERVICES[service]
         repository = 'appflowyinc/' + repository
-        previous = config['services'][service]['image']
+        override = OVERRIDE.fullmatch(config['services'][service]['image'])
+        previous = override[2] if override else config['services'][service]['image']
         if previous.split(':', 1)[0].split('@')[0] != repository:
             raise ValueError(service + ': unexpected Compose image repository')
-        if chart[helm_key]['image']['repository'] != repository:
+        if helm_key and chart[helm_key]['image']['repository'] != repository:
             raise ValueError(service + ': unexpected Helm image repository')
         digest = resolve(repository + ':' + tag)
         if not DIGEST.fullmatch(digest):
@@ -148,12 +153,17 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
                 and version_key(image_tag(previous)) == proposed and old_digest != digest):
             raise ValueError(service + ': an existing release tag was republished; publish a new version')
         reference = repository + ':' + tag + '@' + digest
+        pinned = '${' + override[1] + ':-' + reference + '}' if override else reference
         service_block = block(compose, '  ' + service)
-        updated, count = re.subn(r'^(    image:) [^\n]+$', lambda m: m[1] + ' ' + reference,
+        updated, count = re.subn(r'^(    image:) [^\n]+$', lambda m: m[1] + ' ' + pinned,
                                  service_block[0], count=1, flags=re.M)
         if count != 1:
             raise ValueError(service + ': expected exactly one Compose image line')
         compose = compose[:service_block.start()] + updated + compose[service_block.end():]
+        if previous != reference:
+            changes.append((service, previous, reference))
+        if not helm_key:
+            continue
 
         chart_block = block(helm, helm_key)
         updated, count = re.subn(r'^    tag: [^\n]+$', lambda _: f'    tag: "{tag}"',
@@ -166,8 +176,6 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
             updated = re.sub(r'^(    tag: [^\n]+\n)', lambda m: m[1] + '    digest: ' + digest + '\n',
                              updated, count=1, flags=re.M)
         helm = helm[:chart_block.start()] + updated + helm[chart_block.end():]
-        if previous != reference:
-            changes.append((service, previous, reference))
 
     # Do not leave a partially updated deployment when any selected image fails validation.
     if changes:

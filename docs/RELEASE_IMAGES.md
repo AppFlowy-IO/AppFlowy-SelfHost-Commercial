@@ -11,7 +11,7 @@ Cloud, GoTrue, and the other services the same version number.
 
 | Publisher | When it notifies | Compose services it can update |
 | --- | --- | --- |
-| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, GoTrue, AI, and Backup images |
+| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, GoTrue, AI, Backup, and log collector images |
 | [AppFlowy-Web](https://github.com/AppFlowy-IO/AppFlowy-Web/releases) | After Web's version manifest is published, and when a GitHub release is published | Web |
 | [Admin frontend Docker CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/admin_frontend_docker.yml) | After public version manifests are published with both AMD64 and ARM64 enabled | Admin frontend |
 
@@ -30,7 +30,10 @@ For a real version tag, the receiver:
 2. Resolves each notified image's immutable multi-platform index digest. Both
    `linux/amd64` and `linux/arm64` must be available before an update can be proposed.
 3. Changes the selected Compose images to `repository:version@sha256:digest`, updates
-   the matching Helm tag/digest, and regenerates the Swarm files.
+   the matching Helm tag/digest, and regenerates the Swarm files. The optional log collector
+   exists only in Compose: its pin becomes the default inside
+   `${APPFLOWY_SERVER_LOGS_IMAGE:-…}`, so an installation's own image still wins, and no Helm
+   or Swarm file changes for it.
 4. Opens or refreshes `automation/image-updates/<source>-<tag>[-<services>]` as a PR. The version
    remains readable, while the digest prevents tag replacement from changing a deployment.
 5. Enables squash auto-merge for that PR's exact head commit. GitHub waits for the required

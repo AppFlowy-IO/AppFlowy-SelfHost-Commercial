@@ -219,25 +219,13 @@ Compose project name and storage volumes when updating deployment files.
 Upgrade every Cloud replica to a release that includes the access setting before relying on
 **Allow log access** being off. An older replica does not enforce this saved setting.
 
-The image reference below is a placeholder, not an available release recommendation. Use a
-collector image published and tested with your selected Cloud/Admin release. If that compatible
-collector image has not been released yet, wait for it or build and test the matching sources;
-using `latest` does not establish compatibility.
+### Enable the collector
 
-Set these values in the existing root `.env`:
+Set one value in the existing root `.env`:
 
 ```dotenv
 APPFLOWY_SERVER_LOGS_PROFILE=server-logs
-APPFLOWY_SERVER_LOGS_TOKEN=<a-private-random-token>
-APPFLOWY_SERVER_LOGS_IMAGE=appflowyinc/appflowy_log_collector:<compatible-release>@sha256:<image-index-digest>
 ```
-
-Generate the token locally with `openssl rand -hex 32`, then place its output in `.env`. It must
-contain 32–512 ASCII bearer-token characters. Keep it private; it authenticates Cloud to
-the collector and is never sent to the browser. Pin the collector image released and tested
-with the selected Cloud/Admin versions. The template's `latest` value is a development fallback,
-not a compatibility guarantee. Collector image pins are explicit; the existing core-image
-release updater does not select this optional Compose-only service.
 
 When upgrading `.env`, also copy the updated derived `COMPOSE_PROFILES` expression from
 [`deploy.env`](../deploy.env). It preserves both the Backup and Server Logs profiles; keep the
@@ -248,15 +236,41 @@ docker compose config --quiet
 docker compose up -d
 ```
 
+Then turn on **Allow log access** in Admin, as described below. Nothing else has to be set:
+
+- **Credential.** Cloud and the collector authenticate with a credential that both derive from
+  `GOTRUE_JWT_SECRET`, so there is no token to generate. The secret itself is never sent to the
+  collector over the network. The credential is only as strong as that secret: replace the
+  template value of `GOTRUE_JWT_SECRET`, as every deployment must.
+- **Image.** `docker-compose.yml` names the collector image, and each release pins it together
+  with the Cloud image it was published with.
+
+This needs Cloud and collector releases that include the derived credential. Until a release
+publishes the collector image, `docker-compose.yml` names
+`appflowyinc/appflowy_log_collector:latest`, which is not published, so enabling the profile
+fails to pull. Wait for deployment files that pin a released collector, or build and test the
+matching sources and set `APPFLOWY_SERVER_LOGS_IMAGE`.
+
+Three optional settings exist for installations that need them:
+
+- `APPFLOWY_SERVER_LOGS_TOKEN` replaces the derived credential with your own. GoTrue, Worker and
+  Search also hold the JWT secret and could compute the derived credential; set a token to keep
+  the credential to Cloud and the collector. Generate it with `openssl rand -hex 32`. It must
+  contain 32–512 ASCII bearer-token characters, and an invalid value is reported as a
+  configuration error instead of being replaced.
+- `APPFLOWY_SERVER_LOGS_IMAGE` replaces the collector image, for a mirrored registry or an image
+  built from source. A custom image must match your Cloud release.
+- `APPFLOWY_SERVER_LOGS_DOCKER_SOCKET` sets the host's Docker socket path for rootless Docker or
+  another location. The bind does not create a missing host path.
+
 No collector port is published. Cloud uses the authenticated internal endpoint and does not wait
 for collector health during startup. The collector runs with a read-only filesystem, dropped
 capabilities and resource bounds. It receives Docker's socket as a read-only bind and restricts
 reads to the current Compose project and the supported service labels. Docker socket access is
 still privileged: the bind's read-only flag does not make Docker's API read-only. Cloud and Admin
 receive no Docker socket. Backup keeps its existing independent Docker access when enabled.
+The collector's environment contains the JWT secret, which it uses only to derive its credential.
 
-For rootless Docker or another socket location, set `APPFLOWY_SERVER_LOGS_DOCKER_SOCKET` to the
-host's socket path before enabling the profile. The bind does not create a missing host path.
 Retain the Compose project name when upgrading; the collector derives its scope automatically
 from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-name` override.
 
@@ -264,7 +278,7 @@ from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-na
 
 1. Sign in as an installation administrator and open **Tools → Server Health → Logs**.
    **Allow log access** is available only when a compatible self-host Cloud build accepts the
-   manually supplied collector origin and token and can construct its collector client. This is
+   collector settings this deployment supplies and can construct its collector client. This is
    local validation, not a reachability check. If no choice has been saved, access is **off**:
    installing the collector does not open the logs. A saved choice persists, including after a
    Cloud restart.
@@ -363,15 +377,15 @@ before clearing the profile. Turning **Allow log access** off does not replace t
 docker compose --profile server-logs stop appflowy_log_collector
 ```
 
-Then clear `APPFLOWY_SERVER_LOGS_PROFILE` and `APPFLOWY_SERVER_LOGS_TOKEN` in `.env` and apply
+Then clear `APPFLOWY_SERVER_LOGS_PROFILE` in `.env` and apply
 `docker compose up -d` so Cloud drops its collector configuration. Clearing the profile alone
 does not stop an already running collector.
 
 The saved **Allow log access** choice is kept. If it was on, a collector installed again later is
 readable at once; turn access off before stopping the collector if it should start closed.
 
-The stopped reader container still retains its previous token and socket-mount configuration in
-Docker metadata. To remove that stopped stateless container as optional cleanup, run:
+The stopped reader container still retains its previous environment, including the JWT secret,
+and its socket-mount configuration in Docker metadata. To remove that stopped stateless container as optional cleanup, run:
 
 ```bash
 docker compose --profile server-logs rm -f appflowy_log_collector
