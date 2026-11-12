@@ -18,6 +18,7 @@ The Swarm counterpart makes these explicit compatibility changes:
 - Adds legacy Compose `version: '3.8'` and a default overlay network.
 - Removes `depends_on`; Swarm does not implement Compose startup ordering.
 - Keeps the Compose `backup` profile out of the base stack. Checked-in source environment defaults are inlined without expanding variables; private Compose restore selections are excluded. Other required environment-file paths are rebased to the repository root. Unknown optional/raw files and profiles fail generation for explicit review.
+- Excludes the Compose-only `server-logs` collector and its Cloud endpoint/token settings. Its container discovery uses Compose project/service labels and has no Swarm adapter. Enabling `APPFLOWY_SERVER_LOGS_PROFILE` in the shell does not enable log export on Swarm; Admin reports collection as unsupported. Use Docker directly for Swarm log diagnostics.
 - Converts `restart` to `deploy.restart_policy`, retaining Swarm's default of one replica and using stop-first updates. Omitting an explicit base replica count lets the bootstrap override set zero replicas on older Docker CLIs.
 - Constrains PostgreSQL, MinIO, and Search to `node.labels.appflowy.data == true` so local volumes remain on the designated data node.
 - Converts Nginx's configuration and certificate mounts to Swarm configs, and its TLS private key mount to a Swarm secret. Source paths are relative to this folder.
