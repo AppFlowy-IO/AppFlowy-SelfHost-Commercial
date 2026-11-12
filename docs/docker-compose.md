@@ -201,6 +201,22 @@ The optional collector is disabled by default. Installations without a configure
 show that server-log viewing and export are unsupported; an unreachable configured collector is
 reported separately.
 
+This reader supports the self-hosted Docker Compose deployment supplied by this repository.
+It reads retained container output, not native process logs. Native development launches such as
+`just restart-server`, hosted Cloud builds, and the current Swarm/Helm deployments do not support
+this collection path. Healthy services in Admin do not imply that the optional collector is enabled.
+Changing environment values cannot enable collection in a Cloud build without self-host support.
+
+Before enabling it, upgrade this deployment's `docker-compose.yml` and `deploy.env` to versions
+that include `appflowy_log_collector`, together with compatible Cloud and Admin images. Adding
+settings to an older `.env` alone cannot install the missing service. Preserve the existing `.env`,
+Compose project name and storage volumes when updating deployment files.
+
+The image reference below is a placeholder, not an available release recommendation. Use a
+collector image published and tested with your selected Cloud/Admin release. If that compatible
+collector image has not been released yet, wait for it or build and test the matching sources;
+using `latest` does not establish compatibility.
+
 Set these values in the existing root `.env`:
 
 ```dotenv
