@@ -192,6 +192,77 @@ available; new Backup operations are unavailable until its service is ready agai
 history and completed downloads remain visible. Clearing `APPFLOWY_BACKUP_PROFILE` alone does
 not stop an already running container.
 
+## Server logs
+
+**Tools → Server Logs** in Admin can preview retained Docker output and download a support archive
+for Cloud, Worker, Search, AI, GoTrue and Nginx. It requires Cloud and Admin releases that include
+this feature and a compatible `appflowyinc/appflowy_log_collector` image. The optional collector
+is disabled by default. Installations without a configured Docker collector show that server-log
+viewing and export are unsupported; an unreachable configured collector is reported separately.
+
+Set these values in the existing root `.env`:
+
+```dotenv
+APPFLOWY_SERVER_LOGS_PROFILE=server-logs
+APPFLOWY_SERVER_LOGS_TOKEN=<a-private-random-token>
+APPFLOWY_SERVER_LOGS_IMAGE=appflowyinc/appflowy_log_collector:<compatible-release>@sha256:<image-index-digest>
+```
+
+Generate the token locally with `openssl rand -hex 32`, then place its output in `.env`. It must
+contain at least 32 ASCII bearer-token characters. Keep it private; it authenticates Cloud to
+the collector and is never sent to the browser. Pin the collector image released and tested
+with the selected Cloud/Admin versions. The template's `latest` value is a development fallback,
+not a compatibility guarantee. Collector image pins are explicit; the existing core-image
+release updater does not select this optional Compose-only service.
+
+When upgrading `.env`, also copy the updated derived `COMPOSE_PROFILES` expression from
+[`deploy.env`](../deploy.env). It preserves both the Backup and Server Logs profiles; keep the
+existing `COMPOSE_FILE`, project name and credentials. Then validate and apply the configuration:
+
+```bash
+docker compose config --quiet
+docker compose up -d
+```
+
+No collector port is published. Cloud uses the authenticated internal endpoint and does not wait
+for collector health during startup. The collector runs with a read-only filesystem, dropped
+capabilities and resource bounds. It receives Docker's socket as a read-only bind and restricts
+reads to the current Compose project and the supported service labels. Docker socket access is
+still privileged: the bind's read-only flag does not make Docker's API read-only. Cloud and Admin
+receive no Docker socket. Backup keeps its existing independent Docker access when enabled.
+
+For rootless Docker or another socket location, set `APPFLOWY_SERVER_LOGS_DOCKER_SOCKET` to the
+host's socket path before enabling the profile. The bind does not create a missing host path.
+Retain the Compose project name when upgrading; the collector derives its scope automatically
+from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-name` override.
+
+In Admin, select services and a preset or custom start/end time, then view the logs and export
+the applied interval. The archive includes readable logs, JSON lines and a manifest recording
+the requested range, source images, observed timestamps and any limits or truncation. Requests
+are bounded to 24 hours, and only currently retained container logs can be read. Rotation,
+deleted containers, unreadable logging drivers and size/line limits can reduce coverage; the
+archive is not a complete historical logging store. Common credentials are masked, but logs may
+still contain personal information. Review the archive before sharing it.
+
+High-volume results come from bounded prefixes of the selected source output, with detected
+limits reported; they do not promise the latest matching lines. The collector limits its consumed
+output and request time, while Docker controls the underlying log-driver disk scan. Observed
+image IDs identify loaded image configurations, not guaranteed pullable registry digests.
+
+The current Admin API path requires Cloud, GoTrue and session authority to be available; it
+cannot retrieve crash/startup logs while Cloud is down. This feature does not run arbitrary
+Docker commands, change logging drivers, or alter host log retention.
+
+To disable collection, stop the stateless reader before clearing the profile:
+
+```bash
+docker compose --profile server-logs stop appflowy_log_collector
+```
+
+Then clear `APPFLOWY_SERVER_LOGS_PROFILE` and `APPFLOWY_SERVER_LOGS_TOKEN` in `.env` and apply
+`docker compose up -d` so Cloud drops its collector configuration. Clearing the profile alone
+does not stop an already running collector.
+
 ## Storage and Redis
 
 PostgreSQL, MinIO, and Search use the named volumes `postgres_data`, `minio_data`, and `keyword_index_data`. Retain the Compose project name when recreating containers so they select the same volumes. `docker compose down -v` removes deployment data volumes; it is not an upgrade command.
