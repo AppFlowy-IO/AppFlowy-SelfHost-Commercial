@@ -196,21 +196,26 @@ not stop an already running container.
 
 **Tools → Server Health → Logs** in Admin can preview retained Docker output and download a
 support archive for Cloud, Worker, Search, AI, GoTrue and Nginx. It requires Cloud and Admin
-releases that include this feature and a compatible `appflowyinc/appflowy_log_collector` image.
-The optional collector is disabled by default. Installations without a configured Docker collector
+releases that include this feature and the saved access setting, plus a compatible
+`appflowyinc/appflowy_log_collector` image. The optional collector is disabled by default and must
+be installed through the deployment steps below. Installations without a configured Docker collector
 show that server-log viewing and export are unsupported; an unreachable configured collector is
 reported separately.
 
-This reader supports the self-hosted Docker Compose deployment supplied by this repository.
-It reads retained container output, not native process logs. Native development launches such as
-`just restart-server`, hosted Cloud builds, and the current Swarm/Helm deployments do not support
-this collection path. Healthy services in Admin do not imply that the optional collector is enabled.
+This reader targets the self-hosted Docker Compose deployment supplied by this repository. It reads
+retained container output, not native process logs. The standard `just restart-server` hosted build
+does not support it; a separately built self-host-enabled Cloud can contact a configured Docker
+collector even if Cloud itself runs outside Docker. The supplied Swarm/Helm files do not install or
+configure this optional Compose collector. Healthy services do not imply that the collector is on.
 Changing environment values cannot enable collection in a Cloud build without self-host support.
 
 Before enabling it, upgrade this deployment's `docker-compose.yml` and `deploy.env` to versions
 that include `appflowy_log_collector`, together with compatible Cloud and Admin images. Adding
 settings to an older `.env` alone cannot install the missing service. Preserve the existing `.env`,
 Compose project name and storage volumes when updating deployment files.
+
+Upgrade every Cloud replica to a release that includes the access setting before relying on
+**Allow log access** being off. An older replica does not enforce this saved setting.
 
 The image reference below is a placeholder, not an available release recommendation. Use a
 collector image published and tested with your selected Cloud/Admin release. If that compatible
@@ -226,7 +231,7 @@ APPFLOWY_SERVER_LOGS_IMAGE=appflowyinc/appflowy_log_collector:<compatible-releas
 ```
 
 Generate the token locally with `openssl rand -hex 32`, then place its output in `.env`. It must
-contain at least 32 ASCII bearer-token characters. Keep it private; it authenticates Cloud to
+contain 32–512 ASCII bearer-token characters. Keep it private; it authenticates Cloud to
 the collector and is never sent to the browser. Pin the collector image released and tested
 with the selected Cloud/Admin versions. The template's `latest` value is a development fallback,
 not a compatibility guarantee. Collector image pins are explicit; the existing core-image
@@ -253,13 +258,64 @@ host's socket path before enabling the profile. The bind does not create a missi
 Retain the Compose project name when upgrading; the collector derives its scope automatically
 from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-name` override.
 
-### View and export in Admin
-
-These screenshots were captured from a local Docker deployment; the preview shows a harmless
-`GET /api/ready?diagnostics-example=1` readiness request.
+### Allow or block Admin log access
 
 1. Sign in as an installation administrator and open **Tools → Server Health → Logs**.
-   Choose a service or **All services**, a time range, and any severity or text filter.
+   **Allow log access** is available only when a compatible self-host Cloud build accepts the
+   manually supplied collector origin and token and can construct its collector client. This is
+   local validation, not a reachability check. If no choice has been saved, access starts **on**
+   for compatibility with existing manual installations. A previously saved choice takes
+   precedence, including after a Cloud restart.
+
+2. Turn **Allow log access** on to permit preview and export, or off to block them. Wait for the
+   saved status before continuing. The choice persists across Cloud restarts. If saving fails or
+   the response is lost, reads stay unavailable until **Check saved status** verifies the choice.
+
+3. Once this page confirms access is off, it clears its preview and does not request capabilities, logs
+   or exports. Cloud enforces the setting: under `/api/admin/server-logs`, `GET /capabilities`,
+   `POST /query` and `POST /export` return HTTP **501** while access is off. Results being prepared
+   are checked before delivery; a download already being streamed may finish. Turning access off
+   does not recall files that have already been downloaded or forcibly drain an active response.
+
+The switch controls Cloud's Admin log APIs. It does not install, configure, start or stop Docker or
+the collector. It does not remove the collector, its socket mount or credentials, and does not stop
+Docker logging, delete retained output or change retention. Use the manual deployment steps below
+to stop collection. A configured collector can have access turned off even while it is unreachable
+or both log-read slots are busy; changing the setting does not consume a log-read slot. An
+unconfigured installation shows setup guidance instead of an active switch.
+
+The administrator-only `GET /api/admin/server-logs/settings` reports effective access without a
+collector or Docker health probe. `PUT` on the same path accepts only `{"enabled": true}` or
+`{"enabled": false}` and returns freshly observed access after saving the choice. Their data contains
+`format_version`, `configurable`, `enabled` and a typed `reason`; it does not include configuration or
+credentials. These settings operations remain available while log access is off. An older Cloud
+release without the settings API must be upgraded before the current Admin will request logs.
+
+Every settings and log request requires a current administrator session. All upgraded Cloud
+replicas read the shared saved preference afresh rather than using a process-local preference
+cache. If authoritative state cannot be read, access fails closed with HTTP **503**; a database
+failure or invalid stored value never falls back to on.
+
+Each authoritative settings read has a **5-second** database-operation limit. A save has a separate
+**5-second** mutation limit, followed by another read with its own **5-second** limit to confirm the
+current choice. These are operation limits, not total HTTP deadlines; authorization and network
+time are additional. A timeout or interrupted response can occur after a write committed, so check
+the saved status instead of assuming the change was rolled back or automatically sending it again.
+
+A nonconfigurable installation is different from a saved off choice. Hosted builds and self-host
+builds without a collector URL still return HTTP **200** from their administrator-only capabilities
+endpoint, with minimal unsupported discovery and no log records or container metadata. Their settings
+have `configurable: false` and `enabled: false`; that does not mean an off choice was saved. Current
+Admin checks settings first and does not make these capability requests on such installations.
+
+### View and export in Admin
+
+These screenshots were captured from a local Docker deployment before the access switch was
+added; the current UI also shows **Allow log access** above the filters. The preview shows a
+harmless `GET /api/ready?diagnostics-example=1` readiness request.
+
+1. With **Allow log access** on, choose a service or **All services**, a time range, and any
+   severity or text filter.
 
    ![Server Health Logs tab with service, time range, severity and text filters](images/server-logs/filters.png)
 
@@ -293,7 +349,10 @@ The current Admin API path requires Cloud, GoTrue and session authority to be av
 cannot retrieve crash/startup logs while Cloud is down. This feature does not run arbitrary
 Docker commands, change logging drivers, or alter host log retention.
 
-To disable collection, stop the stateless reader before clearing the profile:
+### Stop the optional collector
+
+To stop the optional reader and clear Cloud's active collector configuration, stop the reader
+before clearing the profile. Turning **Allow log access** off does not replace these steps:
 
 ```bash
 docker compose --profile server-logs stop appflowy_log_collector
@@ -302,6 +361,16 @@ docker compose --profile server-logs stop appflowy_log_collector
 Then clear `APPFLOWY_SERVER_LOGS_PROFILE` and `APPFLOWY_SERVER_LOGS_TOKEN` in `.env` and apply
 `docker compose up -d` so Cloud drops its collector configuration. Clearing the profile alone
 does not stop an already running collector.
+
+The stopped reader container still retains its previous token and socket-mount configuration in
+Docker metadata. To remove that stopped stateless container as optional cleanup, run:
+
+```bash
+docker compose --profile server-logs rm -f appflowy_log_collector
+```
+
+This removes only the reader container, not application data volumes or the other service
+containers and their retained output. The saved Admin access preference is also retained.
 
 ## Storage and Redis
 
