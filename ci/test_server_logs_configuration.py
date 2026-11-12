@@ -12,7 +12,7 @@ from images import ROOT, clean_environment
 
 class ServerLogsConfigurationTests(unittest.TestCase):
     def render(self, backup=False, logs=False, *, token="", project="server-logs-contract",
-               socket="/var/run/docker.sock"):
+               socket="/var/run/docker.sock", ambient_url=None):
         # Never read a developer's .env or inherit application credentials.
         with tempfile.TemporaryDirectory(prefix="server-logs-compose-") as directory:
             env_file = Path(directory) / ".env"
@@ -22,10 +22,13 @@ class ServerLogsConfigurationTests(unittest.TestCase):
                 **clean_environment(),
                 "APPFLOWY_BACKUP_PROFILE": "backup" if backup else "",
                 "APPFLOWY_SERVER_LOGS_PROFILE": "server-logs" if logs else "",
-                "APPFLOWY_SERVER_LOGS_TOKEN": token,
                 "APPFLOWY_SERVER_LOGS_IMAGE": "appflowyinc/appflowy_log_collector:contract-check",
                 "APPFLOWY_SERVER_LOGS_DOCKER_SOCKET": socket,
             }
+            if token is not None:
+                env["APPFLOWY_SERVER_LOGS_TOKEN"] = token
+            if ambient_url is not None:
+                env["APPFLOWY_SERVER_LOGS_URL"] = ambient_url
             command = ["docker", "compose", "--env-file", str(env_file)]
             if project:
                 command += ["--project-name", project]
@@ -82,12 +85,23 @@ class ServerLogsConfigurationTests(unittest.TestCase):
                                  for volume in result["services"][service].get("volumes", [])))
 
     def test_disabled_reader_needs_no_token_and_does_not_forward_one(self):
-        for token in ("", "test-only-unused-token-" + "1" * 40):
-            with self.subTest(token_configured=bool(token)):
-                result = self.render(token=token)
-                self.assertEqual(result["services"]["appflowy_cloud"]["environment"]
-                                 ["APPFLOWY_SERVER_LOGS_TOKEN"], "")
+        tokens = {
+            "unset": None,
+            "empty": "",
+            "malformed": "test-only-invalid-token\r\n",
+            "leftover_valid": "test-only-unused-token-" + "1" * 40,
+        }
+        for token_state, token in tokens.items():
+            with self.subTest(token_state=token_state):
+                result = self.render(token=token,
+                                     ambient_url="http://unused-privacy-canary.invalid/private")
+                cloud = result["services"]["appflowy_cloud"]["environment"]
+                self.assertEqual(cloud["APPFLOWY_SERVER_LOGS_URL"], "")
+                self.assertEqual(cloud["APPFLOWY_SERVER_LOGS_TOKEN"], "")
                 self.assertNotIn("appflowy_log_collector", result["services"])
+                self.assertFalse(any(volume.get("target") == "/var/run/docker.sock"
+                                     for service in result["services"].values()
+                                     for volume in service.get("volumes", [])))
 
     def test_project_scope_and_rootless_socket_follow_the_operator_configuration(self):
         for project in (None, "existing-production-project"):
