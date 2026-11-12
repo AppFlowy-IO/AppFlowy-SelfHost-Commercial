@@ -540,7 +540,8 @@ admin-frontend:
 
   image:
     repository: appflowyinc/admin_frontend
-    tag: "latest"
+    tag: "0.20.1"
+    digest: sha256:eefa56ffd8c1ca4b19455add9e287d3c2d8f531b73cb1bd5c450afe9382f3079
     pullPolicy: IfNotPresent
 
   service:
