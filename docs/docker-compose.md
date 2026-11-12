@@ -207,7 +207,9 @@ retained container output, not native process logs. The standard `just restart-s
 does not support it; a separately built self-host-enabled Cloud can contact a configured Docker
 collector even if Cloud itself runs outside Docker. The supplied Swarm/Helm files do not install or
 configure this optional Compose collector. Healthy services do not imply that the collector is on.
-Changing environment values cannot enable collection in a Cloud build without self-host support.
+A Cloud build without self-host support does not contain this feature: its
+`/api/admin/server-logs` paths return HTTP **404**, Admin shows no Logs tab for it, and changing
+environment values cannot enable collection.
 
 Before enabling it, upgrade this deployment's `docker-compose.yml` and `deploy.env` to versions
 that include `appflowy_log_collector`, together with compatible Cloud and Admin images. Adding
@@ -263,9 +265,9 @@ from that project, including an existing `COMPOSE_PROJECT_NAME` or `--project-na
 1. Sign in as an installation administrator and open **Tools → Server Health → Logs**.
    **Allow log access** is available only when a compatible self-host Cloud build accepts the
    manually supplied collector origin and token and can construct its collector client. This is
-   local validation, not a reachability check. If no choice has been saved, access starts **on**
-   for compatibility with existing manual installations. A previously saved choice takes
-   precedence, including after a Cloud restart.
+   local validation, not a reachability check. If no choice has been saved, access is **off**:
+   installing the collector does not open the logs. A saved choice persists, including after a
+   Cloud restart.
 
 2. Turn **Allow log access** on to permit preview and export, or off to block them. Wait for the
    saved status before continuing. The choice persists across Cloud restarts. If saving fails or
@@ -302,11 +304,14 @@ current choice. These are operation limits, not total HTTP deadlines; authorizat
 time are additional. A timeout or interrupted response can occur after a write committed, so check
 the saved status instead of assuming the change was rolled back or automatically sending it again.
 
-A nonconfigurable installation is different from a saved off choice. Hosted builds and self-host
-builds without a collector URL still return HTTP **200** from their administrator-only capabilities
-endpoint, with minimal unsupported discovery and no log records or container metadata. Their settings
-have `configurable: false` and `enabled: false`; that does not mean an off choice was saved. Current
-Admin checks settings first and does not make these capability requests on such installations.
+A nonconfigurable installation is different from a saved off choice. A self-host build without a
+collector URL keeps the whole feature off: Cloud creates no collector client and reads no saved
+choice, and a settings save, `POST /query` and `POST /export` return HTTP **501**. Its
+administrator-only capabilities endpoint still returns HTTP **200**, with minimal unsupported
+discovery and no log records or container metadata. Its settings have `configurable: false` and
+`enabled: false`; that does not mean an off choice was saved. Current Admin checks settings first
+and does not make these capability requests on such installations. A Cloud build without
+self-host support has none of these routes.
 
 ### View and export in Admin
 
@@ -361,6 +366,9 @@ docker compose --profile server-logs stop appflowy_log_collector
 Then clear `APPFLOWY_SERVER_LOGS_PROFILE` and `APPFLOWY_SERVER_LOGS_TOKEN` in `.env` and apply
 `docker compose up -d` so Cloud drops its collector configuration. Clearing the profile alone
 does not stop an already running collector.
+
+The saved **Allow log access** choice is kept. If it was on, a collector installed again later is
+readable at once; turn access off before stopping the collector if it should start closed.
 
 The stopped reader container still retains its previous token and socket-mount configuration in
 Docker metadata. To remove that stopped stateless container as optional cleanup, run:
