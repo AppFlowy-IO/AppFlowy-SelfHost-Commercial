@@ -87,10 +87,13 @@ Before Search starts, its entrypoint migrates the shared cache's ownership while
 file permissions. This lets Backup capture private LMDB data and use its reader lockfile.
 
 The Backup coordinator has Docker administration access so it can pause and restart application
-services during restore. The default writer list covers Cloud, GoTrue, Worker, Search, and AI.
-If you add MCP, connectors, or other services that write to this installation, include their
-Compose service names in the Backup service's `APPFLOWY_BACKUP_COMPOSE_WRITERS` environment
-setting through a Compose override before using restore.
+services during restore. The supplied writer list in
+[docker-compose.backup.yml](../docker-compose.backup.yml) covers Cloud, GoTrue, Worker, Search,
+AI, and [MCP](#ai-apps-mcp); restore stops them and switches each to the restored bucket and Redis
+database. If you add connectors or other services that write to this installation, extend the
+Backup service's `APPFLOWY_BACKUP_COMPOSE_WRITERS` environment setting through a Compose override
+before using restore. Every listed service needs a container, and a running application writer
+that is missing from the list stops restore.
 
 Use the Backup image published with your Cloud release. The
 [release-image workflow](RELEASE_IMAGES.md) proposes its exact version and digest when
@@ -242,6 +245,153 @@ For Okta, follow the [SAML setup guide](OKTA_SAML.md). The SAML settings forward
 ## Enterprise identity
 
 SCIM provisioning, custom OIDC / OAuth providers, and LDAP sign-in are configured in the Admin console rather than through `.env`. See [SCIM Provisioning](SCIM.md), [OIDC / OAuth](OIDC.md), and [LDAP](LDAP.md). The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) already routes `/scim` to AppFlowy Cloud and sets `X-Forwarded-For` for `/api`; if you use a customized Nginx configuration, the SCIM and LDAP guides show the exact directives to add.
+
+## AI apps (MCP)
+
+The `appflowy_mcp` service lets AI apps such as Claude, ChatGPT, Cursor, Claude Code, and Codex
+read and edit AppFlowy content through the [Model Context Protocol](https://modelcontextprotocol.io).
+The bundled Nginx serves it on your AppFlowy domain, and the service publishes no port of its own.
+
+Users add **`https://your-domain/mcp`** to their AI app as a remote MCP server or custom connector.
+AppFlowy shows the same URL under **Settings → MCP**, where users connect AI apps and manage
+their connections. When a user connects, the AI app opens an AppFlowy consent page; the user signs
+in, chooses a workspace, and grants the app access to that workspace only.
+
+### Turning MCP off or on
+
+MCP is on by default, after installing and after upgrading. It needs a One, Team or Enterprise
+license: without one, the MCP service refuses as if MCP were off, and the Admin page is hidden.
+To turn MCP off, or back on, use the switch on the Admin console's MCP page. The same page sets
+who may use MCP and the rate limits, and lists every change. Changes reach every AppFlowy service
+within seconds, without a restart. The setting saved there always decides: no `.env` setting or
+other environment variable turns MCP on or off.
+
+After an upgrade, MCP is on unless an administrator already saved a setting on that page, which
+keeps deciding; to keep MCP off, turn it off there. While MCP is off, existing connections are
+kept, and they resume once it is on again, unless an app's 30-day sign-in expired meanwhile.
+
+### GoTrue session audience
+
+GoTrue and MCP share `GOTRUE_JWT_AUD` from `.env`. The default empty value preserves
+the audience stored on existing GoTrue accounts, so a regular upgrade needs no account
+migration. Use a commercial MCP image that supports verifying an explicitly empty GoTrue
+audience. If your installation already uses a custom audience, set `GOTRUE_JWT_AUD` to
+that same value in `.env`. Use a single audience without commas or surrounding spaces.
+Changing an existing audience requires a coordinated account migration because GoTrue uses
+it to look up accounts at sign-in.
+
+### Public URL and HTTPS
+
+`APPFLOWY_MCP_BASE_URL` in `.env` defaults to `${APPFLOWY_BASE_URL}`. Set the origin only, without
+`/mcp`. AppFlowy Cloud advertises it to AppFlowy Web and Desktop, and the Admin console shows it;
+Cloud knows the MCP service only from this setting. AppFlowy Web also reads it directly when its
+container starts. It is also the OAuth issuer:
+changing it, for example from `http` to `https` or to a new domain, makes every connected AI app
+reconnect. Recreate every service that reads it after a change:
+
+```bash
+docker compose up -d appflowy_mcp appflowy_cloud appflowy_web
+```
+
+When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
+block from [deploy.env](../deploy.env) into `.env`, or at least add
+`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`, then recreate the
+services above. Without it, AppFlowy Cloud advertises no MCP: it never falls back to
+`APPFLOWY_BASE_URL`, so AppFlowy Web and Desktop hide Settings → MCP and the Admin console's MCP
+page shows no endpoint. The MCP service itself does fall back to `APPFLOWY_BASE_URL`, the same
+origin, so AI apps that are already connected keep working.
+
+To run without MCP, leave the `appflowy_mcp` service out (remove it from `docker-compose.yml`)
+and set `APPFLOWY_MCP_BASE_URL=` blank in `.env`, or remove the `APPFLOWY_MCP_BASE_URL` lines of
+`appflowy_cloud` and `appflowy_web`. Cloud then advertises no MCP, and AppFlowy Web and Desktop
+hide their MCP settings. If Cloud keeps the setting while no MCP service runs, Cloud still
+advertises `/mcp`, which nothing serves, and Web and Desktop show MCP as unavailable.
+
+Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
+origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in
+`docker/nginx/ssl/`. AI apps running on the same machine as the server, such as Claude Code or
+Cursor, also work with `http://localhost`.
+
+### Who can connect
+
+- **Workspace approval:** by default, a workspace owner must approve an AI app before members can
+  connect it to that workspace. Members can request access, and owners can approve or dismiss
+  requests, revoke approvals, or allow any AI app in their workspace.
+- **Email allowlist:** by default every account can use AI apps. To restrict them, choose
+  **Only these domains and people** in Admin → AI apps (MCP). `.env` can set the starting lists
+  instead, as a comma-separated domain list (`APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS=example.com`)
+  and/or exact addresses (`APPFLOWY_MCP_ALLOWED_EMAILS`); lists saved in Admin take precedence.
+- **Server-wide client lists:** `MCP_ALLOWED_CLIENT_IDS` blocks every AI app except the listed
+  OAuth client IDs, and `MCP_ALLOWED_REDIRECT_HOSTS` limits which callback hosts (host or
+  host:port) may receive authorization responses, at registration and at every sign-in, also for
+  apps identified by a metadata document URL. While it is set, custom-scheme callbacks such as
+  `raycast://` are refused; list `localhost` to keep loopback callbacks. Leave both empty to let
+  workspace owners decide.
+
+Recreate `appflowy_mcp` after changing these `.env` settings (and `appflowy_cloud` too for the
+email lists); changes made in Admin apply without a restart. Users can always revoke their own
+connections from Settings → MCP.
+
+### Routes, limits, and custom proxies
+
+The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) sends exactly these paths to
+`appflowy_mcp:8002`; everything else keeps its existing service:
+
+| Path | Match |
+| --- | --- |
+| `/mcp` | exact (Streamable HTTP; `GET` holds a server-sent event stream open) |
+| `/api/mcp` and everything under it | prefix, ahead of the `/api` location for AppFlowy Cloud |
+| `/.well-known/oauth-authorization-server` | exact |
+| `/.well-known/oauth-protected-resource` and its sub-paths | prefix |
+| `/.well-known/mcp.json` | exact |
+| `/.well-known/openai-apps-challenge` | exact (OpenAI plugin-portal domain verification) |
+
+`/oauth/*` stays on AppFlowy Web, which serves the consent page. MCP's health, metrics, and root
+`/sse` endpoints are not published. If you use your own reverse proxy, route the same paths and,
+for `/mcp` and `/api/mcp`, use HTTP/1.1 without proxy buffering or caching, with read and send
+timeouts of at least an hour and a body limit above MCP's own `APPFLOWY_MCP_MAX_BODY_BYTES` (1 MiB
+by default; the bundled Nginx allows 8 MiB). Pass `Host` and
+`X-Forwarded-Proto`, and set both `X-Real-IP` and `X-Forwarded-For` to `$remote_addr`, replacing
+any value the client sent.
+
+MCP answers CORS requests itself. By default it mirrors the request origin; AppFlowy Web and the
+Admin console on this domain need nothing more. To limit which other browser origins may call MCP
+directly, list them (scheme, host and optional port, comma-separated) in
+`APPFLOWY_CORS_ALLOWED_ORIGINS` and recreate `appflowy_mcp`.
+
+To list this server's MCP in OpenAI's plugin directory, set `APPFLOWY_MCP_OPENAI_APPS_CHALLENGE`
+to the domain-verification token the portal shows; MCP serves it as plain text at
+`<APPFLOWY_MCP_BASE_URL>/.well-known/openai-apps-challenge`, whether MCP is on or off, and answers
+404 while it is blank. `APPFLOWY_MCP_PRIVACY_POLICY_URL` and `APPFLOWY_MCP_TERMS_OF_SERVICE_URL`
+(http or https URLs) appear in MCP's OAuth metadata as `op_policy_uri` and `op_tos_uri`. A
+malformed value stops MCP at startup. Recreate `appflowy_mcp` after changing them.
+
+Unauthenticated OAuth and client-registration requests are limited per client address to 60 a
+minute, the server default, until Admin → AI apps (MCP) sets another limit; that page also sets
+each user's tool-call and search limits per workspace. To start from a different limit, set
+`APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` in `.env` and recreate both `appflowy_cloud` and
+`appflowy_mcp`, which must agree.
+MCP records the client address in its audit log. MCP takes that address from `X-Forwarded-For` or
+`X-Real-IP` only when the request comes from `APPFLOWY_MCP_TRUSTED_PROXY_CIDRS`, which defaults to
+Docker's private address pools (`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`); a blank value restores
+that default. Even then it believes only the right-most `X-Forwarded-For` address, the one that
+proxy set, and never the entries a client wrote to its left. A proxy may therefore append the
+address it received the request from or replace the header with it, as the bundled Nginx does;
+either way no client, even one on a private LAN or VPN, chooses its own address. What matters is
+that nothing else inside those ranges reaches MCP directly: only Nginx and other Compose
+containers can. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from`
+to only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
+describes, so that `$remote_addr` is the end user. `APPFLOWY_MCP_OUTER_PROXY_CIDRS` is only for a
+proxy that connects to MCP itself and appends to `X-Forwarded-For` (see [deploy.env](../deploy.env)).
+On Docker Swarm, the routing mesh hides client addresses from Nginx; see
+[client addresses](docker-swarm.md#client-addresses).
+
+MCP keeps its own PostgreSQL pool of up to `APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS` (8)
+connections; include it in your [connection budget](HARDWARE_SIZING.md#connection-budget). It starts
+after Cloud and uses the same database, Redis, object storage, and Search settings. On
+`docker compose stop` or a recreate, open `GET /mcp` streams end at once, and Compose waits up to
+90 seconds (`stop_grace_period`) for tool calls in flight and the audit queue to finish. Upgrade
+Cloud, Worker, Search, and MCP together.
 
 ## Search admission
 

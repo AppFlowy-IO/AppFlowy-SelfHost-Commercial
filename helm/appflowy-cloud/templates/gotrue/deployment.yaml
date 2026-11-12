@@ -74,6 +74,8 @@ spec:
                   key: {{ include "appflowy.jwt.secretKey" . }}
             - name: GOTRUE_JWT_EXP
               value: {{ .Values.gotrue.config.jwtExp | default .Values.global.jwt.expiration | quote }}
+            - name: GOTRUE_JWT_AUD
+              value: {{ include "appflowy.jwt.audience" . | quote }}
             - name: GOTRUE_JWT_ADMIN_GROUP_NAME
               value: "supabase_admin"
 

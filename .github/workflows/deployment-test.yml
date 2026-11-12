@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-env:
-  SERVER_IMAGE_TAG: 0.20.0
-  WEB_IMAGE_TAG: 0.19.30
-
 concurrency:
   group: deployment-test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,8 +23,6 @@ jobs:
     if: needs.changes.outputs.run_checks == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      USE_RELEASE_PINS: ${{ startsWith(github.head_ref, 'automation/image-updates/') || needs.changes.outputs.kind == 'web-images' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,12 +48,7 @@ jobs:
           helm lint helm/appflowy-cloud
           helm lint helm/appflowy-cloud -f ci/helm-values.yaml
       - name: Resolve exact linux/amd64 image digests once
-        run: |
-          image_options=()
-          if [[ "$USE_RELEASE_PINS" != true ]]; then
-            image_options+=(--server-tag "$SERVER_IMAGE_TAG" --web-tag "$WEB_IMAGE_TAG")
-          fi
-          python ci/images.py "${image_options[@]}" --output ci-artifacts/image-lock.json
+        run: python ci/images.py --output ci-artifacts/image-lock.json
       - uses: actions/upload-artifact@v4
         with:
           name: deployment-image-lock

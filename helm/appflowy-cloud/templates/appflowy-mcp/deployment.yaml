@@ -1,0 +1,224 @@
+{{- if index .Values "appflowy-mcp" "enabled" }}
+{{- $mcp := index .Values "appflowy-mcp" }}
+{{- /* On SIGTERM MCP ends its GET /mcp streams at once, then waits for the requests in flight (at
+  most its 60-second request timeout plus 5 s), its policy watchers (5 s) and its audit queue
+  (5 s). Kubernetes kills the pod when the grace period ends, dropping queued audit events. The
+  drain is the sum of DEFAULT_REQUEST_TIMEOUT_SECS, ROUTE_TIMEOUT_MARGIN,
+  POLICY_WATCHER_SHUTDOWN_TIMEOUT and AUDIT_SHUTDOWN_TIMEOUT in the server's
+  services/appflowy-mcp/src/server.rs; tests/test_mcp.py checks this chart against it. */}}
+{{- $terminationGracePeriodSeconds := int ($mcp.terminationGracePeriodSeconds | default 90) }}
+{{- $shutdownDrainSeconds := 75 }}
+{{- if le $terminationGracePeriodSeconds $shutdownDrainSeconds }}
+{{- fail (printf "appflowy-mcp.terminationGracePeriodSeconds (%d) must exceed MCP's %d-second shutdown drain: its 60-second request timeout plus 5, then 5 for its policy watchers and 5 for its audit queue" $terminationGracePeriodSeconds $shutdownDrainSeconds) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appflowy.mcp.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-mcp
+spec:
+  replicas: {{ $mcp.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-mcp
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret-global.yaml") . | sha256sum }}
+        {{- with $mcp.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "appflowy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: appflowy-mcp
+    spec:
+      terminationGracePeriodSeconds: {{ $terminationGracePeriodSeconds }}
+      {{- include "appflowy.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "appflowy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "appflowy.waitForCloud" . | nindent 6 }}
+      containers:
+        - name: appflowy-mcp
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: {{ include "appflowy.image" (dict "Values" .Values "image" $mcp.image) | quote }}
+          imagePullPolicy: {{ $mcp.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8002
+              protocol: TCP
+          env:
+            {{- include "appflowy.backup.redisSelection" . | nindent 12 }}
+            - name: RUST_LOG
+              value: {{ $mcp.config.rustLog | quote }}
+            # Every address family, like Cloud and Compose: an IPv4-only listener would refuse
+            # the probes and the ingress controller on an IPv6 single-stack cluster.
+            - name: APPFLOWY_APPLICATION_HOST
+              value: "[::]"
+            - name: APPFLOWY_APPLICATION_PORT
+              value: "8002"
+
+            # Public origin and OAuth issuer; AI apps connect to <origin>/mcp.
+            - name: APPFLOWY_MCP_BASE_URL
+              value: {{ include "appflowy.mcp.baseUrl" . | quote }}
+            # Cloud's origin: a self-hosted MCP service reads the license Cloud installed under its
+            # host, and serves only with a One, Team or Enterprise license.
+            - name: APPFLOWY_BASE_URL
+              value: {{ include "appflowy.baseUrl" . | quote }}
+            # AppFlowy Web serves the browser consent page at /oauth/mcp/authorize.
+            - name: APPFLOWY_WEB_URL
+              value: {{ include "appflowy.baseUrl" . | quote }}
+            - name: APPFLOWY_MCP_TRUSTED_PROXY_CIDRS
+              value: {{ $mcp.config.trustedProxyCidrs | default "" | quote }}
+            - name: MCP_ALLOWED_CLIENT_IDS
+              value: {{ $mcp.config.allowedClientIds | default "" | quote }}
+            - name: MCP_ALLOWED_REDIRECT_HOSTS
+              value: {{ $mcp.config.allowedRedirectHosts | default "" | quote }}
+            # The policy bootstrap values; Cloud gets the same list.
+            {{- include "appflowy.mcp.policyEnv" . | trim | nindent 12 }}
+            {{- with $mcp.config.corsAllowedOrigins }}
+            - name: APPFLOWY_CORS_ALLOWED_ORIGINS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with index .Values "appflowy-cloud" "config" "auditEnable" }}
+            # Cloud's audit fallback: both resolve it, so both receive appflowy-cloud's value.
+            - name: APPFLOWY_AUDIT_ENABLE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $mcp.config.openaiAppsChallenge }}
+            - name: APPFLOWY_MCP_OPENAI_APPS_CHALLENGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $mcp.config.privacyPolicyUrl }}
+            - name: APPFLOWY_MCP_PRIVACY_POLICY_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $mcp.config.termsOfServiceUrl }}
+            - name: APPFLOWY_MCP_TERMS_OF_SERVICE_URL
+              value: {{ . | quote }}
+            {{- end }}
+
+            # Database configuration: a small pool of its own, not Cloud's.
+            - name: POSTGRES_USER
+              value: {{ include "appflowy.postgresql.username" . | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.postgresql.secretName" . }}
+                  key: {{ include "appflowy.postgresql.secretKey" . }}
+            - name: APPFLOWY_DATABASE_URL
+              value: {{ include "appflowy.postgresql.url" . | quote }}
+            - name: APPFLOWY_DATABASE_MAX_CONNECTIONS
+              value: {{ $mcp.config.databaseMaxConnections | quote }}
+            - name: APPFLOWY_DATABASE_MIN_CONNECTIONS
+              value: {{ $mcp.config.databaseMinConnections | quote }}
+            - name: APPFLOWY_MCP_MAX_IN_FLIGHT
+              value: {{ $mcp.config.maxInFlight | quote }}
+            - name: APPFLOWY_MCP_MAX_BODY_BYTES
+              value: {{ $mcp.config.maxBodyBytes | int64 | quote }}
+
+            # Redis configuration
+            {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.redis.secretName" . }}
+                  key: {{ include "appflowy.redis.secretKey" . }}
+            {{- end }}
+            - name: APPFLOWY_REDIS_URI
+              value: {{ include "appflowy.redis.url" . | quote }}
+
+            # GoTrue configuration
+            - name: APPFLOWY_GOTRUE_BASE_URL
+              value: {{ include "appflowy.gotrue.internalUrl" . | quote }}
+            - name: APPFLOWY_GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.jwt.secretName" . }}
+                  key: {{ include "appflowy.jwt.secretKey" . }}
+            - name: APPFLOWY_GOTRUE_EXPECTED_AUDIENCES
+              value: {{ include "appflowy.mcp.gotrueExpectedAudiences" . | quote }}
+
+            # S3/MinIO configuration
+            - name: APPFLOWY_S3_USE_MINIO
+              value: {{ .Values.global.s3.useMinio | quote }}
+            - name: APPFLOWY_S3_MINIO_URL
+              value: {{ include "appflowy.s3.endpoint" . | quote }}
+            - name: APPFLOWY_S3_BUCKET
+              {{- include "appflowy.backup.bucketSelection" . | nindent 14 }}
+            - name: APPFLOWY_S3_REGION
+              value: {{ include "appflowy.s3.region" . | quote }}
+            - name: APPFLOWY_S3_CREATE_BUCKET
+              value: {{ .Values.global.s3.createBucket | quote }}
+            {{- if .Values.global.s3.presignedUrlEndpoint }}
+            - name: APPFLOWY_S3_PRESIGNED_URL_ENDPOINT
+              value: {{ .Values.global.s3.presignedUrlEndpoint | quote }}
+            {{- end }}
+            - name: APPFLOWY_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.accessKey | default "root-user" }}
+            - name: APPFLOWY_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.s3.secretName" . }}
+                  key: {{ .Values.global.s3.secretKeys.secretKey | default "root-password" }}
+            - name: APPFLOWY_COLLAB_S3_THRESHOLD
+              value: {{ $mcp.config.collabS3Threshold | quote }}
+
+            # Search tools use the bundled Search service; empty disables them.
+            - name: APPFLOWY_SEARCH_SERVICE_URL
+            {{- if index .Values "appflowy-search" "enabled" }}
+              value: "http://{{ include "appflowy.search.fullname" . }}:{{ index .Values "appflowy-search" "service" "port" }}"
+            {{- else }}
+              value: ""
+            {{- end }}
+            - name: APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS
+              value: {{ index .Values "appflowy-cloud" "config" "searchRequestTimeoutSecs" | default 10 | quote }}
+          # Passes once PostgreSQL and Redis answer; it does not wait for the MCP policy, so a pod
+          # whose policy cannot load yet (Cloud's migration lagging) stays unready, not restarted.
+          startupProbe:
+            httpGet:
+              path: /api/startup
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Reads the status a background check keeps, so a saturated PostgreSQL pool does not
+          # remove the pod; it fails after 30 s without an answer. Startup checks live. It also
+          # fails while no MCP policy is in force, and then no route reaches the pod, revocation
+          # and disconnects included.
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml $mcp.resources | nindent 12 }}
+      {{- with $mcp.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

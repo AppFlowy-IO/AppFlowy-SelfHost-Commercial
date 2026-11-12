@@ -20,16 +20,42 @@ SERVICES = {
     'appflowy_cloud': ('appflowy_cloud', 'appflowy-cloud'),
     'appflowy_worker': ('appflowy_worker', 'appflowy-worker'),
     'appflowy_search': ('appflowy_search', 'appflowy-search'),
+    'appflowy_mcp': ('appflowy_mcp', 'appflowy-mcp'),
     'appflowy_backup': ('appflowy_backup', 'appflowy-backup'),
     'ai': ('appflowy_ai', 'appflowy-ai'),
     'appflowy_web': ('appflowy_web', 'appflowy-web'),
     'admin_frontend': ('admin_frontend', 'admin-frontend'),
 }
 DEFAULT_SERVICES = {
-    'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search'],
+    'cloud': ['appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp'],
     'web': ['appflowy_web'],
     'admin': ['admin_frontend'],
 }
+# MCP's routes and settings, and the guides that describe them, follow AppFlowy-Cloud-Premium files
+# and must match the appflowy_mcp image that serves them. Each entry is (path here, the part that is
+# MCP's, the server source when it is not the same path). Nothing compares the repositories, so a
+# PR that changes that image asks its reviewer to port the server's changes in a separate PR first.
+# docs/RELEASE_IMAGES.md lists the same copies and their deliberate differences from the server.
+MCP_COPIES = (
+    ('docker/nginx/nginx.conf', 'the MCP locations', '`nginx/nginx.conf`'),
+    ('helm/appflowy-cloud/templates/ingress-mcp.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/_helpers.tpl', 'the `appflowy.mcp.*` helpers', None),
+    ('helm/appflowy-cloud/templates/appflowy-mcp/deployment.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/appflowy-mcp/service.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/templates/observability/servicemonitor-appflowy-mcp.yaml', 'the whole file', None),
+    ('helm/appflowy-cloud/values.yaml', '`appflowy-mcp` and `ingress.mcp`', None),
+    ('docker-compose.yml', 'the `appflowy_mcp` environment', None),
+    ('deploy.env', 'the MCP section', None),
+    ('docs/docker-compose.md', 'the MCP route table and settings',
+     "the MCP locations in `nginx/nginx.conf` and `deploy.env`'s MCP section"),
+    ('helm/appflowy-cloud/README.md', 'the MCP Ingress path table and `appflowy-mcp` rows',
+     "`ingress-mcp.yaml` and `values.yaml`'s `appflowy-mcp`"),
+)
+MCP_DIFFERENCES_URL = ('https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/main/docs/RELEASE_IMAGES.md'
+                       '#deliberate-differences-from-the-server')
+# The AppFlowy-Cloud-Premium commit (PR #1521's merge into main) the copies were last compared with.
+# It is the baseline only while appflowy_mcp is unpinned; once it is pinned, the pinned image's build is.
+MCP_COPIES_BASELINE = '0fda6b6188273cc8e355714d3ab133827c7462db'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
@@ -176,6 +202,41 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
     return changes, 'Prepared exact image pins' if changes else 'Images are already pinned'
 
 
+def auto_merge(changes):
+    """An MCP image change waits for a separate PR that ports the copied MCP routes and settings."""
+    return all(service != 'appflowy_mcp' for service, _, _ in changes)
+
+
+def pull_request_body(source, tag, url, changes):
+    body = [f'Update the published {source} images to `{tag}` with immutable multi-platform digests.', '',
+            f'Publisher: [{SOURCES[source]}]({url or "https://github.com/" + SOURCES[source]})', '',
+            '| Service | Previous image | Proposed image |', '| --- | --- | --- |']
+    body += [f'| {service} | `{before}` | `{after}` |' for service, before, after in changes]
+    mcp = [before for service, before, _ in changes if service == 'appflowy_mcp']
+    body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
+             ('Web-only image updates run source validation and skip deployment/Backup integration.'
+              if source == 'web' else
+              'The integration checks use the proposed pins without CI baseline image overrides.'),
+             ('Auto-merge is off because the MCP image changed: merge it after the PR that ports the MCP '
+              'copies below. ' if mcp else 'Auto-merge waits for the required CI checks. ')
+             + 'This PR does not deploy services.', '']
+    if mcp:
+        body += ['The MCP image changed. These MCP routes and settings, and the guides that describe them, follow '
+                 'AppFlowy-Cloud-Premium files at the same paths unless a line names the server source. Compare '
+                 'them with the server commit the publisher run built, not the server tag with the same number:', '']
+        body += [f'- [ ] `{path}`: {part}' + (f' (server: {server})' if server else '')
+                 for path, part, server in MCP_COPIES]
+        body += ['', f'Keep the [deliberate differences from the server]({MCP_DIFFERENCES_URL}).', '',
+                 "Port the server's changes in a separate PR against the default branch and merge it before this one. "
+                 'Do not push them to this branch: a repeated notification for these images rebuilds it from the '
+                 'default branch and drops commits added by hand. Once the port has merged, update this branch '
+                 'from the default branch so the checks run with the ported files, then merge it.', '']
+        if not DIGEST.search(mcp[0]):
+            body += ['The previous MCP image is unpinned. The copies were last compared with server commit '
+                     f'`{MCP_COPIES_BASELINE}` (PR #1521), so port the server changes since that commit.', '']
+    return '\n'.join(body)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--event', type=Path, default=os.environ.get('GITHUB_EVENT_PATH'), required=False)
@@ -187,22 +248,14 @@ def main():
     changes, reason = prepare_update(ROOT, source, tag, services)
     print(reason)
     if changes:
-        body = [f'Update the published {source} images to `{tag}` with immutable multi-platform digests.', '',
-                f'Publisher: [{SOURCES[source]}]({url or "https://github.com/" + SOURCES[source]})', '',
-                '| Service | Previous image | Proposed image |', '| --- | --- | --- |']
-        body += [f'| {service} | `{before}` | `{after}` |' for service, before, after in changes]
-        body += ['', 'Compose, generated Swarm files, and Helm use the same image pins.',
-                 ('Web-only image updates run source validation and skip deployment/Backup integration.'
-                  if source == 'web' else
-                  'The integration checks use the proposed pins without CI baseline image overrides.'),
-                 'Auto-merge waits for the required CI checks. This PR does not deploy services.', '']
-        args.body.write_text('\n'.join(body))
+        args.body.write_text(pull_request_body(source, tag, url, changes))
     output = os.environ.get('GITHUB_OUTPUT')
     if output:
         with open(output, 'a') as stream:
             stream.write('changed=' + str(bool(changes)).lower() + '\n')
             if changes:
-                stream.write(f'source={source}\ntag={tag}\nbranch={update_branch(source, tag, services)}\n')
+                stream.write(f'source={source}\ntag={tag}\nbranch={update_branch(source, tag, services)}\n'
+                             f'auto_merge={str(auto_merge(changes)).lower()}\n')
 
 
 if __name__ == '__main__':

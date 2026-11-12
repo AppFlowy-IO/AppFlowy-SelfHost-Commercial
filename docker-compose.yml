@@ -79,6 +79,7 @@ services:
       - GOTRUE_SITE_URL=appflowy-flutter://                           # redirected to AppFlowy application
       - GOTRUE_URI_ALLOW_LIST=** # adjust restrict if necessary
       - GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}                        # authentication secret
+      - GOTRUE_JWT_AUD=${GOTRUE_JWT_AUD:-}
       - GOTRUE_JWT_EXP=${GOTRUE_JWT_EXP}
       # Without this environment variable, the createuser command will create an admin
       # with the `admin` role as opposed to `supabase_admin`
@@ -153,6 +154,18 @@ services:
       - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY}
       - APPFLOWY_WEB_URL=${APPFLOWY_WEB_URL}
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
+      # Advertised as server-info `mcp_url` whether MCP is on or off, so AppFlowy Web and Desktop
+      # find MCP and members can disconnect. Cloud knows MCP only from this value and never falls
+      # back to APPFLOWY_BASE_URL: blank, it advertises no MCP, and Web and Desktop hide MCP.
+      - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
+      # The same MCP policy defaults as appflowy_mcp's: Cloud resolves the policy too, for
+      # server-info and the Admin console's MCP page (see deploy.env).
+      - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
+      - APPFLOWY_MCP_ALLOWED_EMAILS
+      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
+      # Audit fallback until Admin -> Audit Log saves the switch. appflowy_mcp resolves it too
+      # and receives the same value (see deploy.env).
+      - APPFLOWY_AUDIT_ENABLE
       - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
       - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
       - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
@@ -316,6 +329,100 @@ services:
       postgres:
         condition: service_healthy
 
+  # AI apps (MCP). Nginx serves it on this domain: AI apps connect to
+  # <APPFLOWY_MCP_BASE_URL>/mcp. The service publishes no host port.
+  appflowy_mcp:
+    # Restore writes only the selected bucket and Redis database here.
+    env_file:
+      - path: ./docker/backup/source-appflowy_mcp.env
+      - path: ./backup-ops/runtime/selection-appflowy_mcp.env
+        required: false
+        format: raw
+    restart: on-failure
+    # Longer than MCP's shutdown drain: requests in flight (the 60-second request timeout plus
+    # 5 s), then 5 s each for its policy watchers and audit queue. Open GET /mcp streams end at
+    # once; Docker's 10-second default would kill a running tool call and queued audit events.
+    # The timeouts are named in the server's services/appflowy-mcp/src/server.rs
+    # (AUDIT_SHUTDOWN_TIMEOUT); ci/test_mcp_configuration.py keeps this value above the drain.
+    stop_grace_period: 90s
+    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-latest}
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - APPFLOWY_APPLICATION_HOST=[::]
+      - APPFLOWY_APPLICATION_PORT=8002
+      # Public origin without /mcp, and the OAuth issuer. When blank, MCP falls back to
+      # APPFLOWY_BASE_URL, the same-domain default, for its own origin; Cloud does not, and then
+      # advertises no MCP to Web and Desktop.
+      - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
+      - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
+      # AppFlowy Web serves the browser consent page at /oauth/mcp/authorize.
+      - APPFLOWY_WEB_URL=${APPFLOWY_WEB_URL}
+      - MCP_ALLOWED_CLIENT_IDS=${MCP_ALLOWED_CLIENT_IDS:-}
+      - MCP_ALLOWED_REDIRECT_HOSTS=${MCP_ALLOWED_REDIRECT_HOSTS:-}
+      # MCP is on by default and needs a One, Team or Enterprise license; only the Admin
+      # console's MCP page turns it off (see deploy.env).
+      # Fallbacks for the MCP email allowlist and OAuth per-IP limit; settings saved on that page
+      # take precedence. Unset, the server's own defaults apply. Keep appflowy_cloud's
+      # APPFLOWY_MCP_* values equal to these.
+      - APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
+      - APPFLOWY_MCP_ALLOWED_EMAILS
+      - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
+      # Per-IP OAuth limit and audit address. Only Nginx and other Compose containers reach
+      # MCP, and Nginx replaces X-Forwarded-For and X-Real-IP with the connecting address,
+      # so trusting Docker's private pools lets no client pick its own. Blank restores them.
+      - APPFLOWY_MCP_TRUSTED_PROXY_CIDRS=${APPFLOWY_MCP_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      # A CDN or load balancer in front of a proxy that appends to X-Forwarded-For (deploy.env).
+      # Never applies behind the bundled Nginx, which replaces the header.
+      - APPFLOWY_MCP_OUTER_PROXY_CIDRS=${APPFLOWY_MCP_OUTER_PROXY_CIDRS:-}
+      # Plugin-directory listing settings (deploy.env); blank publishes nothing.
+      - APPFLOWY_MCP_OPENAI_APPS_CHALLENGE=${APPFLOWY_MCP_OPENAI_APPS_CHALLENGE:-}
+      - APPFLOWY_MCP_PRIVACY_POLICY_URL=${APPFLOWY_MCP_PRIVACY_POLICY_URL:-}
+      - APPFLOWY_MCP_TERMS_OF_SERVICE_URL=${APPFLOWY_MCP_TERMS_OF_SERVICE_URL:-}
+      # Browser origins, other than this domain, that call MCP directly. Empty mirrors the
+      # request origin. Only MCP reads it here; appflowy_cloud has no CORS setting in Compose.
+      - APPFLOWY_CORS_ALLOWED_ORIGINS=${APPFLOWY_CORS_ALLOWED_ORIGINS:-}
+      # appflowy_cloud's audit fallback; both must agree (see deploy.env).
+      - APPFLOWY_AUDIT_ENABLE
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
+      - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL}
+      # Two literal quotes make MCP verify GoTrue's empty audience.
+      - APPFLOWY_GOTRUE_EXPECTED_AUDIENCES=${GOTRUE_JWT_AUD:-""}
+      - APPFLOWY_DATABASE_URL=${APPFLOWY_DATABASE_URL}
+      # MCP keeps its own small pool instead of Cloud's APPFLOWY_DATABASE_MAX_CONNECTIONS.
+      - APPFLOWY_DATABASE_MAX_CONNECTIONS=${APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS:-8}
+      - APPFLOWY_DATABASE_MIN_CONNECTIONS=${APPFLOWY_MCP_DATABASE_MIN_CONNECTIONS:-1}
+      # At most 16 concurrent tool calls per pooled connection.
+      - APPFLOWY_MCP_MAX_IN_FLIGHT=${APPFLOWY_MCP_MAX_IN_FLIGHT:-128}
+      # Largest request body. A tool call carries what a model writes in one response, well
+      # under 1 MiB, and every call in flight holds its parsed body (at most twice this).
+      - APPFLOWY_MCP_MAX_BODY_BYTES=${APPFLOWY_MCP_MAX_BODY_BYTES:-1048576}
+      - APPFLOWY_S3_CREATE_BUCKET=${APPFLOWY_S3_CREATE_BUCKET}
+      - APPFLOWY_S3_USE_MINIO=${APPFLOWY_S3_USE_MINIO}
+      - APPFLOWY_S3_MINIO_URL=${APPFLOWY_S3_MINIO_URL}
+      - APPFLOWY_S3_ACCESS_KEY=${APPFLOWY_S3_ACCESS_KEY}
+      - APPFLOWY_S3_SECRET_KEY=${APPFLOWY_S3_SECRET_KEY}
+      - APPFLOWY_S3_REGION=${APPFLOWY_S3_REGION}
+      - APPFLOWY_S3_PRESIGNED_URL_ENDPOINT=${APPFLOWY_S3_PRESIGNED_URL_ENDPOINT}
+      - APPFLOWY_COLLAB_S3_THRESHOLD=${APPFLOWY_COLLAB_S3_THRESHOLD:-8000}
+      # Preserve an explicitly empty URL when Search is deliberately unconfigured.
+      - APPFLOWY_SEARCH_SERVICE_URL=${APPFLOWY_SEARCH_SERVICE_URL-http://appflowy_search:4002}
+      - APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS=${APPFLOWY_SEARCH_REQUEST_TIMEOUT_SECS:-10}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8002/api/ready" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      gotrue:
+        condition: service_healthy
+      appflowy_cloud:
+        condition: service_healthy
+
   # The environment template selects the supporting settings automatically.
   appflowy_backup:
     # Restore writes only the selected bucket, Redis database and search directory here.
@@ -338,6 +445,9 @@ services:
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
       - APPFLOWY_WS_BASE_URL=${APPFLOWY_WEBSOCKET_BASE_URL}
+      # The MCP origin. Web prefers it to server-info's `mcp_url`, which Cloud leaves out until
+      # it has loaded the MCP policy.
+      - APPFLOWY_MCP_BASE_URL=${APPFLOWY_MCP_BASE_URL}
 volumes:
   postgres_data:
   minio_data:

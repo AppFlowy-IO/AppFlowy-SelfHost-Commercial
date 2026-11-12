@@ -1,0 +1,114 @@
+{{- $mcpIngress := .Values.ingress.mcp | default (dict) -}}
+{{- if and .Values.ingress.enabled (index .Values "appflowy-mcp" "enabled") ($mcpIngress.enabled | default false) }}
+{{- $timeout := int ($mcpIngress.proxyTimeoutSeconds | default 3600) -}}
+{{- if lt $timeout 60 -}}
+{{- fail "ingress.mcp.proxyTimeoutSeconds must be at least 60: GET /mcp holds a server-sent event stream open" -}}
+{{- end -}}
+{{- $bodySize := $mcpIngress.bodySize | default "8m" | toString -}}
+{{- if not (regexMatch "^[1-9][0-9]{0,8}[kKmM]?$" $bodySize) -}}
+{{- fail "ingress.mcp.bodySize must be a non-zero Nginx size such as 8m" -}}
+{{- end -}}
+{{- /* Streamable HTTP needs unbuffered, long-lived responses whatever ingress.annotations say.
+  use-regex: the paths below are anchored regular expressions (see the comment above them). */ -}}
+{{- $streamingAnnotations := dict
+  "nginx.ingress.kubernetes.io/use-regex" "true"
+  "nginx.ingress.kubernetes.io/proxy-buffering" "off"
+  "nginx.ingress.kubernetes.io/proxy-http-version" "1.1"
+  "nginx.ingress.kubernetes.io/proxy-read-timeout" (toString $timeout)
+  "nginx.ingress.kubernetes.io/proxy-send-timeout" (toString $timeout)
+  "nginx.ingress.kubernetes.io/proxy-body-size" $bodySize
+-}}
+{{- /* The primary Ingress's client-address affinity and per-IP limits suit browsers, not AI apps:
+  MCP keeps no session, and every user behind one NAT or AI vendor's egress would land on one
+  replica and share one limit, which counts each open GET /mcp stream. Set MCP's own limits in
+  ingress.mcp.annotations. */ -}}
+{{- $inheritedAnnotations := dict -}}
+{{- range $key, $value := (.Values.ingress.annotations | default (dict)) -}}
+{{- if not (or (hasPrefix "nginx.ingress.kubernetes.io/upstream-hash-by" $key) (hasPrefix "nginx.ingress.kubernetes.io/limit-" $key)) -}}
+{{- $_ := set $inheritedAnnotations $key $value -}}
+{{- end -}}
+{{- end -}}
+{{- $annotations := mergeOverwrite
+  (dict)
+  $inheritedAnnotations
+  ($mcpIngress.annotations | default (dict))
+  $streamingAnnotations
+-}}
+{{- $service := include "appflowy.mcp.fullname" . -}}
+{{- $port := index .Values "appflowy-mcp" "service" "port" -}}
+# MCP on the main host: exactly /mcp, the two root discovery documents and OpenAI's
+# domain-verification challenge, and /api/mcp and protected-resource metadata with everything
+# under them. Everything else keeps the primary Ingress. Once any Ingress of a host uses use-regex or rewrite-target (the GoTrue and MinIO ones
+# do), ingress-nginx matches every path of that host as a case-insensitive regex prefix, `~*
+# "^<path>"`, whatever its pathType: an Exact /mcp would also take /mcpx and /mcp/x, such as a
+# published site's namespace. The paths are therefore anchored regexes, and use-regex is set here
+# so this holds without those Ingresses too. Keep them equal to the MCP locations in
+# docker/nginx/nginx.conf; tests/test_mcp.py checks the paths and their annotations.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "appflowy.fullname" . }}-mcp
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.global.domain | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default (printf "%s-tls" (include "appflowy.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.global.domain | quote }}
+      http:
+        paths:
+          # Streamable HTTP endpoint; GET opens a server-sent event stream.
+          - path: /mcp$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          # OAuth, client, member and owner APIs, plus the legacy /api/mcp transport.
+          - path: /api/mcp(/|$)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/oauth-authorization-server$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/oauth-protected-resource(/|$)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          - path: /.well-known/mcp.json$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+          # OpenAI's plugin portal checks the MCP origin's domain-verification token here.
+          - path: /.well-known/openai-apps-challenge$
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ $service }}
+                port:
+                  number: {{ $port }}
+{{- end }}

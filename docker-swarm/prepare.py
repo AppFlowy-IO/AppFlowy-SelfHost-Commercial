@@ -171,7 +171,7 @@ def main() -> None:
     limits = {
         'postgres': '768M', 'redis': '256M', 'minio': '512M',
         'gotrue': '256M', 'appflowy_cloud': '1024M',
-        'appflowy_search': '768M', 'appflowy_worker': '512M',
+        'appflowy_search': '768M', 'appflowy_worker': '512M', 'appflowy_mcp': '256M',
         'appflowy_web': '512M', 'admin_frontend': '128M', 'nginx': '128M',
     }
     for name, service in services.items():
@@ -283,7 +283,8 @@ def main() -> None:
         'environment_keys': {name: sorted(service.get('environment', {})) for name, service in services.items()},
         'initial_services': sorted(initial_services),
         'stages': [sorted(initial_services), ['gotrue'], ['appflowy_cloud'],
-                   ['appflowy_search', 'appflowy_worker', 'appflowy_web', 'admin_frontend', 'nginx']],
+                   ['appflowy_search', 'appflowy_worker', 'appflowy_mcp', 'appflowy_web', 'admin_frontend',
+                    'nginx']],
         'stateful_node_constraint': 'node.labels.appflowy-swarm-test == true',
         'ai_enabled': False, 'semantic_indexing_enabled': False,
         'keyword_indexing_enabled': True, 'local_experiment_only': True,
