@@ -36,7 +36,10 @@ services:
 
   postgres:
     restart: on-failure
-    image: pgvector/pgvector:pg16
+    # Pinned to the build the Backup image contains. Backup restores every snapshot into its own
+    # copy of this PostgreSQL, which rejects a database from a newer minor release. Move this pin
+    # only together with a Backup image built for the new release.
+    image: pgvector/pgvector:pg16@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-postgres}

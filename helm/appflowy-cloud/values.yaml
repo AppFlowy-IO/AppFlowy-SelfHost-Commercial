@@ -88,6 +88,8 @@ postgresql:
     registry: docker.io
     repository: pgvector/pgvector
     tag: pg16
+    # The same build as Compose and as the Backup image contains; move them together.
+    digest: sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
   auth:
     postgresPassword: "password"  # MUST be set
     database: postgres
