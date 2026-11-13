@@ -126,6 +126,18 @@ class BackupConfigurationTests(unittest.TestCase):
         self.lock.write_text(json.dumps(payload))
         return Deployment(mode, self.root / 'runtime', self.root / 'artifacts', self.lock, backup=backup)
 
+    def test_database_image_cannot_move_ahead_of_the_backup_image(self):
+        # Backup restores each snapshot into the PostgreSQL it was built with. A floating database
+        # tag moved to a newer minor release once, and every snapshot then failed.
+        compose = yaml.safe_load((ROOT / 'docker-compose.yml').read_text())
+        image = compose['services']['postgres']['image']
+        self.assertRegex(image, r'^pgvector/pgvector:pg16@sha256:[0-9a-f]{64}$')
+        digest = image.partition('@')[2]
+        stack = yaml.safe_load((ROOT / 'docker-swarm/docker-stack.yml').read_text())
+        self.assertEqual(stack['services']['postgres']['image'], image)
+        chart = yaml.safe_load((ROOT / 'helm/appflowy-cloud/values.yaml').read_text())
+        self.assertEqual(chart['postgresql']['image']['digest'], digest)
+
     def test_backup_requires_separate_pin_and_current_source_fingerprint(self):
         instance = self.deployment()
         self.assertEqual(instance.services, CORE | {'appflowy_backup'})
