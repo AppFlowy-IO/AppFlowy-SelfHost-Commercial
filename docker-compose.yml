@@ -336,7 +336,7 @@ services:
   # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
   appflowy_log_collector:
     profiles: [server-logs]
-    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:latest}
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.3}
     restart: unless-stopped
     user: "0:0"
     read_only: true

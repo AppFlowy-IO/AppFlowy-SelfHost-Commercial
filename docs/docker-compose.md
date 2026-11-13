@@ -261,11 +261,10 @@ Then turn on **Allow log access** in Admin, as described below. Nothing else has
 - **Image.** `docker-compose.yml` names the collector image, and each release pins it together
   with the Cloud image it was published with.
 
-This needs Cloud and collector releases that include the derived credential. Until a release
-publishes the collector image, `docker-compose.yml` names
-`appflowyinc/appflowy_log_collector:latest`, which is not published, so enabling the profile
-fails to pull. Wait for deployment files that pin a released collector, or build and test the
-matching sources and set `APPFLOWY_SERVER_LOGS_IMAGE`.
+This needs Cloud and collector releases that include the derived credential. A collector that
+`docker-compose.yml` names without a `@sha256:` digest has not been confirmed as published. If
+enabling the profile fails to pull it, wait for deployment files that pin it by digest, or build
+and test the matching sources and set `APPFLOWY_SERVER_LOGS_IMAGE`.
 
 Three optional settings exist for installations that need them:
 
