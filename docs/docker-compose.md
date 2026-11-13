@@ -227,14 +227,30 @@ Set one value in the existing root `.env`:
 APPFLOWY_SERVER_LOGS_PROFILE=server-logs
 ```
 
-When upgrading `.env`, also copy the updated derived `COMPOSE_PROFILES` expression from
-[`deploy.env`](../deploy.env). It preserves both the Backup and Server Logs profiles; keep the
-existing `COMPOSE_FILE`, project name and credentials. Then validate and apply the configuration:
+An `.env` created before this feature needs one more change. Replace its `COMPOSE_PROFILES` line
+with the one from [`deploy.env`](../deploy.env), and keep `APPFLOWY_SERVER_LOGS_PROFILE` above
+that line:
+
+```dotenv
+APPFLOWY_SERVER_LOGS_PROFILE=server-logs
+COMPOSE_PROFILES=${APPFLOWY_BACKUP_PROFILE}${APPFLOWY_BACKUP_PROFILE:+${APPFLOWY_SERVER_LOGS_PROFILE:+,}}${APPFLOWY_SERVER_LOGS_PROFILE}
+```
+
+`.env` is read from top to bottom, so `COMPOSE_PROFILES` does not see a profile that is set below
+it. Keep the existing `COMPOSE_FILE`, project name and credentials.
+
+Check that Compose will start the collector, then apply the configuration:
 
 ```bash
-docker compose config --quiet
+docker compose config --services | grep appflowy_log_collector
 docker compose up -d
 ```
+
+The first command must print `appflowy_log_collector`. If it prints nothing, the
+`COMPOSE_PROFILES` line is the old one or sits above the profile setting. Compose reports no
+error in that case: Cloud is told about a collector that never starts, and Admin shows
+**The log collector is unavailable** once access is turned on. `docker compose config --profiles`
+does not help here, because it lists every profile the files define, enabled or not.
 
 Then turn on **Allow log access** in Admin, as described below. Nothing else has to be set:
 
