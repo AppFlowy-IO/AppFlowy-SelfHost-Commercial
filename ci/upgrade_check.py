@@ -173,6 +173,22 @@ def table(services, containers, before):
     return lines
 
 
+def repositories(references):
+    """Image repositories of Compose image references, without tag or digest."""
+    names = set()
+    for reference in references:
+        head, _, last = reference.split("@")[0].rpartition("/")
+        name = last.split(":")[0]
+        names.add(f"{head}/{name}" if head else name)
+    return names
+
+
+def unused_images(images, deployment_repositories, used):
+    """IDs of this deployment's images that no container on the host uses."""
+    return sorted({image["ID"] for image in images
+                   if image["Repository"] in deployment_repositories and image["ID"] not in used})
+
+
 def run(*args, timeout=120):
     return subprocess.run(args, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
 
@@ -257,6 +273,26 @@ def route_problems():
     return problems
 
 
+def remove_unused_images():
+    """Remove older images of this deployment, so each release does not add to the disk."""
+    references = run("docker", "compose", "config", "--images").stdout.split()
+    listing = run("docker", "image", "ls", "--no-trunc", "--format", "json").stdout
+    images = [json.loads(line) for line in listing.splitlines() if line.strip()]
+    containers = run("docker", "ps", "--all", "--quiet").stdout.split()
+    used = set()
+    if containers:
+        inspected = run("docker", "inspect", "--format", "{{.Image}}", *containers)
+        used = set(inspected.stdout.split())
+    stale = unused_images(images, repositories(references), used)
+    removed = 0
+    if stale:
+        result = run("docker", "image", "rm", *stale, timeout=600)
+        removed = len(stale) - result.stderr.count("Error response from daemon")
+    free = shutil.disk_usage("/").free / 2**30
+    images_word = "image" if removed == 1 else "images"
+    return f"Cleanup: removed {removed} unused {images_word}; {free:.1f} GiB free"
+
+
 def report(summary, problems):
     print(SUMMARY)
     print("\n".join(summary))
@@ -281,7 +317,10 @@ def main():
     problems = upgrade()
     containers, more = watch(enabled)
     problems += more + route_problems()
-    return report(summary + table(enabled, containers, before), problems)
+    summary += table(enabled, containers, before)
+    if not problems:
+        summary.append(remove_unused_images())
+    return report(summary, problems)
 
 
 if __name__ == "__main__":

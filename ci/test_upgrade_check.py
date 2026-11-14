@@ -90,6 +90,24 @@ class UpgradeCheckTest(unittest.TestCase):
             "nginx: restarted during the 60-second watch",
         ])
 
+    def test_image_repositories_drop_tag_and_digest(self):
+        references = [f"appflowyinc/appflowy_cloud:0.21.4@sha256:{'a' * 64}", "nginx",
+                      "pgvector/pgvector:pg16", "registry.local:5000/team/app:1.0"]
+        self.assertEqual(check.repositories(references), {
+            "appflowyinc/appflowy_cloud", "nginx", "pgvector/pgvector",
+            "registry.local:5000/team/app",
+        })
+
+    def test_only_unused_images_of_this_deployment_are_removed(self):
+        images = [{"ID": "sha256:running", "Repository": "appflowyinc/appflowy_cloud"},
+                  {"ID": "sha256:previous", "Repository": "appflowyinc/appflowy_cloud"},
+                  {"ID": "sha256:previous", "Repository": "appflowyinc/appflowy_cloud"},
+                  {"ID": "sha256:stopped", "Repository": "redis"},
+                  {"ID": "sha256:other", "Repository": "ghcr.io/goauthentik/server"}]
+        used = {"sha256:running", "sha256:stopped"}
+        found = check.unused_images(images, {"appflowyinc/appflowy_cloud", "redis"}, used)
+        self.assertEqual(found, ["sha256:previous"])
+
     def test_the_table_marks_containers_this_run_created(self):
         containers = [container("appflowy_cloud", health="healthy", ident="new"),
                       container("redis", ident="old")]

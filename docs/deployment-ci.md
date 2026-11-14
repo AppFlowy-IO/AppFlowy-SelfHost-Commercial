@@ -278,6 +278,9 @@ On the server, it runs `git pull --ff-only`, then [`ci/upgrade_check.py`](../ci/
 3. **Services.** For one minute, every service must have one running container that passes its
    health check and does not restart.
 4. **Routes.** Cloud, GoTrue, Admin and Web must answer through Nginx.
+5. **Cleanup.** When everything passed, it removes this deployment's images that no container
+   uses, so each release does not add to the disk. When anything failed, it keeps them, so going
+   back to the previous release needs no download.
 
 The run summary lists every service with its status and image, and marks the ones the upgrade
 replaced. The log is public, so the check never prints `.env` values or container logs.
