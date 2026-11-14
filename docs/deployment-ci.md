@@ -260,10 +260,52 @@ Completed test evidence is saved before collecting optional service diagnostics.
 
 Python and Playwright are CI/test dependencies installed by the workflow. They are **not installation requirements** for AppFlowy: the [Swarm setup guide](docker-swarm.md) uses Docker commands directly.
 
+## Self-hosted upgrade check
+
+[Self-hosted upgrade check](../.github/workflows/self-host-upgrade-check.yml) upgrades the team's
+own self-hosted server the way a self-hoster does, then checks it. It finds problems that only an
+existing installation shows, such as an `.env` older than the deployment files.
+
+It runs when a change to the deployment files reaches `main`, including the image-pin update each
+release makes, and on demand from GitHub Actions. It does not block merges.
+
+On the server, it runs `git pull --ff-only`, then [`ci/upgrade_check.py`](../ci/upgrade_check.py):
+
+1. **Configuration.** `.env` must have the current `COMPOSE_*` lines from `deploy.env`, every
+   profile it turns on must start its services, and Compose must print no warnings. If this
+   fails, nothing is pulled or restarted.
+2. **Upgrade.** `docker compose pull`, then `docker compose up -d --wait`.
+3. **Services.** For one minute, every service must have one running container that passes its
+   health check and does not restart.
+4. **Routes.** Cloud, GoTrue, Admin and Web must answer through Nginx.
+
+The run summary lists every service with its status and image, and marks the ones the upgrade
+replaced. The log is public, so the check never prints `.env` values or container logs.
+
+### Set up the server connection
+
+1. Create a key pair for CI. Add its public key to the server's `~/.ssh/authorized_keys`, limited
+   to this check, so the key cannot open a shell or run anything else:
+
+   ```text
+   restrict,command="sh -c 'cd ~/Team && git pull --ff-only --quiet && exec python3 ci/upgrade_check.py'" ssh-ed25519 AAAA… self-host-upgrade-check
+   ```
+
+2. In this repository, create the `self-host-server` environment, allow only the `main` branch to
+   deploy to it, and add three secrets:
+
+   | Secret | Value |
+   | --- | --- |
+   | `SELF_HOST_SSH_HOST` | The server's address |
+   | `SELF_HOST_SSH_KEY` | The private key |
+   | `SELF_HOST_SSH_KNOWN_HOSTS` | The address, a space, then the server's `/etc/ssh/ssh_host_ed25519_key.pub` |
+
+The workflow connects as `ubuntu`.
+
 ## Scope of the result
 
 A green check means that the tested commit and recorded images passed these core workflows on fresh Linux AMD64 installations. It does not certify every AppFlowy feature or every deployment environment.
 
-External AI providers, semantic search, SMTP delivery, OAuth/SAML/LDAP/SCIM, HTTPS certificates, ARM64, upgrades from existing databases, interrupted imports, Redis queue durability, Swarm/Helm backup restoration, multi-node Swarm, and high availability require additional tests. The default kind network plugin does not enforce NetworkPolicy, so this job does not certify network isolation. A fresh-install Backup restore does not replace the release-specific migration steps in the [deployment instructions](../README.md).
+External AI providers, semantic search, SMTP delivery, OAuth/SAML/LDAP/SCIM, HTTPS certificates, ARM64, upgrades from existing databases, interrupted imports, Redis queue durability, Swarm/Helm backup restoration, multi-node Swarm, and high availability require additional tests. The default kind network plugin does not enforce NetworkPolicy, so this job does not certify network isolation. A fresh-install Backup restore does not replace the release-specific migration steps in the [deployment instructions](../README.md). The [self-hosted upgrade check](#self-hosted-upgrade-check) covers one existing installation: the team's server.
 
 The full Compose and Swarm configurations still contain optional AI; the runtime acceptance profile leaves it disabled. Helm renders its normal templates with a separate CI values overlay. Keep these test overrides explicit when extending coverage so CI cannot hide a broken deployment setting.

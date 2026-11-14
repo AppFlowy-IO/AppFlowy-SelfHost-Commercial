@@ -38,6 +38,8 @@ For a real version tag, the receiver:
    remains readable, while the digest prevents tag replacement from changing a deployment.
 5. Enables squash auto-merge for that PR's exact head commit. GitHub waits for the required
    **Deployment tests** and **Backup tests** checks before merging it.
+6. After the merge, the [self-hosted upgrade check](deployment-ci.md#self-hosted-upgrade-check)
+   upgrades the team's server to the new pins and checks every service.
 
 Repeated publication/release notifications for the same image selection reuse the same PR.
 Cloud branches also identify the selected services, so a GoTrue-only publication cannot
@@ -47,7 +49,7 @@ with different image contents fails; publish a new version instead.
 
 Only PRs opened or refreshed by the image-update workflow opt into auto-merge. Other PRs
 remain manual unless a maintainer enables auto-merge individually. A merge does not publish
-a self-hosted release or deploy an installation. Supported client versions, migration
+a self-hosted release or deploy self-hosters' installations. Supported client versions, migration
 requirements, optional features, and upgrades still need their release-specific checks.
 The [deployment CI coverage](deployment-ci.md) describes the runtime checks and limitations;
 the image-index check does not substitute for ARM64 runtime qualification.

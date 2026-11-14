@@ -1,0 +1,64 @@
+name: Self-hosted upgrade check
+
+# Upgrades the team's self-hosted server the way a self-hoster does, then checks every service.
+# A release from AppFlowy-Docker-CI reaches this point when its image-pin update merges into main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.yml
+      - docker-compose.backup.yml
+      - deploy.env
+      - 'docker/**'
+      - ci/upgrade_check.py
+      - .github/workflows/self-host-upgrade-check.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: self-host-upgrade-check
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    name: Upgrade the team server and check every service
+    if: github.repository == 'AppFlowy-IO/AppFlowy-SelfHost-Commercial' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: self-host-server
+    env:
+      SSH_USER: ubuntu
+    steps:
+      - name: Upgrade over SSH and check every service
+        env:
+          SSH_HOST: ${{ secrets.SELF_HOST_SSH_HOST }}
+          SSH_KEY: ${{ secrets.SELF_HOST_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SELF_HOST_SSH_KNOWN_HOSTS }}
+        run: |
+          if [[ -z "$SSH_HOST" || -z "$SSH_KEY" || -z "$SSH_KNOWN_HOSTS" ]]; then
+            echo "::error::Add SELF_HOST_SSH_HOST, SELF_HOST_SSH_KEY and SELF_HOST_SSH_KNOWN_HOSTS to the self-host-server environment."
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$SSH_KEY" > "$RUNNER_TEMP/self_host_key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/self_host_known_hosts"
+          # The key's forced command updates the server's checkout and runs ci/upgrade_check.py;
+          # this run only tells it which commit to expect.
+          ssh -i "$RUNNER_TEMP/self_host_key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/self_host_known_hosts" \
+            -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            "$SSH_USER@$SSH_HOST" "$GITHUB_SHA" 2>&1 | tee "$RUNNER_TEMP/report.txt"
+      - name: Publish the summary
+        if: always()
+        run: |
+          [[ -s "$RUNNER_TEMP/report.txt" ]] || exit 0
+          {
+            echo '```text'
+            if grep -q '^=== Summary ===$' "$RUNNER_TEMP/report.txt"; then
+              sed -n '/^=== Summary ===$/,$p' "$RUNNER_TEMP/report.txt" | tail -n +2
+            else
+              echo 'The check did not finish. See the job log.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
