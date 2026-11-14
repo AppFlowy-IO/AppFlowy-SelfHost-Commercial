@@ -25,6 +25,10 @@ for the v0.19.2 storage migration. Swarm and Helm use their own deployment guide
 adapters; the [Compose Backup acceptance lane](docs/deployment-ci.md#backup-acceptance) does not
 qualify those platforms.
 
+For optional server logs in the Admin console, set `APPFLOWY_SERVER_LOGS_PROFILE=server-logs` in
+`.env`; see [Server logs](docs/docker-compose.md#server-logs). To run Backup, server logs, or
+both, follow [Optional services](docs/docker-compose.md#optional-services).
+
 To browse and test your installation's business APIs in Swagger UI, see the [OpenAPI guide](docs/OPENAPI.md).
 
 ## Deployment Options
