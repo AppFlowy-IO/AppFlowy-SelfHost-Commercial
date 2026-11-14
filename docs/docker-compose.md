@@ -50,64 +50,77 @@ not change it at runtime.
 
 ## Optional services
 
-Backup and server logs are off by default. Each is turned on by its own value in the root `.env`,
-and either works without the other:
+Backup and server logs are off by default. Each has one setting in `.env`, and you can turn on
+either one or both. Set the two lines for your case, then [apply the change](#apply-the-change).
 
-| To run | `APPFLOWY_BACKUP_PROFILE` | `APPFLOWY_SERVER_LOGS_PROFILE` | Services Compose adds |
-| --- | --- | --- | --- |
-| Neither (default) | empty | empty | none |
-| [Backup](#backup) | `backup` | empty | `appflowy_backup` |
-| [Server logs](#server-logs) | empty | `server-logs` | `appflowy_log_collector` |
-| Both | `backup` | `server-logs` | `appflowy_backup` and `appflowy_log_collector` |
+### Backup only
 
-With both on, `.env` starts as follows. Edit only the first two lines. The other three are
-derived from them: keep them as [`deploy.env`](../deploy.env) has them, apart from an override
-file you appended to `COMPOSE_FILE`.
+```dotenv
+APPFLOWY_BACKUP_PROFILE=backup
+APPFLOWY_SERVER_LOGS_PROFILE=
+```
+
+This adds the `appflowy_backup` service. Once it runs, open **Tools → Backup** in Admin.
+See [Backup](#backup) for details.
+
+### Server logs only
+
+```dotenv
+APPFLOWY_BACKUP_PROFILE=
+APPFLOWY_SERVER_LOGS_PROFILE=server-logs
+```
+
+This adds the `appflowy_log_collector` service. Once it runs, open
+**Tools → Server Health → Logs** in Admin and turn on **Allow log access**.
+See [Server logs](#server-logs) for details.
+
+### Backup and server logs
 
 ```dotenv
 APPFLOWY_BACKUP_PROFILE=backup
 APPFLOWY_SERVER_LOGS_PROFILE=server-logs
-COMPOSE_PROFILES=${APPFLOWY_BACKUP_PROFILE}${APPFLOWY_BACKUP_PROFILE:+${APPFLOWY_SERVER_LOGS_PROFILE:+,}}${APPFLOWY_SERVER_LOGS_PROFILE}
-COMPOSE_PATH_SEPARATOR=:
-COMPOSE_FILE=docker-compose.yml${APPFLOWY_BACKUP_PROFILE:+:docker-compose.backup.yml}
 ```
 
-Check which optional services Compose will start, then apply the configuration:
+This adds both services. Do both Admin steps above. Neither service needs the other.
+
+### Apply the change
 
 ```bash
 docker compose config --services | grep -E 'appflowy_backup|appflowy_log_collector'
 docker compose up -d
 ```
 
-The first command prints one line for each optional service that is on, and nothing when both
-are off. `docker compose config --profiles` cannot replace it: that command lists every profile
-the files define, enabled or not. Each service then has its own setup. [Backup](#backup) needs
-the image for your PostgreSQL version, and [server logs](#server-logs) stay closed until an
-administrator allows access.
+The first command lists the optional services that are on. Check that it matches your case
+before you run the second. `docker compose config --profiles` is not a substitute: it lists every
+profile, on or off.
+
+If a service is missing from the list, [update your `.env`](#update-an-existing-env).
+
+Clearing a setting does not stop a container that is already running. To turn a service off,
+follow [Pause Backup](#pause-backup) or [Stop the optional collector](#stop-the-optional-collector).
 
 ### Update an existing `.env`
 
-Updating the deployment files, for example with `git pull`, replaces `deploy.env` and the Compose
-files. It never changes `.env`, which is your own copy. After an update, compare the lines above
-with your `.env`:
+Updating the deployment files, for example with `git pull`, never changes your `.env`. An `.env`
+created before these features existed must have these five lines, in this order, with your own
+values in the first two:
 
-- **Use the template's `COMPOSE_PROFILES` line.** An `.env` created before server logs existed
-  has `COMPOSE_PROFILES=${APPFLOWY_BACKUP_PROFILE}`. That line can turn on only Backup, whatever
-  `APPFLOWY_SERVER_LOGS_PROFILE` is set to.
-- **Keep both profile values above that line.** `.env` is read from top to bottom, so
-  `COMPOSE_PROFILES` does not see a value that is set below it.
-- **Do not write the list by hand.** With `COMPOSE_PROFILES=server-logs`, `docker compose up -d`
-  no longer starts or updates `appflowy_backup`.
-- Keep your project name, credentials and any override file you appended to `COMPOSE_FILE`.
+```dotenv
+APPFLOWY_BACKUP_PROFILE=
+APPFLOWY_SERVER_LOGS_PROFILE=
+COMPOSE_PROFILES=${APPFLOWY_BACKUP_PROFILE}${APPFLOWY_BACKUP_PROFILE:+${APPFLOWY_SERVER_LOGS_PROFILE:+,}}${APPFLOWY_SERVER_LOGS_PROFILE}
+COMPOSE_PATH_SEPARATOR=:
+COMPOSE_FILE=docker-compose.yml${APPFLOWY_BACKUP_PROFILE:+:docker-compose.backup.yml}
+```
 
-Compose reports no error when a profile is left out. The service is absent, and the feature
-fails in Admin instead:
+- **Keep the order.** `.env` is read from top to bottom, so a setting placed below
+  `COMPOSE_PROFILES` is ignored.
+- **Copy the last three lines from [`deploy.env`](../deploy.env) as they are.** They follow the
+  first two automatically. If you added your own override file to `COMPOSE_FILE`, keep it.
+- **Keep each line only once**, and keep your project name and credentials.
 
-| What you see | Cause |
-| --- | --- |
-| `docker compose config --services` does not list the service | Its profile value is empty, the `COMPOSE_PROFILES` line is the old one, or the value is set below that line. |
-| With **Allow log access** on, Admin shows **The log collector is unavailable**, and no `appflowy_log_collector` container exists | Cloud takes the collector's address from `APPFLOWY_SERVER_LOGS_PROFILE` itself, so it expects a collector that Compose never started. Correct `COMPOSE_PROFILES` and run `docker compose up -d`. |
-| Backup controls are unavailable in **Tools → Backup**, and no `appflowy_backup` container exists | The Backup profile is not in `COMPOSE_PROFILES`. Correct the line and run `docker compose up -d`. |
+Compose reports no error when these lines are wrong. The service does not start, and Admin shows
+**The log collector is unavailable**, or the Backup controls are unavailable.
 
 ## Backup
 
@@ -131,7 +144,7 @@ automatically. Keep its derived `COMPOSE_PROFILES`, `COMPOSE_PATH_SEPARATOR`, an
 settings from [deploy.env](../deploy.env). When upgrading an older `.env`, copy those three
 settings from the template without replacing your existing credentials or project name.
 Using `--profile backup` alone does not select the supporting file. To run Backup together with
-server logs, or to check what Compose will start, see [Optional services](#optional-services).
+server logs, see [Optional services](#optional-services).
 
 ### What startup prepares
 
@@ -283,26 +296,14 @@ Upgrade every Cloud replica to a release that includes the access setting before
 
 ### Enable the collector
 
-Set one value in the existing root `.env`, above its `COMPOSE_PROFILES` line:
+Set this line in the root `.env`, then [apply the change](#apply-the-change):
 
 ```dotenv
 APPFLOWY_SERVER_LOGS_PROFILE=server-logs
 ```
 
-An `.env` created before this feature also needs the current `COMPOSE_PROFILES` line. See
-[Update an existing `.env`](#update-an-existing-env); [Optional services](#optional-services)
-shows the settings for running server logs together with Backup.
-
-Check that Compose will start the collector, then apply the configuration:
-
-```bash
-docker compose config --services | grep appflowy_log_collector
-docker compose up -d
-```
-
-The first command must print `appflowy_log_collector`. If it prints nothing, Compose reports no
-error: Cloud is told about a collector that never starts, and Admin shows
-**The log collector is unavailable** once access is turned on.
+To run the collector together with Backup, or if your `.env` is older than this feature, see
+[Optional services](#optional-services).
 
 Then turn on **Allow log access** in Admin, as described below. Nothing else has to be set:
 
@@ -313,9 +314,8 @@ Then turn on **Allow log access** in Admin, as described below. Nothing else has
 - **Image.** `docker-compose.yml` names the collector image, and each release pins it together
   with the Cloud image it was published with.
 
-This needs deployment files from release 0.21.4 or later, the first release published with a
-collector image. Earlier files name `appflowyinc/appflowy_log_collector:latest`, which is not
-tied to their Cloud release: update the deployment files before enabling the profile.
+Server logs need deployment files from release 0.21.4 or later, the first release with a
+collector image. Update older deployment files before you turn this on.
 
 Three optional settings exist for installations that need them:
 

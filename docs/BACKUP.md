@@ -74,8 +74,9 @@ The supplied Compose configuration handles startup. Backup reuses your PostgreSQ
 
 For an existing `.env`, retain your credentials and project name and copy the template's
 `COMPOSE_FILE`, `COMPOSE_PROFILES`, and `COMPOSE_PATH_SEPARATOR` settings before enabling Backup.
-The Compose guide lists these lines, the command that shows what Compose will start, and the
-settings for running Backup [together with server logs](docker-compose.md#optional-services).
+The Compose guide shows these lines and how to run Backup
+[alone](docker-compose.md#backup-only) or
+[with server logs](docker-compose.md#backup-and-server-logs).
 Follow the [upgrade procedure](docker-compose.md#upgrade-with-existing-backups) when adopting the
 new storage migration and service builds. Creating a Backup image alone does not upgrade Cloud's
 Admin API, migrations, or the Search restore protocol.
