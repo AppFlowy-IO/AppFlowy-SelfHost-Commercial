@@ -312,7 +312,8 @@ def main():
         summary += describe_checkout(commit)
         enabled = configuration()
     except CheckFailed as failure:
-        return report(summary + ["No image was pulled and no service was restarted."], failure.problems)
+        unchanged = "No image was pulled and no service was restarted."
+        return report(summary + [unchanged], failure.problems)
     before = {container["Id"] for container in snapshot()}
     problems = upgrade()
     containers, more = watch(enabled)
