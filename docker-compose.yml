@@ -176,7 +176,7 @@ services:
       # No collector dependency or startup probe when server logs are disabled.
       - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
-    image: appflowyinc/appflowy_cloud:0.21.5@sha256:bd8faf117c20186cef4c06590c63ed05dd2516e99f1a687cb8f0bb4f6dd8a59d
+    image: appflowyinc/appflowy_cloud:0.21.6@sha256:6acb48e3f80655bf19914a106c0d5e53f544ab94e934332e5897f550fa92dd9f
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -207,7 +207,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.21.5@sha256:ef502ec21a13727cc5759d6e2a6fa3a3dc48f58c6265f620b857366370bd1a01
+    image: appflowyinc/appflowy_ai:0.21.6@sha256:161cc2f41166fca2e5ac18e44a204606da67960259d0ecf3a19892a6164311b3
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -244,7 +244,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.21.5@sha256:970b773ef5057ce44c61a9b5637580e4dfb90797065cbec12feb48024f66ec9a
+    image: appflowyinc/appflowy_worker:0.21.6@sha256:8f6ff2edbb2933b16a32981bd212a3359102a857649717919adfbbaadfc993e1
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -277,7 +277,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.21.5@sha256:1ff49c088c8caf3fe20cefd738b957cf9b6b5055f64bb4557eaba7df4675c5a2
+    image: appflowyinc/appflowy_search:0.21.6@sha256:c9f735cd6e77504923ea73ef4cf02321cc5c91e006be6164dff14f395ccbacde
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -332,14 +332,14 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:0.21.4@sha256:3354cf9d8278ca791dbde204d33c371ad2c76caf94061b1bf2c51602492f66f8
+    image: appflowyinc/appflowy_backup:0.21.6@sha256:f9b02b89ddde57a340c8ddeb0f12a440d5f5261afc2425fda9483a5e342927a4
     restart: unless-stopped
 
   # The only Docker socket added for server-log viewing belongs to this isolated reader.
   # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
   appflowy_log_collector:
     profiles: [server-logs]
-    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.5@sha256:6ca87e01b4f66345c27c75af932787f7c73ac499e078f33d521a96f0cc73eefd}
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.6@sha256:69eacdf07acaffb6e938cee72b7f08d7270b5541d0ed00c8f518d87a2d521839}
     restart: unless-stopped
     user: "0:0"
     read_only: true
