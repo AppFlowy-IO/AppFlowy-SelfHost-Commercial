@@ -32,7 +32,7 @@ override file or existing Kubernetes Secrets):
 | --- | --- | --- |
 | `global.domain` | Always | Public hostname used for ingress routing and redirect URLs. |
 | `global.jwt.secret` (or `global.jwt.existingSecret`) | Always | Shared JWT signing secret for GoTrue + AppFlowy Cloud. |
-| `gotrue.config.adminPassword` | Always | Default admin login password for the console. |
+| `gotrue.config.adminPassword` (or `gotrue.existingSecret`) | Initial deployment | Initial admin login password for the console (defaults to "password" if unset). When `gotrue.existingSecret` is set, credentials are read from that secret. Can later be changed independently. |
 | `postgresql.auth.postgresPassword` | When `postgresql.enabled=true` | Sets the Bitnami Postgres password used by the app. |
 | `global.postgresql.host` + `global.postgresql.password` (or `existingSecret`) | When using an external Postgres | Tells AppFlowy where to connect. Also set `postgresql.enabled=false`. |
 | `minio.auth.rootPassword` | When `minio.enabled=true` | Sets MinIO credentials used by the app. |
@@ -62,6 +62,34 @@ upgrades preserve existing enabled admission while the initial checks run.
 Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the chart derives the release's Service names. Leave them empty when using bundled infrastructure. Init containers wait for PostgreSQL, GoTrue and Cloud migrations before background workers start. Search uses one replica, a PVC and `Recreate` updates so two processes never write its keyword index concurrently. Redis persists its AOF on its PVC.
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
+
+## Existing GoTrue credentials
+
+To manage GoTrue credentials outside Helm, create a Secret in the release namespace and set:
+
+```yaml
+gotrue:
+  existingSecret: appflowy-gotrue-credentials
+```
+
+The chart references this Secret and omits its generated GoTrue Secret. The existing Secret must
+contain the following keys for the features you enable:
+
+| Secret key | Required when |
+| --- | --- |
+| `admin-password` | GoTrue is enabled. Used to create the initial admin account. |
+| `smtp-password` | `gotrue.config.smtp.enabled=true` |
+| `google-oauth-secret` | `gotrue.config.oauth.google.enabled=true` |
+| `github-oauth-secret` | `gotrue.config.oauth.github.enabled=true` |
+| `discord-oauth-secret` | `gotrue.config.oauth.discord.enabled=true` |
+| `saml-private-key` | `gotrue.config.saml.enabled=true` |
+
+With `gotrue.existingSecret` set, inline GoTrue passwords and provider secrets are ignored. JWT
+credentials continue to use `global.jwt.*`. Changing the initial admin password value or Secret
+does not reset an existing admin account's password.
+
+When switching an existing release, create the external Secret under a new name and copy its
+required credentials before upgrading. Helm removes the previous generated GoTrue Secret on upgrade.
 
 ## Backup and restore
 
