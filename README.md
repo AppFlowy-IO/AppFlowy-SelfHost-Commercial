@@ -73,7 +73,37 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.21.0 (Latest)
+### 🚀 v0.21.8 (Latest)
+
+#### New Features
+
+- **AI Meeting configuration** — Added Admin APIs to configure and test AssemblyAI transcription and streaming connections without restarting Cloud. Saved settings overrode individual environment values and could be reset to their fallbacks.
+- **Server log snapshots (opt-in)** — Added administrator-only previews and ZIP exports of retained Docker logs, with service, time, severity and text filters, credential masking, and coverage and truncation details.
+
+#### Improvements
+
+- **Directory-managed membership** — Kept SCIM membership changes under directory control, blocked local invitations and removals from bypassing that control, and preserved managed guest identities when their last page share was revoked.
+- **AI model selection** — Improved Auto selection for chat, search summaries and transcription, including recovery from removed chat or summary models. Blank `DEFAULT_AI_MODEL` values selected Auto.
+- **Background processing** — Limited queued database work and concurrent storage writes, scheduled busy databases more fairly, and retained accepted updates during storage retries.
+
+#### Bug Fixes
+
+- Fixed child-page creation under eligible incomplete database-row pages, copied sub-page links and partial MCP duplication retries; recovered additional verified legacy sidebar sync gaps.
+- Corrected access checks for publishing, private attachment copies, Trash and mention suggestions, and protected shared published attachments and replacement files during cleanup.
+- Prevented queued AI instructions from overwriting newer edits or clears, and reused generated images after file-publication failures.
+- Fixed SCIM provisioning and retry recovery when GoTrue used an empty token audience.
+- Fixed native PDF indexing failures caused by NUL characters in extracted text.
+
+#### ⚠️ Action Required
+
+- **Cloud, AI and Backup upgrade** — Apply the bundled database migrations and upgrade Cloud before starting the updated AI service. Stop or drain old AI instruction writers before activating upgraded AI replicas, and upgrade Backup with Cloud when enabled. Do not roll AI back to older instruction writers while new instruction updates remain queued.
+- **Search summaries** — Initialize the Admin model registry if the installation relied only on environment credentials. `AI_OPENAI_API_SUMMARY_MODEL` no longer selected the runtime summary model.
+- **Publishing integrations** — Require current Member or Owner membership and Full Access to every source page and dependency being published; read or edit access alone no longer authorized publication.
+- **Optional server logs** — Follow the [Server logs setup guide](docs/docker-compose.md#server-logs) to deploy the collector. Upgrade all Cloud replicas before enabling access through `/api/admin/server-logs/settings`; access defaulted to off even with a configured collector.
+
+**Baseline:** [`29a7b1086aaebba607a439fde196286b3f020cfb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/29a7b1086aaebba607a439fde196286b3f020cfb)
+
+### 🚀 v0.21.0
 
 #### New Features
 
