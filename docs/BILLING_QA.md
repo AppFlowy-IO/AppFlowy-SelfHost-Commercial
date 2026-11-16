@@ -7,7 +7,10 @@
 1. Open your self-hosted AppFlowy admin frontend and go to
    `https://your-host/upgrade-plan`. Replace `your-host` with your instance's
    hostname.
-2. Sign in if needed.
+2. If needed, click **Sign in to Billing** and complete sign-in.
+
+   <img src="assets/billing-qa/sign-in-to-billing.png" alt="Sign in to Billing button on the Upgrade Plan page" width="720">
+
 3. Under **Active Plan**, click **Manage Billing** on your current Stripe plan.
 
    <img src="assets/billing-qa/manage-billing.png" alt="Manage Billing button on the Upgrade Plan page" width="400">
