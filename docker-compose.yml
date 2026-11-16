@@ -371,7 +371,7 @@ services:
 
   appflowy_web:
     restart: on-failure
-    image: appflowyinc/appflowy_web:0.20.13@sha256:42fe8aebab99bc2a312fce2e519e800857009fa5a9c817acbb187d3b0be02858
+    image: appflowyinc/appflowy_web:0.20.14@sha256:42455f7a89de7ba7156df4979b4a4efba8a7a245333ff85e48989bf8053731d5
     depends_on:
       appflowy_cloud:
         condition: service_healthy
