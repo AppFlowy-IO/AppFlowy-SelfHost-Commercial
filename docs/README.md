@@ -16,6 +16,7 @@ operational limits.
 | Investigate administrative and permission changes | [Audit logging](AUDIT.md) |
 | Validate deployment configuration in CI | [Deployment CI](deployment-ci.md) |
 | Redeem a license invitation | [Invitation code](LICENSE_INVITE_CODE.md) |
+| Manage your billing card | [Billing Q&A](BILLING_QA.md) |
 
 ## Set up sign-in and automatic provisioning
 
