@@ -176,7 +176,7 @@ services:
       # No collector dependency or startup probe when server logs are disabled.
       - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
-    image: appflowyinc/appflowy_cloud:0.21.5@sha256:bd8faf117c20186cef4c06590c63ed05dd2516e99f1a687cb8f0bb4f6dd8a59d
+    image: appflowyinc/appflowy_cloud:0.21.7@sha256:2d6428ceee940acd90a9bcc72e37fc8e829747500f15ccdbadb90f4e2b408cdb
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -207,7 +207,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.21.5@sha256:ef502ec21a13727cc5759d6e2a6fa3a3dc48f58c6265f620b857366370bd1a01
+    image: appflowyinc/appflowy_ai:0.21.7@sha256:33e2a6c583ecaf726fc146027d734444ae52a9d684721db3f2967566591b58eb
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -244,7 +244,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.21.5@sha256:970b773ef5057ce44c61a9b5637580e4dfb90797065cbec12feb48024f66ec9a
+    image: appflowyinc/appflowy_worker:0.21.7@sha256:72536f031c28435187b98050bc7a012c8b97dd9fd84a8075af3ae0d3c6adb749
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -277,7 +277,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.21.5@sha256:1ff49c088c8caf3fe20cefd738b957cf9b6b5055f64bb4557eaba7df4675c5a2
+    image: appflowyinc/appflowy_search:0.21.7@sha256:9b3a665b35510a4e1ff372e1e6d6b9d76bd3717fd44c744ca68df94862a3620c
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -339,7 +339,7 @@ services:
   # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
   appflowy_log_collector:
     profiles: [server-logs]
-    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.5@sha256:6ca87e01b4f66345c27c75af932787f7c73ac499e078f33d521a96f0cc73eefd}
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.7@sha256:d68d84cad4d1abea961a4ac9bbaff26f2b15906a02fce1d11740f7e7dc4f4435}
     restart: unless-stopped
     user: "0:0"
     read_only: true
