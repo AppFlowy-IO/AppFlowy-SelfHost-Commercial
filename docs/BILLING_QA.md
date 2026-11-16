@@ -10,7 +10,7 @@
 2. Sign in if needed.
 3. Under **Active Plan**, click **Manage Billing** on your current Stripe plan.
 
-   ![Manage Billing button on the Upgrade Plan page](assets/billing-qa/manage-billing.png)
+   <img src="assets/billing-qa/manage-billing.png" alt="Manage Billing button on the Upgrade Plan page" width="400">
 
 4. The Stripe billing portal opens. Use the edit icon next to your subscription's
    card to update it, or select **Add payment method** under **Payment method**
