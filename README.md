@@ -80,6 +80,7 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
+
 ### 🚀 v0.21.8 (Latest)
 
 #### New Features
@@ -109,6 +110,33 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 - **Optional server logs** — Follow the [Server logs setup guide](docs/docker-compose.md#server-logs) to deploy the collector. Upgrade all Cloud replicas before enabling access through `/api/admin/server-logs/settings`; access defaulted to off even with a configured collector.
 
 **Baseline:** [`29a7b1086aaebba607a439fde196286b3f020cfb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/29a7b1086aaebba607a439fde196286b3f020cfb)
+
+### 🚀 v0.21.7 (Latest)
+
+#### New Features
+
+- **Server log diagnostics (opt-in, Docker)** — Added administrator-only APIs to preview retained service logs and download ZIP support archives, filtered by service, time, severity, or text. Results masked common credentials and reported coverage gaps and truncation.
+
+#### Improvements
+
+- **Database background work** — Limited queued updates and concurrent storage writes across retries, combined repeated maintenance requests, and gave busy databases fair turns to reduce resource pressure and delays for other databases.
+- **AI image generation** — Reused successfully generated images when retrying downloads or storage writes, avoiding repeated generation after temporary publication failures.
+
+#### Bug Fixes
+
+- Fixed child-page and database creation inside eligible row pages with missing registration, and recovered additional legacy sidebar synchronization gaps while preserving client edits.
+- Fixed incomplete MCP page copies, unnecessary duplicate data on retries, and copy failures caused by unsynced row templates.
+- Prevented delayed AI instruction updates from overwriting newer profile edits or cleared instructions.
+- Fixed SCIM provisioning with an unset GoTrue JWT audience, and preserved cleanup for automatic signup permissions across failed workspace deletions.
+
+#### ⚠️ Action Required
+
+- **Cloud and AI upgrade** — Apply the included database migration and upgrade Cloud before starting upgraded AI replicas. Stop or drain old AI instruction writers before activating the new replicas; do not roll AI back while versioned instruction updates remain pending.
+- **Server logs (optional)** — Use compatible Cloud, Admin, and log-collector images and follow the [Server logs setup](docs/docker-compose.md#server-logs), including `APPFLOWY_SERVER_LOGS_PROFILE=server-logs`. Log access defaulted to off; enable **Allow log access** in Admin after configuring the collector. Upgrade every Cloud replica before relying on the saved access setting.
+- **Failed SCIM provisioning** — Retry previously rejected User provisioning, followed by Group synchronization, after upgrading. Keep an existing unset `GOTRUE_JWT_AUD` unchanged.
+
+**Baseline:** [`e7fe0cfc5aa4956854ad87e20e75db8cedd93fd5`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/e7fe0cfc5aa4956854ad87e20e75db8cedd93fd5)
+
 
 ### 🚀 v0.21.0
 
