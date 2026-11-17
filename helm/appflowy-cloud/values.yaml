@@ -288,8 +288,8 @@ appflowy-backup:
   enabled: false
   image:
     repository: appflowyinc/appflowy_backup
-    tag: "0.21.4"
-    digest: sha256:3354cf9d8278ca791dbde204d33c371ad2c76caf94061b1bf2c51602492f66f8
+    tag: "0.21.8"
+    digest: sha256:33af6435de4cfbb03d4fe2740f1f4d81a66d30ee88eda4e3a633f058c7422012
     pullPolicy: IfNotPresent
   # Exact kubernetes.io/hostname shared with Search's local LMDB volume.
   nodeName: ""
