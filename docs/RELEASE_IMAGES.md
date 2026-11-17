@@ -11,7 +11,7 @@ Cloud, GoTrue, and the other services the same version number.
 
 | Publisher | When it notifies | Compose services it can update |
 | --- | --- | --- |
-| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, MCP, GoTrue, AI, and Backup images |
+| [AppFlowy-Docker-CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/self_host_cloud_docker.yml) | After every selected image's version manifest is successfully published | Cloud and Worker together, plus selected Search, MCP, GoTrue, AI, Backup, and log collector images |
 | [AppFlowy-Web](https://github.com/AppFlowy-IO/AppFlowy-Web/releases) | After Web's version manifest is published, and when a GitHub release is published | Web |
 | [Admin frontend Docker CI](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/workflows/admin_frontend_docker.yml) | After public version manifests are published with both AMD64 and ARM64 enabled | Admin frontend |
 
@@ -30,12 +30,17 @@ For a real version tag, the receiver:
 2. Resolves each notified image's immutable multi-platform index digest. Both
    `linux/amd64` and `linux/arm64` must be available before an update can be proposed.
 3. Changes the selected Compose images to `repository:version@sha256:digest`, updates
-   the matching Helm tag/digest, and regenerates the Swarm files.
+   the matching Helm tag/digest, and regenerates the Swarm files. The optional log collector
+   exists only in Compose: its pin becomes the default inside
+   `${APPFLOWY_SERVER_LOGS_IMAGE:-…}`, so an installation's own image still wins, and no Helm
+   or Swarm file changes for it.
 4. Opens or refreshes `automation/image-updates/<source>-<tag>[-<services>]` as a PR. The version
    remains readable, while the digest prevents tag replacement from changing a deployment.
 5. Enables squash auto-merge for that PR's exact head commit. GitHub waits for the required
    **Deployment tests** and **Backup tests** checks before merging it. A PR that changes the
    `appflowy_mcp` image is left for a reviewer instead; see [MCP copies](#mcp-copies).
+6. After the merge, the [self-hosted upgrade check](deployment-ci.md#self-hosted-upgrade-check)
+   upgrades the team's server to the new pins and checks every service.
 
 Repeated publication/release notifications for the same image selection reuse the same PR.
 Cloud branches also identify the selected services, so a GoTrue-only publication cannot
@@ -45,7 +50,7 @@ with different image contents fails; publish a new version instead.
 
 Only PRs opened or refreshed by the image-update workflow opt into auto-merge. Other PRs
 remain manual unless a maintainer enables auto-merge individually. A merge does not publish
-a self-hosted release or deploy an installation. Supported client versions, migration
+a self-hosted release or deploy self-hosters' installations. Supported client versions, migration
 requirements, optional features, and upgrades still need their release-specific checks.
 The [deployment CI coverage](deployment-ci.md) describes the runtime checks and limitations;
 the image-index check does not substitute for ARM64 runtime qualification.
@@ -68,6 +73,14 @@ the PR and its post-merge push, regardless of the branch name.
 Both integration workflows use the images configured in the proposed Compose files on all
 branches. A manual Backup run may override its Backup image to qualify a matching build.
 Incompatible Cloud, MCP or Backup images must be corrected at publication.
+
+Cloud releases can retain the existing Backup pin when its code and migration catalog
+are unchanged. Backup does not need rebuilding for every server image update.
+When Cloud adds migrations, publish Backup from the same Cloud commit and include its
+`appflowy_backup` pin in the deployment update. Backup embeds the migration catalog and
+rejects restoring a database with newer migrations. Updating Cloud alone can therefore pass
+the core deployment checks while failing Backup restore acceptance. Re-running the same
+image pair cannot resolve that incompatibility.
 
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job

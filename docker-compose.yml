@@ -3,6 +3,7 @@
 # Then run `docker compose up -d`.
 # Backup is disabled by default; set APPFLOWY_BACKUP_PROFILE=backup in .env to enable it.
 # See docs/docker-compose.md#backup for setup.
+# Server logs are optional; see docs/docker-compose.md#server-logs.
 
 services:
   nginx:
@@ -35,7 +36,10 @@ services:
 
   postgres:
     restart: on-failure
-    image: pgvector/pgvector:pg16
+    # Pinned to the build the Backup image contains. Backup restores every snapshot into its own
+    # copy of this PostgreSQL, which rejects a database from a newer minor release. Move this pin
+    # only together with a Backup image built for the new release.
+    image: pgvector/pgvector:pg16@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-postgres}
@@ -182,7 +186,10 @@ services:
       # and rely on the whitelist + invitations to gate who can sign up.
       - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
       - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:0.20.7@sha256:2a29e56a611d6e00162226129d5bd16c3e0b36e24eb4cf409db2c8a6fc3a9b08
+      # No collector dependency or startup probe when server logs are disabled.
+      - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
+      - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
+    image: appflowyinc/appflowy_cloud:0.21.8@sha256:1d63b831255698326be150c1945a2a63e396ff872fb8f741bbca936a2cac3b6f
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -194,7 +201,7 @@ services:
 
   admin_frontend:
     restart: on-failure
-    image: appflowyinc/admin_frontend:${APPFLOWY_ADMIN_FRONTEND_VERSION:-latest}
+    image: appflowyinc/admin_frontend:0.20.3@sha256:bc3a8a449d6cd82dc24c9a6a158d3939fb13ea070ba4658b7a095a76fcd73ee3
     environment:
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
@@ -213,7 +220,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.20.7@sha256:3bbc28c54cdf1dd6888db80e5922eb097cd6406fc20912177e744903c476e34e
+    image: appflowyinc/appflowy_ai:0.21.8@sha256:e1f93bf91152d8457304747f126a4ff3699ad3fb5adad302ce33f3fd41d14499
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -250,7 +257,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.20.7@sha256:06d4f95b5c25e3a070686266fff9345c1897b53ea2ac2b61f2564f1e5f0c715e
+    image: appflowyinc/appflowy_worker:0.21.8@sha256:45c801f7aa2e5f93639738c2b1afa08f0d6074cd1c4880594eec4f0266d35bdd
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -283,7 +290,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.20.7@sha256:48bd0ffcc67ec0f816988f0945c3864279ada01622b4ff5747fa4a7ec66b9f99
+    image: appflowyinc/appflowy_search:0.21.8@sha256:83f8632116e4c22d04253d6fedf068a6f2d856fc80ad434be560189bc5037d6f
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -432,12 +439,46 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:0.20.7@sha256:d8c047827e7aa01fdef98362210378040c05c164fad2b16acc0bcb19f176e6d9
+    image: appflowyinc/appflowy_backup:0.21.8@sha256:33af6435de4cfbb03d4fe2740f1f4d81a66d30ee88eda4e3a633f058c7422012
     restart: unless-stopped
+
+  # The only Docker socket added for server-log viewing belongs to this isolated reader.
+  # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
+  appflowy_log_collector:
+    profiles: [server-logs]
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.21.8@sha256:c12b6894dc7eec4437fedceec563b0f6281a3c5f871587229abf0b9e74f41034}
+    restart: unless-stopped
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: "0.50"
+    environment:
+      - APPFLOWY_SERVER_LOGS_BIND=0.0.0.0:8088
+      # With no token set, Cloud and this reader derive the same credential from the JWT secret.
+      - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_TOKEN:-}
+      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
+      - APPFLOWY_SERVER_LOGS_PROJECT=${COMPOSE_PROJECT_NAME}
+      - APPFLOWY_SERVER_LOGS_DOCKER_SOCKET=/var/run/docker.sock
+    volumes:
+      - type: bind
+        source: ${APPFLOWY_SERVER_LOGS_DOCKER_SOCKET:-/var/run/docker.sock}
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "appflowy_log_collector", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   appflowy_web:
     restart: on-failure
-    image: appflowyinc/appflowy_web:0.20.12@sha256:f439f4495b7ce8cf5e3f1157bb88ef312c3b09c3ce37d2bdb91bfbd64958d841
+    image: appflowyinc/appflowy_web:0.20.14@sha256:42455f7a89de7ba7156df4979b4a4efba8a7a245333ff85e48989bf8053731d5
     depends_on:
       appflowy_cloud:
         condition: service_healthy

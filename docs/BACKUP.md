@@ -31,6 +31,12 @@ Compose uses `latest`, which contains PostgreSQL 16 tools. It does not detect yo
 and choose a variant automatically. Changing the Backup tag does not upgrade PostgreSQL;
 backup and restore require matching PostgreSQL majors and extensions.
 
+Backup also needs a PostgreSQL minor release that is not older than your database's. It restores
+every snapshot into its own private copy of PostgreSQL, and that copy rejects a database written
+by a newer minor release. The supplied Compose file therefore pins the database image to the build
+the pinned Backup image contains, and a release moves both together. If you run your own
+PostgreSQL, update Backup before or together with a database minor update.
+
 The variants publish independently, so a release's PG16 tag may appear before its PG17 or PG18
 tags. Confirm that your chosen tag exists in Docker Hub before pulling it. If its build is still
 running, wait for publication; earlier releases may not include every variant. The moving tags
@@ -68,6 +74,9 @@ The supplied Compose configuration handles startup. Backup reuses your PostgreSQ
 
 For an existing `.env`, retain your credentials and project name and copy the template's
 `COMPOSE_FILE`, `COMPOSE_PROFILES`, and `COMPOSE_PATH_SEPARATOR` settings before enabling Backup.
+The Compose guide shows these lines and how to run Backup
+[alone](docker-compose.md#backup-only) or
+[with server logs](docker-compose.md#backup-and-server-logs).
 Follow the [upgrade procedure](docker-compose.md#upgrade-with-existing-backups) when adopting the
 new storage migration and service builds. Creating a Backup image alone does not upgrade Cloud's
 Admin API, migrations, or the Search restore protocol.
@@ -137,7 +146,8 @@ runtime checks pass; rendering configuration or passing unit tests alone does no
 | Only one Backup repository appears in Docker Hub | Open `appflowyinc/appflowy_backup` → **Tags**. PostgreSQL variants are tags in this repository. See [image selection](#choose-the-backup-image). |
 | Pull fails because the selected tag is missing | Verify the release and PostgreSQL suffix in Docker Hub. The variant's build may still be running, or that release may not publish it. |
 | Backup reports the wrong PostgreSQL major version | Set `APPFLOWY_BACKUP_VERSION` to the tag matching your existing database, then pull the image and run `docker compose up -d`. |
-| Backup controls are unavailable | Check that `APPFLOWY_BACKUP_PROFILE=backup` is set and `appflowy_backup` is running. Read the readiness message and container logs. |
+| Backups fail with `Snapshot subprocess failed` after the database image was updated | The database runs a newer PostgreSQL minor release than Backup contains. Compare `SHOW server_version` in the database with `docker compose exec appflowy_backup postgres --version`, then use a Backup image built for that release. |
+| Backup controls are unavailable | Check that `APPFLOWY_BACKUP_PROFILE=backup` is set and `appflowy_backup` is running. If `docker compose config --services` does not list `appflowy_backup`, [update the `.env`](docker-compose.md#update-an-existing-env). Otherwise read the readiness message and container logs. |
 | Backup cannot create its bucket | Allow the existing storage credentials to create a private backup bucket, or create that bucket beforehand. |
 | A job finishes with warnings or fails | Open **View report**. The report explains the affected items; include its ZIP when requesting support. |
 | There is no export download | Wait for the export to complete. A recovery backup itself does not have a portable download. |

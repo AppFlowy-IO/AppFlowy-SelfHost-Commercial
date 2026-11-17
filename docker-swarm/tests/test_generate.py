@@ -1,4 +1,4 @@
-"""Swarm must retain deployable defaults without activating Compose-only Backup."""
+"""Swarm must retain deployable defaults without activating unsupported Compose profiles."""
 import copy
 import importlib.util
 from pathlib import Path
@@ -21,7 +21,8 @@ class GeneratorTests(unittest.TestCase):
         before = copy.deepcopy(self.source)
         stack = GENERATOR.derive(self.source)
         self.assertEqual(self.source, before)
-        self.assertEqual(set(stack['services']), set(self.source['services']) - {'appflowy_backup'})
+        self.assertEqual(set(stack['services']),
+                         set(self.source['services']) - {'appflowy_backup', 'appflowy_log_collector'})
         for name, service in stack['services'].items():
             self.assertNotIn('profiles', service)
             self.assertNotIn('env_file', service)
@@ -31,6 +32,78 @@ class GeneratorTests(unittest.TestCase):
         search = stack['services']['appflowy_search']['environment']
         self.assertIn('APPFLOWY_KEYWORD_INDEX_DIR=${APPFLOWY_KEYWORD_INDEX_DIR:-/var/lib/appflowy/keyword_index}', search)
         GENERATOR.check_parity(self.source, stack)
+
+    def test_compose_log_collection_is_excluded_without_changing_other_cloud_settings(self):
+        cloud = self.source['services']['appflowy_cloud']
+        original = GENERATOR.environment_map(cloud['environment'])
+        for environment in (cloud['environment'], original):
+            with self.subTest(environment_type=type(environment).__name__):
+                source = copy.deepcopy(self.source)
+                source['services']['appflowy_cloud']['environment'] = copy.deepcopy(environment)
+                stack = GENERATOR.derive(source)
+                actual = GENERATOR.environment_map(stack['services']['appflowy_cloud']['environment'])
+                self.assertFalse(any(key.startswith('APPFLOWY_SERVER_LOGS_') for key in actual))
+                self.assertEqual({key: actual[key] for key in original if key not in
+                                  GENERATOR.COMPOSE_LOG_ENVIRONMENT},
+                                 {key: value for key, value in original.items() if key not in
+                                  GENERATOR.COMPOSE_LOG_ENVIRONMENT})
+                GENERATOR.check_parity(source, stack)
+        backup = GENERATOR.derive_backup(
+            self.source, yaml.safe_load(GENERATOR.BACKUP_SOURCE.read_text()))
+        self.assertFalse(any(key.startswith('APPFLOWY_SERVER_LOGS_') for key in
+                             backup['services']['appflowy_cloud']['environment']))
+
+    def test_collector_without_exact_opt_in_profile_requires_review(self):
+        for profile in (None, [], ['other'], ['server-logs', 'other']):
+            with self.subTest(profile=profile):
+                source = copy.deepcopy(self.source)
+                collector = source['services']['appflowy_log_collector']
+                if profile is None:
+                    collector.pop('profiles')
+                else:
+                    collector['profiles'] = profile
+                with self.assertRaisesRegex(ValueError, 'explicit Swarm adapter'):
+                    GENERATOR.derive(source)
+
+    def test_changed_or_ambiguous_cloud_log_settings_require_review(self):
+        original = self.source['services']['appflowy_cloud']['environment']
+        mutations = [
+            original + ['APPFLOWY_SERVER_LOGS_UNREVIEWED=true'],
+        ]
+        for key in GENERATOR.COMPOSE_LOG_ENVIRONMENT:
+            remaining = [item for item in original if not item.startswith(key + '=')]
+            mutations.extend([remaining, remaining + [key], remaining + [key + '=changed'],
+                              {**GENERATOR.environment_map(original), key: None}])
+        # Duplicate a log setting specifically, independent of its source ordering.
+        mutations.append(original + [next(item for item in original
+                                         if item.startswith('APPFLOWY_SERVER_LOGS_TOKEN='))])
+        for index, environment in enumerate(mutations):
+            with self.subTest(mutation=index):
+                source = copy.deepcopy(self.source)
+                source['services']['appflowy_cloud']['environment'] = environment
+                with self.assertRaisesRegex(ValueError, 'server-log settings changed'):
+                    GENERATOR.derive(source)
+
+    def test_parity_rejects_reintroduced_cloud_collector_endpoint_or_token(self):
+        for key, value in GENERATOR.COMPOSE_LOG_ENVIRONMENT.items():
+            with self.subTest(setting=key):
+                stack = GENERATOR.derive(self.source)
+                stack['services']['appflowy_cloud']['environment'].append(f'{key}={value}')
+                with self.assertRaisesRegex(ValueError, 'configuration drift: appflowy_cloud'):
+                    GENERATOR.check_parity(self.source, stack)
+
+    def test_source_environment_defaults_cannot_reintroduce_cloud_log_settings(self):
+        original_defaults = GENERATOR.source_defaults
+
+        def defaults(name):
+            result = original_defaults(name)
+            if name == 'appflowy_cloud':
+                result['APPFLOWY_SERVER_LOGS_UNREVIEWED'] = '${APPFLOWY_SERVER_LOGS_UNREVIEWED}'
+            return result
+
+        with patch.object(GENERATOR, 'source_defaults', side_effect=defaults):
+            with self.assertRaisesRegex(ValueError, 'server-log settings changed'):
+                GENERATOR.derive(self.source)
 
     def test_unknown_profile_requires_review_instead_of_implicit_startup(self):
         self.source['services']['ai']['profiles'] = ['ai']

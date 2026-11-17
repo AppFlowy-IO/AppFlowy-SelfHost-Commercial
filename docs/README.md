@@ -16,6 +16,7 @@ operational limits.
 | Investigate administrative and permission changes | [Audit logging](AUDIT.md) |
 | Validate deployment configuration in CI | [Deployment CI](deployment-ci.md) |
 | Redeem a license invitation | [Invitation code](LICENSE_INVITE_CODE.md) |
+| Manage your billing card | [Billing Q&A](BILLING_QA.md) |
 
 ## Set up sign-in and automatic provisioning
 
@@ -48,6 +49,7 @@ or [role and permission mapping](SCIM_OPERATIONS.md#understand-roles-and-permiss
 | Task | Guide |
 | --- | --- |
 | Select AI providers and models | [AI model configuration](MODEL_CONFIG.md) |
+| Turn on AI Meeting transcription | [AI Meeting configuration](AI_MEETING_CONFIG.md) |
 | Configure search | [Search configuration](SEARCH_CONFIG.md) |
 | Connect Google Drive or Google Calendar | [Connections](CONNECTION.md) |
 | Connect Claude, ChatGPT, Cursor, and other AI apps | [AI apps (MCP)](docker-compose.md#ai-apps-mcp) |

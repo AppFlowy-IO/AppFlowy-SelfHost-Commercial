@@ -29,7 +29,18 @@ for the v0.19.2 storage migration. Swarm and Helm use their own deployment guide
 adapters; the [Compose Backup acceptance lane](docs/deployment-ci.md#backup-acceptance) does not
 qualify those platforms.
 
+For optional server logs in the Admin console, set `APPFLOWY_SERVER_LOGS_PROFILE=server-logs` in
+`.env`; see [Server logs](docs/docker-compose.md#server-logs). To run Backup, server logs, or
+both, follow [Optional services](docs/docker-compose.md#optional-services).
+
 To browse and test your installation's business APIs in Swagger UI, see the [OpenAPI guide](docs/OPENAPI.md).
+
+The bundled [`docker/nginx/nginx.conf`](docker/nginx/nginx.conf) serves AppFlowy Web and the APIs from
+one origin and forwards every `/api` request, CORS preflights included, to Cloud, so it needs no CORS
+rules. If AppFlowy Web runs on another origin behind a proxy, CDN or ingress that answers CORS
+preflights itself, that edge's `Access-Control-Allow-Headers` must include `X-Request-Time` and
+`X-Request-Stream-Id`, which search and @-mention requests send, and `X-AppFlowy-Media-Retry`, which
+lets Web retry a file whose upload is still finishing. Otherwise the browser drops those requests.
 
 ## Deployment Options
 
@@ -73,7 +84,93 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.20.5 (Latest)
+
+### 🚀 v0.21.8 (Latest)
+
+#### New Features
+
+- **AI Meeting configuration** — Added Admin APIs to configure and test AssemblyAI transcription and streaming connections without restarting Cloud. Saved settings overrode individual environment values and could be reset to their fallbacks.
+- **Server log snapshots (opt-in)** — Added administrator-only previews and ZIP exports of retained Docker logs, with service, time, severity and text filters, credential masking, and coverage and truncation details.
+
+#### Improvements
+
+- **Directory-managed membership** — Kept SCIM membership changes under directory control, blocked local invitations and removals from bypassing that control, and preserved managed guest identities when their last page share was revoked.
+- **AI model selection** — Improved Auto selection for chat, search summaries and transcription, including recovery from removed chat or summary models. Blank `DEFAULT_AI_MODEL` values selected Auto.
+- **Background processing** — Limited queued database work and concurrent storage writes, scheduled busy databases more fairly, and retained accepted updates during storage retries.
+
+#### Bug Fixes
+
+- Fixed child-page creation under eligible incomplete database-row pages, copied sub-page links and partial MCP duplication retries; recovered additional verified legacy sidebar sync gaps.
+- Corrected access checks for publishing, private attachment copies, Trash and mention suggestions, and protected shared published attachments and replacement files during cleanup.
+- Prevented queued AI instructions from overwriting newer edits or clears, and reused generated images after file-publication failures.
+- Fixed SCIM provisioning and retry recovery when GoTrue used an empty token audience.
+- Fixed native PDF indexing failures caused by NUL characters in extracted text.
+
+#### ⚠️ Action Required
+
+- **Cloud, AI and Backup upgrade** — Apply the bundled database migrations and upgrade Cloud before starting the updated AI service. Stop or drain old AI instruction writers before activating upgraded AI replicas, and upgrade Backup with Cloud when enabled. Do not roll AI back to older instruction writers while new instruction updates remain queued.
+- **Search summaries** — Initialize the Admin model registry if the installation relied only on environment credentials. `AI_OPENAI_API_SUMMARY_MODEL` no longer selected the runtime summary model.
+- **Publishing integrations** — Require current Member or Owner membership and Full Access to every source page and dependency being published; read or edit access alone no longer authorized publication.
+- **Optional server logs** — Follow the [Server logs setup guide](docs/docker-compose.md#server-logs) to deploy the collector. Upgrade all Cloud replicas before enabling access through `/api/admin/server-logs/settings`; access defaulted to off even with a configured collector.
+
+**Baseline:** [`29a7b1086aaebba607a439fde196286b3f020cfb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/29a7b1086aaebba607a439fde196286b3f020cfb)
+
+### 🚀 v0.21.7 (Latest)
+
+#### New Features
+
+- **Server log diagnostics (opt-in, Docker)** — Added administrator-only APIs to preview retained service logs and download ZIP support archives, filtered by service, time, severity, or text. Results masked common credentials and reported coverage gaps and truncation.
+
+#### Improvements
+
+- **Database background work** — Limited queued updates and concurrent storage writes across retries, combined repeated maintenance requests, and gave busy databases fair turns to reduce resource pressure and delays for other databases.
+- **AI image generation** — Reused successfully generated images when retrying downloads or storage writes, avoiding repeated generation after temporary publication failures.
+
+#### Bug Fixes
+
+- Fixed child-page and database creation inside eligible row pages with missing registration, and recovered additional legacy sidebar synchronization gaps while preserving client edits.
+- Fixed incomplete MCP page copies, unnecessary duplicate data on retries, and copy failures caused by unsynced row templates.
+- Prevented delayed AI instruction updates from overwriting newer profile edits or cleared instructions.
+- Fixed SCIM provisioning with an unset GoTrue JWT audience, and preserved cleanup for automatic signup permissions across failed workspace deletions.
+
+#### ⚠️ Action Required
+
+- **Cloud and AI upgrade** — Apply the included database migration and upgrade Cloud before starting upgraded AI replicas. Stop or drain old AI instruction writers before activating the new replicas; do not roll AI back while versioned instruction updates remain pending.
+- **Server logs (optional)** — Use compatible Cloud, Admin, and log-collector images and follow the [Server logs setup](docs/docker-compose.md#server-logs), including `APPFLOWY_SERVER_LOGS_PROFILE=server-logs`. Log access defaulted to off; enable **Allow log access** in Admin after configuring the collector. Upgrade every Cloud replica before relying on the saved access setting.
+- **Failed SCIM provisioning** — Retry previously rejected User provisioning, followed by Group synchronization, after upgrading. Keep an existing unset `GOTRUE_JWT_AUD` unchanged.
+
+**Baseline:** [`e7fe0cfc5aa4956854ad87e20e75db8cedd93fd5`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/e7fe0cfc5aa4956854ad87e20e75db8cedd93fd5)
+
+
+### 🚀 v0.21.0
+
+#### New Features
+
+- **Managed AI app connections (One, Team, and Enterprise)** — Added live Admin API controls for MCP availability, email and domain access rules, rate limits, and policy history. Added workspace app approval policies and APIs for members to review and disconnect their connections.
+- **MCP workspace authoring** — Added tools to create spaces with access settings, embed database views, edit saved filters and chart or dashboard settings, and configure form questions and sharing links.
+- **SCIM and permission diagnostic exports (Seed plan or higher)** — Added an Admin API to download received directory state and its permission projection for support investigations, optionally scoped to an affected user or page. Excluded user names, email addresses, credentials, and document content.
+
+#### Improvements
+
+- **Mention suggestions** — Ranked matches by quality before recent activity, using recently viewed pages and recently mentioned people to order comparable matches.
+- **AI answers** — Improved workspace evidence selection and passage coverage, retained table text, and preserved source citations when combining workspace retrieval with web search.
+- **Background indexing** — Reused saved image and OCR text after shared caches expired, kept unrelated work moving during workspace lease contention, and paced retries for incomplete database generations and busy embedding writes.
+
+#### Bug Fixes
+
+- Fixed row-creation failures during transient database lock contention, deleted-field references in new views, and MCP row inserts that could discard concurrent rows or view settings.
+- Recovered eligible legacy sidebar rename and move queues, retained the latest delayed synchronization requests, and bounded permission-recovery retries.
+- Fixed SCIM provisioning for authentication accounts without a Cloud profile and legacy mixed-case email addresses.
+- Fixed stale attachment references when republishing renamed pages and full-backup exports failing during temporary-dump cleanup.
+
+#### ⚠️ Action Required
+
+- **MCP setup and policy** — To use AI app connections, deploy the standalone MCP service, set a consistent public origin through `APPFLOWY_MCP_BASE_URL` on Cloud and MCP, and forward its transport, OAuth, discovery, and connection-management routes. Remote AI apps required public HTTPS. MCP defaulted to on for eligible licenses unless a saved Admin policy disabled it; use `/api/admin/mcp/policy` for changes. Environment flags no longer disabled MCP, and generic system-config writes no longer accepted MCP settings.
+- **Existing MCP deployments** — Replace older MCP replicas together to avoid approval-policy incompatibilities. Before rollback to the previous approval model, approve each required client ID in every affected workspace.
+
+**Baseline:** [`a57c982ef2ba2d2362f193e7577efb067e8bc4a3`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/a57c982ef2ba2d2362f193e7577efb067e8bc4a3)
+
+### 🚀 v0.20.5
 
 #### New Features
 
