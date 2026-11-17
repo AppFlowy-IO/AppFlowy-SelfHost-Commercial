@@ -31,6 +31,13 @@ both, follow [Optional services](docs/docker-compose.md#optional-services).
 
 To browse and test your installation's business APIs in Swagger UI, see the [OpenAPI guide](docs/OPENAPI.md).
 
+The bundled [`docker/nginx/nginx.conf`](docker/nginx/nginx.conf) serves AppFlowy Web and the APIs from
+one origin and forwards every `/api` request, CORS preflights included, to Cloud, so it needs no CORS
+rules. If AppFlowy Web runs on another origin behind a proxy, CDN or ingress that answers CORS
+preflights itself, that edge's `Access-Control-Allow-Headers` must include `X-Request-Time` and
+`X-Request-Stream-Id`, which search and @-mention requests send, and `X-AppFlowy-Media-Retry`, which
+lets Web retry a file whose upload is still finishing. Otherwise the browser drops those requests.
+
 ## Deployment Options
 
 AppFlowy's production services are powered by our **commercial AppFlowy Cloud codebase**, which is actively developed and maintained by the AppFlowy team.
