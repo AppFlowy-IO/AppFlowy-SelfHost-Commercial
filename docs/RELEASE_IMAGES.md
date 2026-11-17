@@ -75,6 +75,14 @@ baseline overrides, so a green result cannot be produced by substituting differe
 images. Other branches use that fixed qualification baseline. Incompatible Cloud/Backup
 images must be corrected at publication; CI does not replace proposed pins to hide a failure.
 
+Cloud releases can retain the existing Backup pin when its code and migration catalog
+are unchanged. Backup does not need rebuilding for every server image update.
+When Cloud adds migrations, publish Backup from the same Cloud commit and include its
+`appflowy_backup` pin in the deployment update. Backup embeds the migration catalog and
+rejects restoring a database with newer migrations. Updating Cloud alone can therefore pass
+the core deployment checks while failing Backup restore acceptance. Re-running the same
+image pair cannot resolve that incompatibility.
+
 If a Web GitHub release is published before its Docker build completes, its first update
 attempt can fail because the image is not available yet. The successful Web manifest job
 sends the notification again. An unavailable image never falls back to `latest`.
