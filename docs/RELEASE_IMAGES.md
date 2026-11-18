@@ -30,8 +30,9 @@ For a real version tag, the receiver:
 2. Resolves each notified image's immutable multi-platform index digest. Both
    `linux/amd64` and `linux/arm64` must be available before an update can be proposed.
 3. Changes the selected Compose images to `repository:version@sha256:digest`, updates
-   the matching Helm tag/digest, and regenerates the Swarm files. The optional log collector
-   exists only in Compose: its pin becomes the default inside
+   the matching Helm tag/digest, and regenerates the Swarm files.
+   Existing version overrides such as `GOTRUE_VERSION` and `APPFLOWY_MCP_VERSION` keep the new pin
+   as their default. The optional log collector exists only in Compose: its pin becomes the default inside
    `${APPFLOWY_SERVER_LOGS_IMAGE:-…}`, so an installation's own image still wins, and no Helm
    or Swarm file changes for it.
 4. Opens or refreshes `automation/image-updates/<source>-<tag>[-<services>]` as a PR. The version
@@ -116,12 +117,9 @@ from the default branch and force-pushes it, which drops every commit added by h
 has merged, update the image-update PR from the default branch so its checks run with the ported
 files, then merge it.
 
-Until `appflowy_mcp` is pinned, the copies' baseline is server commit
-`0fda6b6188273cc8e355714d3ab133827c7462db`, the commit that merged PR #1521 into main, which they
-were last compared with. The first MCP image-update PR names it. Once `appflowy_mcp` is pinned, the
-pinned image's build commit replaces it as the baseline. The copies differ from the server only
-where this repository's deployments deliberately differ, as listed below; keep these differences
-when porting.
+The commercial MCP `0.21.8` image was built from
+[server commit `39502be`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Premium/commit/39502be94d3f31f12266d6a62e49ee917c901c63).
+Use the previous pinned image's build commit as the baseline for each update.
 
 ### Deliberate differences from the server
 
@@ -132,8 +130,7 @@ Everything else differs only as follows:
   has no `build` section; the server's Compose file names `appflowyinc/appflowy_mcp_premium` and
   builds it from its source tree.
 - **GoTrue audience.** The commercial defaults retain GoTrue's existing empty audience.
-  MCP receives the two-quote setting for that exact claim. Qualify a self-hosted MCP image
-  that supports this setting before publishing the deployment configuration.
+  MCP receives the two-quote setting for that exact claim. The pinned MCP build supports this setting.
 - **Backup selection.** MCP takes its bucket and Redis database from Backup's restore selection,
   like the other writers: Compose through the `appflowy_mcp` `env_file` entries (which the Swarm
   generator turns into environment entries), the chart through `appflowy.backup.bucketSelection`
@@ -149,27 +146,20 @@ Everything else differs only as follows:
   ceiling, encoded-collab memory and disk cache settings (nor the chart's cache volume), or S3
   timeout settings, so MCP does not either. The chart reads `global.s3.presignedUrlEndpoint`
   directly; it has no `appflowy.s3.presignedUrlEndpoint` helper.
-- **Trusted proxies.** MCP trusts forwarding headers from Docker's private address pools
-  (`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`) by default in Compose, Swarm and the chart
-  (`appflowy-mcp.config.trustedProxyCidrs`), and the bundled Nginx reaches it as plain
-  `appflowy_mcp:8002`. Nginx replaces `X-Forwarded-For` and `X-Real-IP`, and MCP believes only the
-  right-most `X-Forwarded-For` entry, so no client chooses its own address; the chart's README asks
-  to narrow the value to the ingress controller's pod CIDR. The server's Compose file pins its
-  Nginx's address on an isolated `cloud_proxy` network (`appflowy_mcp_proxy`, `172.31.255.2`), its
-  chart falls back to `appflowy-cloud.config.publicForm.trustedProxyCidrs` and refuses to render
-  while its MCP Ingress is enabled and neither value names the ingress hop. These deployments have
-  neither that network nor that value.
+- **Trusted proxies and browser origins.** Compose and Swarm give Nginx and MCP a dedicated
+  proxy subnet with a network-scoped alias. The chart trusts the socket peer until the operator
+  supplies the ingress controller's source CIDRs. Browser CORS defaults to the public Web origin.
 - **One MCP origin.** `appflowy-mcp.config.publicBaseUrl` is the chart's only source of the MCP
   origin (`appflowy.mcp.baseUrl`); with `appflowy-mcp.enabled=false` it names an MCP service
   deployed elsewhere. The server's `appflowy.mcp.advertisedUrl` helper and
-  `admin-frontend.config.mcpBaseUrl` are not copied. In Compose, `APPFLOWY_MCP_BASE_URL` has no
-  `APPFLOWY_BASE_URL` fallback (`deploy.env` sets it): Cloud knows MCP only from this value, so a
-  blank value advertises no MCP. MCP itself still falls back to `APPFLOWY_BASE_URL`.
+  `admin-frontend.config.mcpBaseUrl` are not copied. Compose and Swarm use the API origin when an
+  older environment file omits
+  `APPFLOWY_MCP_BASE_URL`. An explicit empty value suppresses discovery.
 - **One audit fallback.** The chart gives Cloud and MCP the same
   `appflowy-cloud.config.auditEnable`; the server's chart has a separate
   `appflowy-mcp.config.auditEnable`.
-- **OAuth limit only when set.** Compose passes `APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` as a
-  bare entry, like the email allowlists, where the server writes `${...:-}`.
+- **Swarm Backup.** Its overlay keeps MCP at zero replicas and suppresses discovery because
+  the supported Swarm adapter cannot drain MCP or update its restore selections.
 - **No inline password form.** No file here sets `MCP_OAUTH_INLINE_FORM`; MCP keeps that
   development-only form off while it is unset, as the server's `false` does.
 - **Guides and comments.** The server has no Compose guide and no MCP rows in its chart README, so

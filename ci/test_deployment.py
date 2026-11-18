@@ -859,7 +859,7 @@ class RuntimeSafetyTests(unittest.TestCase):
                                     for probe in probes))
         ingress = (ROOT / 'helm/appflowy-cloud/templates/ingress-mcp.yaml').read_text()
         paths = re.findall(r'^\s*- path: (\S+)$', ingress, re.M)
-        self.assertIn(CHALLENGE_PATH + '$', paths)
+        self.assertTrue(any(re.fullmatch(path, CHALLENGE_PATH) for path in paths))
         for path in paths:
             with self.subTest(ingress_path=path):
                 self.assertTrue(any(re.match('^' + path, probe) for probe in probes))

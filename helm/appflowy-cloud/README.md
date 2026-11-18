@@ -204,8 +204,7 @@ always decides, and no chart value turns MCP on or off. Users, approvals and the
 work as described in [the Compose guide](../../docs/docker-compose.md#ai-apps-mcp).
 
 The bundled GoTrue and MCP share `global.jwt.audience`. Its empty default preserves the
-audience on existing GoTrue accounts during upgrades. Use a commercial MCP image that supports
-verifying an explicitly empty GoTrue audience. If you already use a custom audience, set the
+audience on existing GoTrue accounts during upgrades. The pinned commercial MCP image verifies that audience. If you already use a custom audience, set the
 shared value to that audience. Changing it requires a coordinated account migration.
 
 A separate `<fullname>-mcp` Ingress on the primary host routes only these paths to MCP, written as
@@ -215,10 +214,10 @@ anchored regular expressions with `pathType: ImplementationSpecific`:
 | --- | --- |
 | `/mcp` (Streamable HTTP; `GET` holds a server-sent event stream open) | `/mcp$` |
 | `/api/mcp` and everything under it | `/api/mcp(/\|$)` |
-| `/.well-known/oauth-authorization-server` | `/.well-known/oauth-authorization-server$` |
-| `/.well-known/oauth-protected-resource` and its sub-paths | `/.well-known/oauth-protected-resource(/\|$)` |
-| `/.well-known/mcp.json` | `/.well-known/mcp.json$` |
-| `/.well-known/openai-apps-challenge` (OpenAI plugin-portal domain verification) | `/.well-known/openai-apps-challenge$` |
+| `/.well-known/oauth-authorization-server` | `/[.]well-known/oauth-authorization-server$` |
+| `/.well-known/oauth-protected-resource` and its sub-paths | `/[.]well-known/oauth-protected-resource(/\|$)` |
+| `/.well-known/mcp.json` | `/[.]well-known/mcp[.]json$` |
+| `/.well-known/openai-apps-challenge` (OpenAI plugin-portal domain verification) | `/[.]well-known/openai-apps-challenge$` |
 
 The GoTrue and MinIO Ingresses on the same host use regular expressions, and ingress-nginx then
 matches every path of that host as a case-insensitive regex prefix, whatever its `pathType`; an
@@ -239,9 +238,12 @@ authentication, and route the same paths yourself.
 
 | Value | Default and purpose |
 | --- | --- |
-| `appflowy-mcp.enabled` | `true`. Deploys MCP, which is on by default. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port. Unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then gets no `APPFLOWY_MCP_BASE_URL` and advertises no MCP (it never falls back to its own origin), so AppFlowy Web and Desktop hide their MCP settings and the Admin console's MCP page shows no endpoint. Turning MCP off on that page does not hide MCP in Web or Desktop. |
+| `appflowy-mcp.enabled` | `true`. Bundled MCP requires `appflowy-cloud.enabled=true` for migrations and readiness. `false` removes MCP's Deployment, Service, Ingress and NetworkPolicy port. Unless `publicBaseUrl` names an MCP service deployed elsewhere, Cloud then gets no `APPFLOWY_MCP_BASE_URL` and advertises no MCP (it never falls back to its own origin), so AppFlowy Web and Desktop hide their MCP settings and the Admin console's MCP page shows no endpoint. Turning MCP off on that page does not hide MCP in Web or Desktop. |
 | `appflowy-mcp.config.publicBaseUrl` | Empty, meaning `global.scheme://global.domain`. Must be an http(s) origin without `/mcp` or another path. MCP, Cloud and AppFlowy Web all use it. It is the OAuth issuer: changing it makes every connected AI app reconnect. The chart's Ingress always routes `global.domain`. With `enabled=false`, set it to the origin of an MCP service deployed outside this chart: Cloud and Web advertise it, and Cloud also receives `oauthIpRateLimitPerMinute` and the email allowlists, which must match that service's own settings. |
-| `appflowy-mcp.config.trustedProxyCidrs` | `172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`. Peers whose `X-Real-IP`/`X-Forwarded-For` MCP trusts for its per-IP OAuth limit (`oauthIpRateLimitPerMinute`; empty uses the server default, 60) and audit address. MCP believes only the right-most `X-Forwarded-For` entry, the one the controller set, so ingress-nginx's default of replacing the header and `compute-full-forwarded-for`, which appends, both give MCP the client address (LDAP sign-in needs the default; see above). Anything else inside these ranges that reaches MCP directly can choose its own address: narrow the value to the ingress controller's pod CIDR, and keep `networkPolicy.enabled`, which admits only the controller's namespace and this release's pods. Empty trusts no proxy. Behind a CDN or load balancer, have the controller resolve the client with `use-forwarded-headers` and `proxy-real-ip-cidr`, as described for LDAP above. |
+| `global.webUrl` | Public Web URL for browser consent. Empty uses the API origin. |
+| `appflowy-mcp.config.corsAllowedOrigins` | Empty derives the Web origin, including any non-default port. Set a complete comma-separated list to allow additional browser origins. |
+| `appflowy-mcp.config.trustedProxyCidrs` | Empty uses the socket peer. Set the ingress controller's actual source CIDRs to apply the OAuth rate limit per client and record client addresses in the audit log. Until configured, clients behind a controller share its budget. |
+| `appflowy-mcp.config.outerProxyCidrs` | Optional CIDRs for additional trusted hops when the ingress controller appends to `X-Forwarded-For`. |
 | `appflowy-mcp.config.allowedClientIds` / `allowedRedirectHosts` | Empty. Optional server-wide client governance; workspace owners still approve apps for their workspace. |
 | `appflowy-mcp.config.allowedEmailDomains` / `allowedEmails` | Empty, allowing every account. Lists saved in Admin → AI apps (MCP) take precedence. |
 | `appflowy-mcp.config.gotrueExpectedAudiences` | Empty derives the verifier audience from `global.jwt.audience`. An explicit list can match an external GoTrue issuer. For bundled GoTrue, the list must accept the shared audience. |

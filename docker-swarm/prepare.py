@@ -180,7 +180,6 @@ def main() -> None:
         for key in ('command', 'entrypoint'):
             if service.get(key) is None:
                 service.pop(key, None)
-        service['networks'] = ['default']
         service['deploy'] = {
             'replicas': int(name in initial_services),
             'restart_policy': {'condition': 'on-failure', 'delay': '5s'},
@@ -238,9 +237,13 @@ def main() -> None:
     source_volumes = yaml.safe_load((REPO / 'docker-swarm/docker-stack.yml').read_text()).get('volumes', {})
     if any(value for value in source_volumes.values()):
         raise SystemExit('The source now customizes volume storage. Review isolation before using the local test profile.')
+    networks = resolved['networks']
+    for network in networks.values():
+        network.pop('name', None)  # Give the local test its own stack-scoped networks.
+    networks['default']['attachable'] = True
     stack = {
         'version': '3.8', 'services': services,
-        'networks': {'default': {'driver': 'overlay', 'attachable': True}},
+        'networks': networks,
         'volumes': {name: {} for name in source_volumes},
         'configs': {
             'nginx_config': {'file': str(nginx_conf)},

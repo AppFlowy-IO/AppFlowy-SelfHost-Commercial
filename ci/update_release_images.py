@@ -60,7 +60,7 @@ MCP_DIFFERENCES_URL = ('https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commerc
 MCP_COPIES_BASELINE = '0fda6b6188273cc8e355714d3ab133827c7462db'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}')
 # An image an installation may replace: the release pin is the default inside the expression.
-OVERRIDE = re.compile(r'\$\{([A-Z_]+):-([^}]+)\}')
+OVERRIDE = re.compile(r'([^${}]*)\$\{([A-Z_]+):-([^}]+)\}')
 VERSION = re.compile(r'v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
                      r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
 
@@ -166,7 +166,9 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
         repository, helm_key = SERVICES[service]
         repository = 'appflowyinc/' + repository
         override = OVERRIDE.fullmatch(config['services'][service]['image'])
-        previous = override[2] if override else config['services'][service]['image']
+        if override and override[1] not in ('', repository + ':'):
+            raise ValueError(service + ': unexpected image override prefix')
+        previous = override[1] + override[3] if override else config['services'][service]['image']
         if previous.split(':', 1)[0].split('@')[0] != repository:
             raise ValueError(service + ': unexpected Compose image repository')
         if helm_key and chart[helm_key]['image']['repository'] != repository:
@@ -179,7 +181,10 @@ def prepare_update(root, source, tag, services, resolve=release_digest):
                 and version_key(image_tag(previous)) == proposed and old_digest != digest):
             raise ValueError(service + ': an existing release tag was republished; publish a new version')
         reference = repository + ':' + tag + '@' + digest
-        pinned = '${' + override[1] + ':-' + reference + '}' if override else reference
+        pinned = reference
+        if override:
+            prefix, variable, _ = override.groups()
+            pinned = prefix + '${' + variable + ':-' + reference.removeprefix(prefix) + '}'
         service_block = block(compose, '  ' + service)
         updated, count = re.subn(r'^(    image:) [^\n]+$', lambda m: m[1] + ' ' + pinned,
                                  service_block[0], count=1, flags=re.M)

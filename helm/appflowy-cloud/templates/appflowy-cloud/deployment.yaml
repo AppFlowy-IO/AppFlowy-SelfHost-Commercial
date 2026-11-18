@@ -185,7 +185,7 @@ spec:
             - name: APPFLOWY_BASE_URL
               value: {{ include "appflowy.baseUrl" . | quote }}
             - name: APPFLOWY_WEB_URL
-              value: {{ include "appflowy.baseUrl" . | quote }}
+              value: {{ include "appflowy.webUrl" . | quote }}
             {{- /* Without an MCP origin (appflowy-mcp.enabled=false and no publicBaseUrl), Cloud
               gets no APPFLOWY_MCP_BASE_URL. It never falls back to APPFLOWY_BASE_URL, so it
               advertises no MCP and runs no MCP policy watcher, and Web and Desktop hide MCP. */}}

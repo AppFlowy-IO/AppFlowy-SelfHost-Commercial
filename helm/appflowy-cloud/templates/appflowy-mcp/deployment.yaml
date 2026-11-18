@@ -1,5 +1,8 @@
 {{- if index .Values "appflowy-mcp" "enabled" }}
 {{- $mcp := index .Values "appflowy-mcp" }}
+{{- if not (index .Values "appflowy-cloud" "enabled") }}
+{{- fail "appflowy-mcp requires appflowy-cloud.enabled=true for migrations and readiness" }}
+{{- end }}
 {{- /* On SIGTERM MCP ends its GET /mcp streams at once, then waits for the requests in flight (at
   most its 60-second request timeout plus 5 s), its policy watchers (5 s) and its audit queue
   (5 s). Kubernetes kills the pod when the grace period ends, dropping queued audit events. The
@@ -71,19 +74,19 @@ spec:
               value: {{ include "appflowy.baseUrl" . | quote }}
             # AppFlowy Web serves the browser consent page at /oauth/mcp/authorize.
             - name: APPFLOWY_WEB_URL
-              value: {{ include "appflowy.baseUrl" . | quote }}
+              value: {{ include "appflowy.webUrl" . | quote }}
             - name: APPFLOWY_MCP_TRUSTED_PROXY_CIDRS
               value: {{ $mcp.config.trustedProxyCidrs | default "" | quote }}
+            - name: APPFLOWY_MCP_OUTER_PROXY_CIDRS
+              value: {{ $mcp.config.outerProxyCidrs | default "" | quote }}
             - name: MCP_ALLOWED_CLIENT_IDS
               value: {{ $mcp.config.allowedClientIds | default "" | quote }}
             - name: MCP_ALLOWED_REDIRECT_HOSTS
               value: {{ $mcp.config.allowedRedirectHosts | default "" | quote }}
             # The policy bootstrap values; Cloud gets the same list.
             {{- include "appflowy.mcp.policyEnv" . | trim | nindent 12 }}
-            {{- with $mcp.config.corsAllowedOrigins }}
             - name: APPFLOWY_CORS_ALLOWED_ORIGINS
-              value: {{ . | quote }}
-            {{- end }}
+              value: {{ include "appflowy.mcp.corsOrigins" . | quote }}
             {{- with index .Values "appflowy-cloud" "config" "auditEnable" }}
             # Cloud's audit fallback: both resolve it, so both receive appflowy-cloud's value.
             - name: APPFLOWY_AUDIT_ENABLE

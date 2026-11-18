@@ -71,8 +71,9 @@ class ReleaseImageTests(unittest.TestCase):
         self.assertEqual([row[0] for row in changes], ['appflowy_web'])
         expected = 'appflowyinc/appflowy_web:0.20.0@' + self.digest
         updated = self.compose()
-        self.assertEqual(updated['services']['appflowy_web']['image'], expected)
-        original['services']['appflowy_web']['image'] = expected
+        override = 'appflowyinc/appflowy_web:${APPFLOWY_WEB_VERSION:-0.20.0@' + self.digest + '}'
+        self.assertEqual(updated['services']['appflowy_web']['image'], override)
+        original['services']['appflowy_web']['image'] = override
         self.assertEqual(updated, original)
         image = yaml.safe_load((self.root / self.paths[1]).read_text())['appflowy-web']['image']
         self.assertEqual(image['tag'], '0.20.0')

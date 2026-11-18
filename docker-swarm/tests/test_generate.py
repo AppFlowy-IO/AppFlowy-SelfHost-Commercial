@@ -45,7 +45,7 @@ class GeneratorTests(unittest.TestCase):
                 self.assertFalse(any(key.startswith('APPFLOWY_SERVER_LOGS_') for key in actual))
                 self.assertEqual({key: actual[key] for key in original if key not in
                                   GENERATOR.COMPOSE_LOG_ENVIRONMENT},
-                                 {key: value for key, value in original.items() if key not in
+                                 {key: GENERATOR.MCP_SWARM_ENV.get(value, value) for key, value in original.items() if key not in
                                   GENERATOR.COMPOSE_LOG_ENVIRONMENT})
                 GENERATOR.check_parity(source, stack)
         backup = GENERATOR.derive_backup(

@@ -1,8 +1,12 @@
 """Render Compose and Swarm MCP settings without starting services (Helm: helm/appflowy-cloud/tests)."""
 import json
 import re
+from pathlib import Path
 import subprocess
+import tempfile
 import unittest
+
+import yaml
 
 from images import ROOT, clean_environment
 
@@ -105,7 +109,7 @@ class McpConfigurationTests(unittest.TestCase):
                 with self.subTest(file=file, configured=configured):
                     values = {} if configured is None else {OAUTH_IP_LIMIT: configured}
                     for environment in self.compose_environments(file, **values):
-                        self.assertEqual(environment.get(OAUTH_IP_LIMIT), configured)
+                        self.assertEqual(environment[OAUTH_IP_LIMIT], configured or '')
 
     def test_audit_fallback_reaches_cloud_and_mcp_alike(self):
         # Until Admin saves the audit switch, Cloud and MCP each read it from their own
@@ -115,7 +119,7 @@ class McpConfigurationTests(unittest.TestCase):
                 with self.subTest(file=file, configured=configured):
                     values = {} if configured is None else {'APPFLOWY_AUDIT_ENABLE': configured}
                     for environment in self.compose_environments(file, **values):
-                        self.assertEqual(environment.get('APPFLOWY_AUDIT_ENABLE'), configured)
+                        self.assertEqual(environment['APPFLOWY_AUDIT_ENABLE'], configured or '')
 
     def test_mcp_reads_the_license_under_clouds_origin(self):
         # Cloud keys the installed license by the host of APPFLOWY_BASE_URL, and a self-hosted MCP
@@ -131,12 +135,88 @@ class McpConfigurationTests(unittest.TestCase):
         # Helm exposes appflowy-mcp.config.corsAllowedOrigins; Compose and Swarm take it from .env.
         origins = 'https://tools.example.test,https://console.example.test'
         for file in COMPOSE_FILES:
-            for configured, expected in ((None, ''), (origins, origins)):
+            for configured, expected in ((None, 'http://localhost'), (origins, origins)):
                 with self.subTest(file=file, configured=configured):
                     values = {} if configured is None else {'APPFLOWY_CORS_ALLOWED_ORIGINS': configured}
                     cloud, mcp = self.compose_environments(file, **values)
                     self.assertEqual(mcp.get('APPFLOWY_CORS_ALLOWED_ORIGINS'), expected)
                     self.assertNotIn('APPFLOWY_CORS_ALLOWED_ORIGINS', cloud)
+
+    def test_backup_writer_environment_contains_only_strings(self):
+        config = json.loads(self.render(
+            'docker', 'compose', '--env-file', str(ROOT / 'deploy.env'), '-f', 'docker-compose.yml',
+            '-f', 'docker-compose.backup.yml', '--profile', 'backup', 'config', '--format', 'json'))
+        services = config['services']
+        writers = json.loads(services['appflowy_backup']['environment']['APPFLOWY_BACKUP_COMPOSE_WRITERS'])
+        self.assertIn('appflowy_mcp', writers)
+        for name in [*writers, 'appflowy_backup']:
+            for key, value in services[name]['environment'].items():
+                self.assertIsInstance(value, str, f'{name}.{key}')
+
+    def test_legacy_environment_and_native_swarm_backup(self):
+        # Exercise the real stack parser as well as Compose. Older environment files lack all
+        # MCP variables. An explicit blank is still an operator choice to suppress discovery.
+        origin = 'https://api.example.test'
+        web = 'https://web.example.test:8443'
+        old_env = [line for line in (ROOT / 'deploy.env').read_text().splitlines()
+                   if not line.startswith(('APPFLOWY_MCP_', 'APPFLOWY_CORS_ALLOWED_ORIGINS='))]
+        old_env += ['APPFLOWY_BASE_URL=' + origin, 'APPFLOWY_WEB_URL=' + web,
+                    'APPFLOWY_BACKUP_BUCKET=test-backups', 'APPFLOWY_SWARM_BACKUP_RUNTIME_DIR=/tmp/mcp-test']
+        stack = ['-c', 'docker-swarm/docker-stack.yml']
+        native = ['sh', '-ec', 'set -a; . "$1"; . ./docker-swarm/mcp-env.sh; shift; exec docker stack config "$@"',
+                  'stack-config']
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'legacy.env'
+            for value in (None, '', 'https://mcp.example.test'):
+                with self.subTest(mcp_url=value):
+                    extra = [] if value is None else ['APPFLOWY_MCP_BASE_URL=' + value]
+                    path.write_text('\n'.join(old_env + extra) + '\n')
+                    compose = json.loads(self.render('docker', 'compose', '--env-file', str(path),
+                        '-f', 'docker-compose.yml', 'config', '--format', 'json'))
+                    swarm = yaml.safe_load(self.render(*native, str(path), *stack))
+                    for config in (compose, swarm):
+                        services = config['services']
+                        for name in ('appflowy_cloud', 'appflowy_mcp', 'appflowy_web'):
+                            self.assertEqual(services[name]['environment']['APPFLOWY_MCP_BASE_URL'],
+                                             origin if value is None else value, name)
+                        self.assertEqual(services['appflowy_mcp']['environment']['APPFLOWY_CORS_ALLOWED_ORIGINS'], web)
+            backup = yaml.safe_load(self.render(*native, str(path), *stack, '-c', 'docker-swarm/docker-stack.backup.yml'))
+            services = backup['services']
+            self.assertEqual(services['appflowy_mcp']['deploy']['replicas'], 0)
+            for name in ('appflowy_cloud', 'appflowy_web'):
+                self.assertEqual(services[name]['environment']['APPFLOWY_MCP_BASE_URL'].strip(), '')
+
+    def test_only_nginx_and_mcp_join_the_trusted_subnet(self):
+        for file in COMPOSE_FILES:
+            with self.subTest(file=file):
+                cidr = '192.0.2.0/28'
+                config = json.loads(self.render(
+                    'docker', 'compose', '--env-file', str(ROOT / 'deploy.env'), '-f', file,
+                    'config', '--format', 'json', env={**clean_environment(), 'APPFLOWY_MCP_PROXY_SUBNET': cidr}))
+                net = config['networks']['mcp_proxy']
+                self.assertTrue(net['internal'])
+                self.assertEqual(net['ipam']['config'][0]['subnet'], cidr)
+                services = config['services']
+                peers = {name for name, service in services.items() if 'mcp_proxy' in service['networks']}
+                self.assertEqual(peers, {'nginx', 'appflowy_mcp'})
+                mcp = services['appflowy_mcp']
+                self.assertIn('mcp-ingress', mcp['networks']['mcp_proxy']['aliases'])
+                self.assertEqual(mcp['environment']['APPFLOWY_MCP_TRUSTED_PROXY_CIDRS'], cidr)
+                _, mcp_env = self.compose_environments(file, APPFLOWY_MCP_TRUSTED_PROXY_CIDRS='')
+                self.assertEqual(mcp_env['APPFLOWY_MCP_TRUSTED_PROXY_CIDRS'], '')
+
+    def test_images_match_the_helm_digests_and_keep_operator_overrides(self):
+        chart = yaml.safe_load((ROOT / 'helm/appflowy-cloud/values.yaml').read_text())
+        for file in COMPOSE_FILES:
+            defaults = self.compose_services(file)
+            custom = self.compose_services(file, GOTRUE_VERSION='test-tag', APPFLOWY_MCP_VERSION='test-tag')
+            for name, key in [('gotrue', 'gotrue'), ('appflowy_mcp', 'appflowy-mcp')]:
+                with self.subTest(file=file, service=name):
+                    image = chart[key]['image']
+                    self.assertRegex(image['tag'], r'^\d+\.\d+\.\d+')
+                    self.assertRegex(image['digest'], r'^sha256:[0-9a-f]{64}$')
+                    self.assertEqual(defaults[name]['image'], f"{image['repository']}:{image['tag']}@{image['digest']}")
+                    self.assertEqual(custom[name]['image'], image['repository'] + ':test-tag')
 
 
 if __name__ == '__main__':

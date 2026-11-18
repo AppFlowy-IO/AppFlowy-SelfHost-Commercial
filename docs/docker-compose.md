@@ -542,8 +542,7 @@ kept, and they resume once it is on again, unless an app's 30-day sign-in expire
 
 GoTrue and MCP share `GOTRUE_JWT_AUD` from `.env`. The default empty value preserves
 the audience stored on existing GoTrue accounts, so a regular upgrade needs no account
-migration. Use a commercial MCP image that supports verifying an explicitly empty GoTrue
-audience. If your installation already uses a custom audience, set `GOTRUE_JWT_AUD` to
+migration. The pinned commercial images support this empty audience. If your installation already uses a custom audience, set `GOTRUE_JWT_AUD` to
 that same value in `.env`. Use a single audience without commas or surrounding spaces.
 Changing an existing audience requires a coordinated account migration because GoTrue uses
 it to look up accounts at sign-in.
@@ -561,19 +560,9 @@ reconnect. Recreate every service that reads it after a change:
 docker compose up -d appflowy_mcp appflowy_cloud appflowy_web
 ```
 
-When upgrading an installation whose `.env` predates this setting, copy the **AI apps (MCP)**
-block from [deploy.env](../deploy.env) into `.env`, or at least add
-`APPFLOWY_MCP_BASE_URL=${APPFLOWY_BASE_URL}` after `APPFLOWY_BASE_URL`, then recreate the
-services above. Without it, AppFlowy Cloud advertises no MCP: it never falls back to
-`APPFLOWY_BASE_URL`, so AppFlowy Web and Desktop hide Settings → MCP and the Admin console's MCP
-page shows no endpoint. The MCP service itself does fall back to `APPFLOWY_BASE_URL`, the same
-origin, so AI apps that are already connected keep working.
-
-To run without MCP, leave the `appflowy_mcp` service out (remove it from `docker-compose.yml`)
-and set `APPFLOWY_MCP_BASE_URL=` blank in `.env`, or remove the `APPFLOWY_MCP_BASE_URL` lines of
-`appflowy_cloud` and `appflowy_web`. Cloud then advertises no MCP, and AppFlowy Web and Desktop
-hide their MCP settings. If Cloud keeps the setting while no MCP service runs, Cloud still
-advertises `/mcp`, which nothing serves, and Web and Desktop show MCP as unavailable.
+Existing `.env` files that omit `APPFLOWY_MCP_BASE_URL` inherit `APPFLOWY_BASE_URL` on upgrade.
+To remove the bundled service, set `APPFLOWY_MCP_BASE_URL=` explicitly in `.env` and remove
+`appflowy_mcp` from the Compose services. Cloud and Web then hide MCP discovery.
 
 Hosted AI apps such as claude.ai and ChatGPT connect from the internet. They need a public HTTPS
 origin: set `SCHEME=https` and `WS_SCHEME=wss`, and install a certificate those apps trust in
@@ -603,7 +592,7 @@ connections from Settings → MCP.
 ### Routes, limits, and custom proxies
 
 The bundled [`docker/nginx/nginx.conf`](../docker/nginx/nginx.conf) sends exactly these paths to
-`appflowy_mcp:8002`; everything else keeps its existing service:
+`mcp-ingress:8002`; everything else keeps its existing service:
 
 | Path | Match |
 | --- | --- |
@@ -622,10 +611,10 @@ by default; the bundled Nginx allows 8 MiB). Pass `Host` and
 `X-Forwarded-Proto`, and set both `X-Real-IP` and `X-Forwarded-For` to `$remote_addr`, replacing
 any value the client sent.
 
-MCP answers CORS requests itself. By default it mirrors the request origin; AppFlowy Web and the
-Admin console on this domain need nothing more. To limit which other browser origins may call MCP
-directly, list them (scheme, host and optional port, comma-separated) in
-`APPFLOWY_CORS_ALLOWED_ORIGINS` and recreate `appflowy_mcp`.
+MCP accepts credentialed browser requests from `APPFLOWY_WEB_URL` by default. Use a browser
+origin (scheme, host and optional port). If the Web URL contains a path or other browser apps
+call MCP, set `APPFLOWY_CORS_ALLOWED_ORIGINS` to the complete comma-separated list of origins
+and recreate `appflowy_mcp`.
 
 To list this server's MCP in OpenAI's plugin directory, set `APPFLOWY_MCP_OPENAI_APPS_CHALLENGE`
 to the domain-verification token the portal shows; MCP serves it as plain text at
@@ -639,18 +628,14 @@ minute, the server default, until Admin → AI apps (MCP) sets another limit; th
 each user's tool-call and search limits per workspace. To start from a different limit, set
 `APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE` in `.env` and recreate both `appflowy_cloud` and
 `appflowy_mcp`, which must agree.
-MCP records the client address in its audit log. MCP takes that address from `X-Forwarded-For` or
-`X-Real-IP` only when the request comes from `APPFLOWY_MCP_TRUSTED_PROXY_CIDRS`, which defaults to
-Docker's private address pools (`172.16.0.0/12,10.0.0.0/8,192.168.0.0/16`); a blank value restores
-that default. Even then it believes only the right-most `X-Forwarded-For` address, the one that
-proxy set, and never the entries a client wrote to its left. A proxy may therefore append the
-address it received the request from or replace the header with it, as the bundled Nginx does;
-either way no client, even one on a private LAN or VPN, chooses its own address. What matters is
-that nothing else inside those ranges reaches MCP directly: only Nginx and other Compose
-containers can. If a CDN, tunnel, or load balancer sits in front of Nginx, set `set_real_ip_from`
-to only its address ranges and `real_ip_header` as the [LDAP guide](LDAP.md#nginx-client-address)
-describes, so that `$remote_addr` is the end user. `APPFLOWY_MCP_OUTER_PROXY_CIDRS` is only for a
-proxy that connects to MCP itself and appends to `X-Forwarded-For` (see [deploy.env](../deploy.env)).
+MCP records the client address in the audit log. The bundled Nginx replaces forwarding headers
+and connects over `mcp_proxy`, a network shared only with MCP. Its subnet defaults to
+`172.31.255.0/28`. Set `APPFLOWY_MCP_PROXY_SUBNET` to an unused subnet if it overlaps another
+installation. MCP trusts that subnet by default. For a custom ingress, set
+`APPFLOWY_MCP_TRUSTED_PROXY_CIDRS` to its actual source addresses. An explicit blank uses the
+socket peer, so clients behind a proxy share its OAuth budget. If a CDN or load balancer sits in
+front of Nginx, configure its real-IP module as described in the [LDAP guide](LDAP.md#nginx-client-address).
+Use `APPFLOWY_MCP_OUTER_PROXY_CIDRS` only with a trusted proxy that appends to `X-Forwarded-For`.
 On Docker Swarm, the routing mesh hides client addresses from Nginx; see
 [client addresses](docker-swarm.md#client-addresses).
 

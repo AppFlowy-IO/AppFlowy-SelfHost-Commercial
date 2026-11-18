@@ -12,6 +12,8 @@ global:
   domain: "localhost"
   scheme: "http"
   wsScheme: "ws"
+  # Public Web URL for browser consent. Empty uses the API origin.
+  webUrl: ""
 
   # Computed URLs (using domain and scheme)
   # These are templates that will be resolved in _helpers.tpl
@@ -208,7 +210,8 @@ gotrue:
 
   image:
     repository: appflowyinc/gotrue
-    tag: "latest"
+    tag: "0.20.6"
+    digest: sha256:93a657d44bc886899a0bd09e693e423c7be232c76315e4467d88bd86095297d5
     pullPolicy: IfNotPresent
 
   service:
@@ -650,7 +653,8 @@ appflowy-mcp:
 
   image:
     repository: appflowyinc/appflowy_mcp
-    tag: "latest"
+    tag: "0.21.8"
+    digest: sha256:5819778eedf4b55d894e3459733681c100c496c01b198286d2dc906e5d3293a5
     pullPolicy: IfNotPresent
 
   service:
@@ -676,15 +680,11 @@ appflowy-mcp:
     # elsewhere, and Cloud also receives oauthIpRateLimitPerMinute and the email allowlists
     # below, which must then match that service's own settings.
     publicBaseUrl: ""
-    # Proxies whose X-Forwarded-For/X-Real-IP MCP trusts for its per-IP OAuth rate limit and
-    # audit address. MCP believes only the right-most X-Forwarded-For entry, the one the proxy
-    # appended or set, so ingress-nginx may replace the header (its default, which LDAP sign-in
-    # needs) or append to it. Anything else inside these ranges that reaches MCP directly can
-    # choose its own address: narrow this to the ingress controller's pod CIDR, and keep
-    # networkPolicy.enabled. Empty trusts no proxy, so all clients share one address. Behind a
-    # CDN or load balancer, have the controller resolve the client (use-forwarded-headers with
-    # proxy-real-ip-cidr, see README.md), as LDAP's limit needs too.
-    trustedProxyCidrs: "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+    # Set the ingress controller's source CIDRs for per-client OAuth limits and audit
+    # addresses. Empty uses the socket peer, so clients of one proxy share its limit.
+    trustedProxyCidrs: ""
+    # Additional trusted hops when that controller appends to X-Forwarded-For.
+    outerProxyCidrs: ""
     # Unauthenticated OAuth and client-registration requests per client IP per minute, until
     # Admin -> AI apps (MCP) sets a limit (1-10000; anything else, 0 included, stops MCP at
     # startup). Empty leaves the variable unset, so the built-in default (60) applies. Cloud
@@ -698,8 +698,7 @@ appflowy-mcp:
     # (MCP) take precedence; empty lists allow every account.
     allowedEmailDomains: ""
     allowedEmails: ""
-    # Browser origins other than global.domain that call MCP directly. Empty mirrors the
-    # request origin; Web and Admin on global.domain need no entry.
+    # Comma-separated browser origins. Empty uses the origin of global.webUrl.
     corsAllowedOrigins: ""
     # Plugin-directory listing settings. openaiAppsChallenge is the domain-verification token
     # OpenAI's plugin portal shows, served at <publicBaseUrl>/.well-known/openai-apps-challenge

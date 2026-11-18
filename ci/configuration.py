@@ -11,7 +11,7 @@ SOURCE_FILES = (
     'deploy.env', 'docker-compose.yml', 'docker-compose.backup.yml',
     'docker/nginx/nginx.conf', 'docker/nginx/ssl/certificate.crt',
     'docker/nginx/ssl/private_key.key', 'docker-swarm/docker-stack.yml',
-    'docker-swarm/docker-stack.backup.yml',
+    'docker-swarm/docker-stack.backup.yml', 'docker-swarm/mcp-env.sh',
     'docker/backup/source-ai.env', 'docker/backup/source-appflowy_cloud.env',
     'docker/backup/source-appflowy_worker.env', 'docker/backup/source-appflowy_search.env',
     'docker/backup/source-appflowy_backup.env', 'docker/backup/source-appflowy_mcp.env',

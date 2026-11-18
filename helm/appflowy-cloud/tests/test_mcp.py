@@ -1,6 +1,7 @@
 """Render the real chart to verify that nothing in the environment turns MCP on or off, and MCP's shared
 settings, origin checks, shutdown, metrics and streaming Ingress."""
 from pathlib import Path
+import re
 import subprocess
 import unittest
 
@@ -115,6 +116,30 @@ class McpChartTests(unittest.TestCase):
                 cloud = self.environment(documents, 'cloud')['APPFLOWY_BASE_URL']
                 self.assertEqual(self.environment(documents, 'mcp').get('APPFLOWY_BASE_URL'), cloud)
 
+    def test_consent_and_cors_use_the_public_web_url(self):
+        web = 'https://WEB.example.test:443/app/'
+        documents = self.render(strings=('global.webUrl=' + web,))
+        cloud, mcp = (self.environment(documents, name) for name in ('cloud', 'mcp'))
+        self.assertEqual(cloud['APPFLOWY_WEB_URL'], web)
+        self.assertEqual(mcp['APPFLOWY_WEB_URL'], web)
+        self.assertEqual(mcp['APPFLOWY_CORS_ALLOWED_ORIGINS'], 'https://web.example.test')
+        self.assertEqual(mcp['APPFLOWY_BASE_URL'], 'http://localhost')
+        self.assertEqual(mcp['APPFLOWY_MCP_TRUSTED_PROXY_CIDRS'], '')
+        custom = self.environment(self.render(strings=(
+            'global.webUrl=https://web.example.test:8443',
+            'appflowy-mcp.config.trustedProxyCidrs=192.0.2.0/24',
+            'appflowy-mcp.config.outerProxyCidrs=198.51.100.0/24')), 'mcp')
+        self.assertEqual(custom['APPFLOWY_CORS_ALLOWED_ORIGINS'], 'https://web.example.test:8443')
+        self.assertEqual(custom['APPFLOWY_MCP_TRUSTED_PROXY_CIDRS'], '192.0.2.0/24')
+        self.assertEqual(custom['APPFLOWY_MCP_OUTER_PROXY_CIDRS'], '198.51.100.0/24')
+        custom = self.environment(self.render(strings=(
+            r'appflowy-mcp.config.corsAllowedOrigins=https://one.test\,https://two.test',)), 'mcp')
+        self.assertEqual(custom['APPFLOWY_CORS_ALLOWED_ORIGINS'], 'https://one.test,https://two.test')
+
+    def test_bundled_mcp_requires_cloud(self):
+        result = self.render(overrides=('appflowy-cloud.enabled=false', 'ingress.scim.enabled=false'), success=False)
+        self.assertIn('appflowy-mcp requires appflowy-cloud.enabled=true', result)
+
     def test_one_origin_reaches_mcp_cloud_and_web_but_not_admin(self):
         external = 'appflowy-mcp.config.publicBaseUrl=https://ai.example.test/'
         for overrides, origin, readers in (
@@ -208,11 +233,13 @@ class McpChartTests(unittest.TestCase):
         self.assertEqual([(path['path'], path['pathType']) for path in paths], [
             ('/mcp$', 'ImplementationSpecific'),
             ('/api/mcp(/|$)', 'ImplementationSpecific'),
-            ('/.well-known/oauth-authorization-server$', 'ImplementationSpecific'),
-            ('/.well-known/oauth-protected-resource(/|$)', 'ImplementationSpecific'),
-            ('/.well-known/mcp.json$', 'ImplementationSpecific'),
-            ('/.well-known/openai-apps-challenge$', 'ImplementationSpecific'),
+            ('/[.]well-known/oauth-authorization-server$', 'ImplementationSpecific'),
+            ('/[.]well-known/oauth-protected-resource(/|$)', 'ImplementationSpecific'),
+            ('/[.]well-known/mcp[.]json$', 'ImplementationSpecific'),
+            ('/[.]well-known/openai-apps-challenge$', 'ImplementationSpecific'),
         ])
+        for neighbor in ('/xwell-known/mcp.json', '/.well-known/mcpXjson', '/.well-known/mcp.json/more'):
+            self.assertFalse(any(re.match(path['path'], neighbor, re.I) for path in paths), neighbor)
         self.assertEqual({path['backend']['service']['port']['number'] for path in paths}, {8002})
 
     def test_plugin_directory_settings_reach_mcp_only_when_set(self):

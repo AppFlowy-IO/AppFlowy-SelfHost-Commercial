@@ -82,21 +82,21 @@ spec:
                 name: {{ $service }}
                 port:
                   number: {{ $port }}
-          - path: /.well-known/oauth-authorization-server$
+          - path: /[.]well-known/oauth-authorization-server$
             pathType: ImplementationSpecific
             backend:
               service:
                 name: {{ $service }}
                 port:
                   number: {{ $port }}
-          - path: /.well-known/oauth-protected-resource(/|$)
+          - path: /[.]well-known/oauth-protected-resource(/|$)
             pathType: ImplementationSpecific
             backend:
               service:
                 name: {{ $service }}
                 port:
                   number: {{ $port }}
-          - path: /.well-known/mcp.json$
+          - path: /[.]well-known/mcp[.]json$
             pathType: ImplementationSpecific
             backend:
               service:
@@ -104,7 +104,7 @@ spec:
                 port:
                   number: {{ $port }}
           # OpenAI's plugin portal checks the MCP origin's domain-verification token here.
-          - path: /.well-known/openai-apps-challenge$
+          - path: /[.]well-known/openai-apps-challenge$
             pathType: ImplementationSpecific
             backend:
               service:

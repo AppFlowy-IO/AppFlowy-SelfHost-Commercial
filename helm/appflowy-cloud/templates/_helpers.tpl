@@ -353,6 +353,33 @@ Base URL
 {{ .Values.global.scheme }}://{{ .Values.global.domain }}
 {{- end }}
 
+{{- define "appflowy.webUrl" -}}
+{{- default (include "appflowy.baseUrl" .) .Values.global.webUrl -}}
+{{- end }}
+
+{{/* MCP uses a browser origin, while the Web URL may include a path. */}}
+{{- define "appflowy.mcp.corsOrigins" -}}
+{{- $configured := index .Values "appflowy-mcp" "config" "corsAllowedOrigins" -}}
+{{- if trimAll " ,\t\r\n" $configured -}}
+{{- $configured -}}
+{{- else -}}
+{{- $url := urlParse (include "appflowy.webUrl" .) -}}
+{{- if or (not (has $url.scheme (list "http" "https"))) (empty $url.host) (not (empty $url.userinfo)) (regexMatch "[[:space:]\\\\]" $url.host) -}}
+{{- fail "global.webUrl must be an HTTP(S) URL with a host and no credentials for MCP CORS" -}}
+{{- end -}}
+{{- $host := lower $url.host -}}
+{{- if not (regexMatch "^([a-z0-9._-]+|\\[[0-9a-f:]+\\])(:[0-9]+)?$" $host) -}}
+{{- fail "MCP CORS needs an ASCII/punycode hostname or an IPv6 address; set an explicit corsAllowedOrigins for other browser origins" -}}
+{{- end -}}
+{{- $port := trimPrefix ":" (regexFind ":[0-9]+$" $host) -}}
+{{- if and $port (or (lt (int $port) 1) (gt (int $port) 65535)) -}}
+{{- fail "global.webUrl has an invalid port for MCP CORS" -}}
+{{- end -}}
+{{- $host = trimSuffix (ternary ":443" ":80" (eq $url.scheme "https")) $host -}}
+{{- printf "%s://%s" $url.scheme $host -}}
+{{- end -}}
+{{- end }}
+
 {{/*
 WebSocket URL
 */}}
