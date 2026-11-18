@@ -188,7 +188,7 @@ services:
 
   admin_frontend:
     restart: on-failure
-    image: appflowyinc/admin_frontend:0.20.3@sha256:bc3a8a449d6cd82dc24c9a6a158d3939fb13ea070ba4658b7a095a76fcd73ee3
+    image: appflowyinc/admin_frontend:0.20.4@sha256:10d136fc7c476346c76c7195b7833dc0f234a3418f35aca0f52cc4e8d95f3567
     environment:
       - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
       - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
