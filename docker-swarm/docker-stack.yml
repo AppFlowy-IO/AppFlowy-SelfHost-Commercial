@@ -210,7 +210,7 @@ services:
         parallelism: 1
         order: stop-first
   admin_frontend:
-    image: appflowyinc/admin_frontend:0.20.3@sha256:bc3a8a449d6cd82dc24c9a6a158d3939fb13ea070ba4658b7a095a76fcd73ee3
+    image: appflowyinc/admin_frontend:0.20.4@sha256:10d136fc7c476346c76c7195b7833dc0f234a3418f35aca0f52cc4e8d95f3567
     environment:
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
@@ -401,7 +401,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_web:
-    image: appflowyinc/appflowy_web:0.20.14@sha256:42455f7a89de7ba7156df4979b4a4efba8a7a245333ff85e48989bf8053731d5
+    image: appflowyinc/appflowy_web:0.20.15@sha256:c0cec44bb86af97696c104c80f9bf6f551bd546d2c12df75bb3747d5f52cf0fd
     environment:
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue

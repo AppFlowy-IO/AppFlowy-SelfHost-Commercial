@@ -498,8 +498,8 @@ appflowy-web:
 
   image:
     repository: appflowyinc/appflowy_web
-    tag: "0.20.14"
-    digest: sha256:42455f7a89de7ba7156df4979b4a4efba8a7a245333ff85e48989bf8053731d5
+    tag: "0.20.15"
+    digest: sha256:c0cec44bb86af97696c104c80f9bf6f551bd546d2c12df75bb3747d5f52cf0fd
     pullPolicy: IfNotPresent
 
   service:
@@ -551,8 +551,8 @@ admin-frontend:
 
   image:
     repository: appflowyinc/admin_frontend
-    tag: "0.20.3"
-    digest: sha256:bc3a8a449d6cd82dc24c9a6a158d3939fb13ea070ba4658b7a095a76fcd73ee3
+    tag: "0.20.4"
+    digest: sha256:10d136fc7c476346c76c7195b7833dc0f234a3418f35aca0f52cc4e8d95f3567
     pullPolicy: IfNotPresent
 
   service:

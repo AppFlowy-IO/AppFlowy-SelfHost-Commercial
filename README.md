@@ -84,8 +84,35 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
+### 🚀 v0.21.9 (Latest)
 
-### 🚀 v0.21.8 (Latest)
+#### New Features
+
+- **Mention search API** — Added opt-in suggestions for a bare `@`, explanations for ranked results, and partial responses when a source was slow or unavailable.
+
+#### Improvements
+
+- **Mention relevance** — Used recent activity and page context to rank pages and databases, and recent interactions to rank people. Added page-title matching for one- and two-character queries. Self-hosted servers recorded recent page creation and edit activity by default.
+- **Database row-page recovery** — Queued registration of eligible row pages when an authorized user opened their database. Reads that identified the row also repaired eligible pages, making them discoverable in keyword search after indexing.
+- **Collaboration storage** — Kept snapshots stored in PostgreSQL readable during S3-compatible storage outages and retried pending uploads in the background, including after a service restart.
+
+#### Bug Fixes
+
+- Tightened access checks for files, databases, history, and sharing, and synchronized profile email with the address confirmed by the sign-in service. Updated HTTP and TLS dependencies with security fixes.
+- Kept newly synced database rows from dropping out of search and preserved sidebar updates when the underlying folder structure changed.
+- Localized the sign-up error for email addresses outside the allowlist.
+
+#### ⚠️ Action Required
+
+- **Server upgrade** — Let active Backup captures and other long-running PostgreSQL transactions finish before upgrading Cloud. Wait for Cloud to finish applying its bundled migrations before starting the updated Worker, Search, and optional MCP services.
+- **Redacted Backup exports** — If you rely on identity-redacted or sanitized debug exports, wait for a Backup build that supports the new snapshot offload schema before upgrading.
+- **Keyword indexing** — If Search runs with keyword search or its keyword worker disabled, set `APPFLOWY_WORKER_ROW_PAGE_BACKFILL_KEYWORD_REFRESH_ENABLED=false` in the Worker environment so row-page recovery can proceed.
+- **Cross-origin proxies** — If your proxy answers CORS preflights, allow `X-Request-Time`, `X-Request-Stream-Id`, and `X-AppFlowy-Media-Retry` in its request-header allowlist.
+- **Publishing integrations** — Use server administrator credentials for the installation-wide published-page list.
+
+**Baseline:** [`07d131e173b172f9ba5129a1a66f19e39c80b614`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/07d131e173b172f9ba5129a1a66f19e39c80b614)
+
+### 🚀 v0.21.8
 
 #### New Features
 
@@ -115,7 +142,7 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 **Baseline:** [`29a7b1086aaebba607a439fde196286b3f020cfb`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/29a7b1086aaebba607a439fde196286b3f020cfb)
 
-### 🚀 v0.21.7 (Latest)
+### 🚀 v0.21.7
 
 #### New Features
 
