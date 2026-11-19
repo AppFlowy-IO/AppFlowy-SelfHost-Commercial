@@ -8,6 +8,10 @@
 # Global Configuration
 # -----------------------------------------------------------------------------
 global:
+  # Enables database automation rules on compatible Cloud and Worker images.
+  databaseAutomationsEnabled: false
+  # Optional existing Secret with the base64 32-byte key under integrations-secret-key.
+  integrationsSecret: ""
   # Domain configuration
   domain: "localhost"
   scheme: "http"
@@ -427,6 +431,7 @@ appflowy-worker:
     rustLog: "info"
     environment: "production"
     importTickInterval: 30
+    databaseMaxConnections: 16
 
   # Metrics (Prometheus/Grafana)
   metrics:

@@ -474,3 +474,20 @@ valueFrom:
 value: {{ include "appflowy.s3.bucket" . | quote }}
 {{- end }}
 {{- end -}}
+
+{{/* The named Secret holds the same integration key used by Cloud and Worker. */}}
+{{- define "appflowy.integrationKeyEnv" -}}
+- name: APPFLOWY_INTEGRATIONS_SECRET_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ . | quote }}
+      key: integrations-secret-key
+{{- end -}}
+
+{{- define "appflowy.databaseAutomationsEnabled" -}}
+{{- $flag := .Values.global.databaseAutomationsEnabled | toString | trim | lower -}}
+{{- if not (has $flag (list "true" "false")) -}}
+{{- fail "global.databaseAutomationsEnabled must be true or false" -}}
+{{- end -}}
+{{- $flag -}}
+{{- end -}}

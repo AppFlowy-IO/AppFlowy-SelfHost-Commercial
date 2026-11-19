@@ -63,6 +63,22 @@ Internal PostgreSQL, Redis and MinIO host overrides are empty by default so the 
 
 The PostgreSQL subchart runs the same upstream pgvector image family as Compose, with explicit probe settings and the image's UID 999. Redis retains its existing Bitnami chart image and configuration. If upgrading an existing installation with a custom PostgreSQL image or data directory ownership, verify those settings against the existing volume before applying the new defaults. Web and Admin need to write startup configuration into their published images; their per-component security settings account for this instead of disabling health checks.
 
+## Database automations
+
+After Cloud, Worker and their migrations support database automations, set
+`global.databaseAutomationsEnabled: true` to enable the feature on both deployments.
+`appflowy-worker.config.databaseMaxConnections` sets the total per-Worker PostgreSQL budget.
+The self-hosted default of 16 includes the five connections reserved by automation.
+For large databases, size `appflowy-worker.resources` for the Worker’s working set. A local
+cold-load test with eight 100,000-row databases reached 821 MiB, above the chart’s 512 MiB
+default memory limit.
+
+If this installation uses a dedicated integration encryption key, set
+`global.integrationsSecret` to the existing Secret name. Its `integrations-secret-key` entry
+contains the base64 encoding of the same 32 bytes that Cloud uses to encrypt provider grants.
+The enabled Worker reads that key. When the value is empty, the enabled Worker uses Cloud’s
+existing GoTrue key reference for compatibility. [Compose configuration](../../docs/docker-compose.md#database-automations)
+
 ## Backup and restore
 
 `appflowy-backup.enabled` defaults to `false`. Enabling it requires a Backup image built with the
