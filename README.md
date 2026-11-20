@@ -80,7 +80,26 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.21.9 (Latest)
+### 🚀 v0.21.10 (Latest)
+
+#### Improvements
+
+- **Snapshot storage and database sync** — Kept snapshots readable in PostgreSQL when converting them for S3 would exceed the read limit. Large database syncs read rows and their pages in smaller batches when their combined size exceeded the limit.
+- **Creation diagnostics** — Cloud logs explained rejected requests, including default Grids with duplicate row IDs and documents submitted with embedded databases. They also recorded whether a row creation retry succeeded.
+
+#### Bug Fixes
+
+- Retried standalone row creation once after a concurrent database edit. If the server could not verify an earlier attempt, it returned a conflict that callers could retry with the same request ID.
+- Kept edits in order when a document restore rolled back. Syncing a new child page after a delay also preserved the parent page’s last editor and edit time.
+
+#### ⚠️ Action Required
+
+- **Redacted Backup exports** — Before running identity-redacted or sanitized debug exports, upgrade Backup to a build that matches your PostgreSQL version and recognizes the snapshot offload table added in v0.21.9. Both exports omit the source installation’s pending upload jobs. [Backup image selection](docs/BACKUP.md#choose-the-backup-image)
+- **Paused assignment processing** — If a Worker update fixes the cause of a paused assignment job without an edit to its row or schema, requeue the affected row or database with `af_mark_person_assignment_dirty`.
+
+**Baseline:** [`4de0fe72e18a52489090ef230db523191297e1e2`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/4de0fe72e18a52489090ef230db523191297e1e2)
+
+### 🚀 v0.21.9
 
 #### New Features
 
