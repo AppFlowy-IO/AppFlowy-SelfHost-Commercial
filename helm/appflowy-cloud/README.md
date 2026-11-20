@@ -69,9 +69,22 @@ After Cloud, Worker and their migrations support database automations, set
 `global.databaseAutomationsEnabled: true` to enable the feature on both deployments.
 `appflowy-worker.config.databaseMaxConnections` sets the total per-Worker PostgreSQL budget.
 The self-hosted default of 16 includes the five connections reserved by automation.
-For large databases, size `appflowy-worker.resources` for the Worker’s working set. A local
-cold-load test with eight 100,000-row databases reached 821 MiB, above the chart’s 512 MiB
-default memory limit.
+
+Size the Worker for the largest databases that run automations concurrently. In a local test
+at 500m CPU, eight databases each had four views with 100,000 row IDs per view. With the
+default 512 MiB limit, the kernel killed two of three Workers during the second batch of
+notifications. Both trials at 1 GiB completed. A separate cold-load test reached 821 MiB of
+process memory. For a comparable workload, start with the following Helm values and monitor
+Worker memory and restarts under your own peak load.
+
+```yaml
+global:
+  databaseAutomationsEnabled: true
+appflowy-worker:
+  resources:
+    limits:
+      memory: 1Gi
+```
 
 If this installation uses a dedicated integration encryption key, set
 `global.integrationsSecret` to the existing Secret name. Its `integrations-secret-key` entry
