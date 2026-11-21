@@ -78,7 +78,7 @@ spec:
             - name: APPFLOWY_WORKER_DATABASE_NAME
               value: {{ include "appflowy.postgresql.database" . | quote }}
             - name: APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS
-              value: {{ $worker.config.databaseMaxConnections | quote }}
+              value: {{ dig "databaseMaxConnections" 16 $worker.config | quote }}
 
             # Redis configuration
             {{- if eq (include "appflowy.redis.authEnabled" .) "true" }}

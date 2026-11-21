@@ -42,6 +42,10 @@ set +a
 
 Repeat this loading step in a new terminal before deploying. `docker stack deploy` does not automatically read `.env` files. Deploy the original stack files directly so their variables are interpolated once.
 
+To enable database automations, set `APPFLOWY_DATABASE_AUTOMATIONS_ENABLED=true` in the
+Swarm environment file. Webhook and connected-provider actions require Cloud’s existing
+`APPFLOWY_INTEGRATIONS_SECRET_KEY` in the exported environment. [Database automation configuration](docker-compose.md#database-automations)
+
 ## 2. Enable Swarm and label the data node
 
 Check that Docker points to your local engine:

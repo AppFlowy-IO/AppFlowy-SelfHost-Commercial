@@ -239,8 +239,9 @@ services:
         condition: service_healthy
 
   appflowy_worker:
-    # Restore writes only the selected bucket, Redis database and search directory here.
     env_file:
+      - ./docker/automations/worker-${APPFLOWY_DATABASE_AUTOMATIONS_ENABLED:-false}.env
+      # Restore writes only the selected bucket, Redis database and search directory here.
       - path: ./docker/backup/source-appflowy_worker.env
       - path: ./backup-ops/runtime/selection-appflowy_worker.env
         required: false
@@ -251,8 +252,6 @@ services:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
       - APPFLOWY_DATABASE_AUTOMATIONS_ENABLED=${APPFLOWY_DATABASE_AUTOMATIONS_ENABLED:-false}
-      - APPFLOWY_INTEGRATIONS_SECRET_KEY=${APPFLOWY_INTEGRATIONS_SECRET_KEY:-}
-      - APPFLOWY_GOTRUE_JWT_SECRET=${GOTRUE_JWT_SECRET}
       - APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS=${APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS:-16}
       - APPFLOWY_WORKER_ENVIRONMENT=production
       - APPFLOWY_WORKER_DATABASE_URL=${APPFLOWY_WORKER_DATABASE_URL}

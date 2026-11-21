@@ -485,7 +485,7 @@ value: {{ include "appflowy.s3.bucket" . | quote }}
 {{- end -}}
 
 {{- define "appflowy.databaseAutomationsEnabled" -}}
-{{- $flag := .Values.global.databaseAutomationsEnabled | toString | trim | lower -}}
+{{- $flag := dig "databaseAutomationsEnabled" false .Values.global | toString | trim | lower -}}
 {{- if not (has $flag (list "true" "false")) -}}
 {{- fail "global.databaseAutomationsEnabled must be true or false" -}}
 {{- end -}}

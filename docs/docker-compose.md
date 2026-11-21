@@ -59,10 +59,13 @@ With the default automation settings, each enabled Worker reserves five connecti
 `APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS`. A self-hosted Worker with the default budget of 16
 has five connections left in its main pool. Budget for all Worker replicas in PostgreSQL.
 
-Webhook signing and connected Gmail and Slack actions use the same encryption key on Cloud and
-Worker. Keep the installation’s existing `APPFLOWY_INTEGRATIONS_SECRET_KEY` if one is configured.
-Otherwise both services derive the existing key from the configured GoTrue JWT secret. Configure
-OAuth providers in Admin and let each sending member connect their own account.
+For webhook signing and connected Gmail and Slack actions, set `APPFLOWY_INTEGRATIONS_SECRET_KEY`
+to the base64 encoding of the 32-byte key Cloud uses to encrypt provider grants. Compose and
+Swarm forward this key to the Worker only when the flag is `true`. If Cloud currently derives
+its key from the GoTrue JWT secret, provision the equivalent integration key before enabling
+these actions. Choosing a different key makes existing encrypted grants unreadable. On a fresh
+installation, generate a key with `openssl rand -base64 32` and keep it across restarts.
+Configure OAuth providers in Admin and let each sending member connect their own account.
 
 ## Optional services
 
@@ -335,9 +338,9 @@ collector image. Update older deployment files before you turn this on.
 
 Three optional settings exist for installations that need them:
 
-- `APPFLOWY_SERVER_LOGS_TOKEN` replaces the derived credential with your own. GoTrue, Worker and
-  Search also hold the JWT secret and could compute the derived credential; set a token to keep
-  the credential to Cloud and the collector. Generate it with `openssl rand -hex 32`. It must
+- `APPFLOWY_SERVER_LOGS_TOKEN` replaces the derived credential with your own. GoTrue, AI and
+  Search also hold the JWT secret and could compute the derived credential. Set a token to limit
+  this credential to Cloud and the collector. Generate it with `openssl rand -hex 32`. It must
   contain 32–512 ASCII bearer-token characters, and an invalid value is reported as a
   configuration error instead of being replaced.
 - `APPFLOWY_SERVER_LOGS_IMAGE` replaces the collector image, for a mirrored registry or an image

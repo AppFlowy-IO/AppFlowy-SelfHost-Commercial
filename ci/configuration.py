@@ -12,6 +12,7 @@ SOURCE_FILES = (
     'docker/nginx/nginx.conf', 'docker/nginx/ssl/certificate.crt',
     'docker/nginx/ssl/private_key.key', 'docker-swarm/docker-stack.yml',
     'docker-swarm/docker-stack.backup.yml',
+    'docker/automations/worker-false.env', 'docker/automations/worker-true.env',
     'docker/backup/source-ai.env', 'docker/backup/source-appflowy_cloud.env',
     'docker/backup/source-appflowy_worker.env', 'docker/backup/source-appflowy_search.env',
     'docker/backup/source-appflowy_backup.env', 'helm/appflowy-cloud/values.yaml',

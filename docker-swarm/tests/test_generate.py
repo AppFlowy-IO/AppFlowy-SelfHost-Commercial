@@ -25,7 +25,11 @@ class GeneratorTests(unittest.TestCase):
                          set(self.source['services']) - {'appflowy_backup', 'appflowy_log_collector'})
         for name, service in stack['services'].items():
             self.assertNotIn('profiles', service)
-            self.assertNotIn('env_file', service)
+            if name == 'appflowy_worker':
+                self.assertEqual(service['env_file'], [
+                    '../docker/automations/worker-${APPFLOWY_DATABASE_AUTOMATIONS_ENABLED:-false}.env'])
+            else:
+                self.assertNotIn('env_file', service)
         cloud = stack['services']['appflowy_cloud']['environment']
         self.assertIn('APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}', cloud)
         self.assertIn('APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI}', cloud)

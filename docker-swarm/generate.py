@@ -32,6 +32,7 @@ SOURCE = ROOT / 'docker-compose.yml'
 TARGET = Path(__file__).resolve().parent / 'docker-stack.yml'
 BACKUP_SOURCE = ROOT / 'docker-compose.backup.yml'
 BACKUP_TARGET = TARGET.with_name('docker-stack.backup.yml')
+WORKER_AUTOMATION_ENV = './docker/automations/worker-${APPFLOWY_DATABASE_AUTOMATIONS_ENABLED:-false}.env'
 DATA_SERVICES = {'postgres', 'minio', 'appflowy_search'}
 DATA_CONSTRAINT = 'node.labels.appflowy.data == true'
 HEADER = (
@@ -109,6 +110,11 @@ def convert_environment(name: str, service: dict) -> None:
     files = service.pop('env_file', [])
     if isinstance(files, str):
         files = [files]
+    # Both renderers resolve a bare key in this file from the installation
+    # environment. Preserve the flag selection and its position before defaults.
+    if name == 'appflowy_worker' and files[:1] == [WORKER_AUTOMATION_ENV]:
+        service['env_file'] = [str(PurePosixPath('..') / WORKER_AUTOMATION_ENV)]
+        files = files[1:]
     defaults = {}
     required_files = []
     for entry in files:
@@ -131,7 +137,7 @@ def convert_environment(name: str, service: dict) -> None:
     if required_files:
         if defaults:
             raise ValueError(f'{name}: mixed source defaults and extra env_files need a precedence review.')
-        service['env_file'] = required_files
+        service.setdefault('env_file', []).extend(required_files)
     if defaults:
         environment = service.get('environment', {})
         if isinstance(environment, list):
