@@ -48,6 +48,22 @@ usage can take up to five minutes to become visible.
 The same behavior applies to external Redis. AppFlowy honors the server's configuration and does
 not change it at runtime.
 
+## Database automations
+
+Use Cloud and Worker images that support database automations and apply their migrations before
+enabling the feature. Set `APPFLOWY_DATABASE_AUTOMATIONS_ENABLED=true` in the installation’s
+`.env` and recreate Cloud and Worker. Compose and Swarm pass the setting to both services.
+The default is off.
+
+With the default automation settings, each enabled Worker reserves five connections from
+`APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS`. A self-hosted Worker with the default budget of 16
+has five connections left in its main pool. Budget for all Worker replicas in PostgreSQL.
+
+Webhook signing and connected Gmail and Slack actions use the same encryption key on Cloud and
+Worker. Keep the installation’s existing `APPFLOWY_INTEGRATIONS_SECRET_KEY` if one is configured.
+Otherwise both services derive the existing key from the configured GoTrue JWT secret. Configure
+OAuth providers in Admin and let each sending member connect their own account.
+
 ## Optional services
 
 Backup and server logs are off by default. Each has one setting in `.env`, and you can turn on

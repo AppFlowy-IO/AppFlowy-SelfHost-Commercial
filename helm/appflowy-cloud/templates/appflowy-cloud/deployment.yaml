@@ -77,6 +77,8 @@ spec:
               value: {{ $cloud.config.rustLog | quote }}
             - name: APPFLOWY_ENVIRONMENT
               value: {{ $cloud.config.environment | quote }}
+            - name: APPFLOWY_DATABASE_AUTOMATIONS_ENABLED
+              value: {{ include "appflowy.databaseAutomationsEnabled" . | quote }}
 
             # Database configuration
             - name: POSTGRES_USER
@@ -110,6 +112,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "appflowy.jwt.secretName" . }}
                   key: {{ include "appflowy.jwt.secretKey" . }}
+            {{- with .Values.global.integrationsSecret }}
+            {{- include "appflowy.integrationKeyEnv" . | nindent 12 }}
+            {{- end }}
 
             # S3/MinIO configuration
             - name: APPFLOWY_S3_USE_MINIO
