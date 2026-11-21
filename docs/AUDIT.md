@@ -145,36 +145,41 @@ An explicit database `false` overrides an environment `true`. Changing the envir
 
 ### Environment configuration
 
-The Admin console is the usual way to enable recording. If you prefer an environment default or need to change retention, pass these variables to the **AppFlowy Cloud container**:
+The Admin console is the usual way to enable recording. If you prefer an environment default or need to change retention, use these variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APPFLOWY_AUDIT_ENABLE` | `false` | Enablement fallback when `audit_enabled` has no database override. |
-| `APPFLOWY_AUDIT_RETENTION_DAYS` | `30` | Retention cutoff used by the maintenance task. A value of zero or less disables pruning. |
+| `APPFLOWY_AUDIT_ENABLE` | `false` | Enablement fallback when `audit_enabled` has no database override. AppFlowy Cloud and the MCP service (AI apps) each resolve it, so both must receive the same value. |
+| `APPFLOWY_AUDIT_RETENTION_DAYS` | `30` | Retention cutoff used by Cloud's maintenance task. A value of zero or less disables pruning. |
 
-For Docker Compose, add an override file such as `docker-compose.override.yml`:
+For Docker Compose, set the enablement fallback once in `.env` (on Swarm, in the environment file you load before `docker stack deploy`). The bundled files pass it to both `appflowy_cloud` and `appflowy_mcp`:
+
+```dotenv
+APPFLOWY_AUDIT_ENABLE=true
+```
+
+Retention is not read from `.env`. Set it on Cloud with an override file such as `docker-compose.override.yml`:
 
 ```yaml
 services:
   appflowy_cloud:
     environment:
-      APPFLOWY_AUDIT_ENABLE: "true"
       APPFLOWY_AUDIT_RETENTION_DAYS: "90"
 ```
 
-Apply it with:
+Apply either change with:
 
 ```bash
-docker compose up -d appflowy_cloud
+docker compose up -d appflowy_cloud appflowy_mcp
 ```
 
-This example applies when your deployment uses the bundled `docker-compose.yml` and Compose loads its default override file. If your startup command names Compose files explicitly, include the override with `-f` as well. Adding a variable only to `.env` does not pass it into a container unless the Compose configuration references it.
+The override example applies when your deployment uses the bundled `docker-compose.yml` and Compose loads its default override file. If your startup command names Compose files explicitly, include the override with `-f` as well. An override that sets `APPFLOWY_AUDIT_ENABLE` must set the same value on `appflowy_cloud` and `appflowy_mcp`. Earlier deployment files passed `APPFLOWY_AUDIT_ENABLE` from `.env` to no container; a value left there now takes effect while no database override exists.
 
-For Kubernetes or another deployment system, set the same variables on the Cloud container and roll out the updated workload. Environment and retention changes require a process restart; console enable/disable changes do not.
+With the bundled Helm chart, set `appflowy-cloud.config.auditEnable`; the chart passes it to Cloud and MCP. For Kubernetes or another deployment system, set the variables on the Cloud container, set `APPFLOWY_AUDIT_ENABLE` on the MCP container too, and roll out the updated workloads. Environment and retention changes require a process restart; console enable/disable changes do not.
 
 Retention maintenance runs at server startup and then daily, and manages monthly PostgreSQL partitions. A partition is dropped only when it is entirely older than the cutoff; old rows in the default partition are swept separately. **Thirty days is not an exact per-event deletion deadline**: records in a retained monthly partition can remain longer. Maintenance continues while recording is disabled. Export records before they expire if you need a longer-lived archive.
 
-If you deploy the standalone MCP service, its binary must also include self-host support. It follows the same database-backed enablement setting; configure an environment fallback on that service too if you rely on one. MCP activity uses a bounded, best-effort queue, so it does not have the same transaction guarantee as covered permission mutations.
+The MCP service's binary must also include self-host support. It follows the same database-backed enablement setting and the shared environment fallback described above. MCP activity uses a bounded, best-effort queue, so it does not have the same transaction guarantee as covered permission mutations.
 
 ## What is recorded
 

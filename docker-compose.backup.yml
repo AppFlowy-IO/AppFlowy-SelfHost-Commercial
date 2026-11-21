@@ -45,6 +45,9 @@ services:
     environment:
       <<: *backup-artifact-environment
       RUST_LOG: ${RUST_LOG:-info}
+      # Services that restore stops and switches to the restored bucket and Redis database.
+      # Every listed service needs a container; keep this in step with docker-compose.yml.
+      APPFLOWY_BACKUP_COMPOSE_WRITERS: '["appflowy_cloud","gotrue","appflowy_worker","appflowy_search","ai","appflowy_mcp"]'
       # Restore discovers this path from Docker metadata, before bootstrap defaults are visible.
       APPFLOWY_BACKUP_WORK_DIR: /var/lib/appflowy-backup/work
       APPFLOWY_DATABASE_URL: ${APPFLOWY_DATABASE_URL}

@@ -45,7 +45,7 @@ class GeneratorTests(unittest.TestCase):
                 self.assertFalse(any(key.startswith('APPFLOWY_SERVER_LOGS_') for key in actual))
                 self.assertEqual({key: actual[key] for key in original if key not in
                                   GENERATOR.COMPOSE_LOG_ENVIRONMENT},
-                                 {key: value for key, value in original.items() if key not in
+                                 {key: GENERATOR.MCP_SWARM_ENV.get(value, value) for key, value in original.items() if key not in
                                   GENERATOR.COMPOSE_LOG_ENVIRONMENT})
                 GENERATOR.check_parity(source, stack)
         backup = GENERATOR.derive_backup(
@@ -148,6 +148,8 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(overlay['services']['appflowy_search'], source['services']['appflowy_search'])
         backup = overlay['services']['appflowy_backup']
         self.assertEqual(backup['environment']['APPFLOWY_BACKUP_DEPLOYMENT'], 'swarm')
+        # Compose service names are no Swarm writer inventory; the Swarm adapter owns its own.
+        self.assertNotIn('APPFLOWY_BACKUP_COMPOSE_WRITERS', backup['environment'])
         self.assertEqual(backup['command'], ['bootstrap'])
         self.assertEqual(backup['deploy']['replicas'], 0)
         self.assertIn('node.role == manager', backup['deploy']['placement']['constraints'])

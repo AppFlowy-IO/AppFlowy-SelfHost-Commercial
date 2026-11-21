@@ -1,5 +1,5 @@
 {{- if .Values.networkPolicy.enabled }}
-# Allow ingress traffic to web, cloud, gotrue, and admin services
+# Allow ingress traffic to web, cloud, gotrue, admin, and MCP services
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -28,6 +28,12 @@ spec:
           port: 8000
         - protocol: TCP
           port: 9999
+        {{- if index .Values "appflowy-mcp" "enabled" }}
+        # AI apps reach MCP through the ingress controller. MCP's own egress to PostgreSQL,
+        # Redis, MinIO and Search uses the same-release rules below.
+        - protocol: TCP
+          port: 8002
+        {{- end }}
 ---
 # Allow internal communication between AppFlowy services
 apiVersion: networking.k8s.io/v1

@@ -11,6 +11,7 @@ Compatibility exceptions are intentionally narrow:
 * The Compose-only server-log collector and its Cloud endpoint/credential are excluded.
 * Checked-in source selection defaults are inlined without interpolation; other
   required environment-file paths are relative to the generated stack.
+* Native stack interpolation uses MCP defaults resolved by the operator environment.
 
 Images, environment, commands, health checks, ports, and application volumes
 otherwise remain identical. AI remains present; the Backup overlay requires a matching Swarm-capable image.
@@ -44,6 +45,18 @@ HEADER = (
 COMPOSE_LOG_ENVIRONMENT = {
     'APPFLOWY_SERVER_LOGS_URL': '${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}',
     'APPFLOWY_SERVER_LOGS_TOKEN': '${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}',
+}
+
+
+# docker stack only expands a single level. deploy.env and mcp-env.sh resolve these
+# in the shell, including the distinction between an unset and a blank public URL.
+MCP_SWARM_ENV = {
+    '${APPFLOWY_MCP_BASE_URL-${APPFLOWY_BASE_URL}}': '${APPFLOWY_MCP_BASE_URL}',
+    '${APPFLOWY_WEB_URL:-${APPFLOWY_BASE_URL}}': '${APPFLOWY_WEB_URL}',
+    '${APPFLOWY_CORS_ALLOWED_ORIGINS:-${APPFLOWY_WEB_URL:-${APPFLOWY_BASE_URL}}}':
+        '${APPFLOWY_CORS_ALLOWED_ORIGINS:?Load the MCP defaults after the Swarm environment}',
+    '${APPFLOWY_MCP_TRUSTED_PROXY_CIDRS-${APPFLOWY_MCP_PROXY_SUBNET:-172.31.255.0/28}}':
+        '${APPFLOWY_MCP_TRUSTED_PROXY_CIDRS}',
 }
 
 
@@ -141,6 +154,20 @@ def convert_environment(name: str, service: dict) -> None:
         else:
             service['environment'] = {**defaults, **environment}
     exclude_compose_log_environment(name, service)
+    if name in ('appflowy_cloud', 'appflowy_mcp', 'appflowy_web'):
+        env = service['environment']
+        if isinstance(env, list):
+            for index, entry in enumerate(env):
+                key, _, value = entry.partition('=')
+                if value in MCP_SWARM_ENV:
+                    env[index] = f'{key}={MCP_SWARM_ENV[value]}'
+        else:
+            service['environment'] = {key: MCP_SWARM_ENV.get(value, value) for key, value in env.items()}
+
+
+def swarm_networks(source: dict) -> dict:
+    networks = {'default': {}, **source.get('networks', {})}
+    return {name: {**(settings or {}), 'driver': 'overlay'} for name, settings in networks.items()}
 
 
 def derive(source: dict) -> dict:
@@ -172,8 +199,8 @@ def derive(source: dict) -> dict:
     ]
     if nginx.get('volumes') != expected_mounts:
         raise ValueError('Root Nginx mounts changed; update the explicit configs/secrets conversion before regenerating.')
-    if 'configs' in source or 'secrets' in source or 'networks' in source:
-        raise ValueError('Root networks/configs/secrets changed; review their Swarm conversion explicitly.')
+    if 'configs' in source or 'secrets' in source:
+        raise ValueError('Root configs/secrets changed; review their Swarm conversion explicitly.')
     nginx.pop('volumes')
     nginx['configs'] = [
         {'source': 'nginx_config', 'target': '/etc/nginx/nginx.conf'},
@@ -182,7 +209,7 @@ def derive(source: dict) -> dict:
     nginx['secrets'] = [
         {'source': 'tls_private_key', 'target': '/etc/nginx/ssl/private_key.key', 'mode': 0o400},
     ]
-    stack['networks'] = {'default': {'driver': 'overlay'}}
+    stack['networks'] = swarm_networks(source)
     stack['configs'] = {
         'nginx_config': {'file': '../docker/nginx/nginx.conf'},
         'tls_certificate': {'file': '../docker/nginx/ssl/certificate.crt'},
@@ -192,9 +219,14 @@ def derive(source: dict) -> dict:
 
 
 def environment_map(value: dict | list) -> dict:
+    """Keep inherited entries distinct from explicitly empty values."""
     if isinstance(value, dict):
         return value
-    return dict(item.split('=', 1) for item in value)
+    result = {}
+    for entry in value:
+        key, separator, setting = entry.partition('=')
+        result[key] = setting if separator else None
+    return result
 
 
 def derive_backup(source: dict, override: dict) -> dict:
@@ -208,6 +240,8 @@ def derive_backup(source: dict, override: dict) -> dict:
     settings.pop('depends_on', None)
     settings.pop('volumes', None)
     settings_environment = environment_map(settings.pop('environment', {}))
+    # The Compose writer list names Compose services; the Swarm adapter owns its own inventory.
+    settings_environment.pop('APPFLOWY_BACKUP_COMPOSE_WRITERS', None)
     service.update(settings)
     service.pop('restart', None)
     service['environment'] = {
@@ -240,9 +274,17 @@ def derive_backup(source: dict, override: dict) -> dict:
     }
     cloud = copy.deepcopy(override['services']['appflowy_cloud'])
     cloud['environment']['APPFLOWY_BACKUP_BUCKET'] = service['environment']['APPFLOWY_BACKUP_BUCKET']
-    search = copy.deepcopy(override['services']['appflowy_search'])
-    return {'version': '3.8', 'services': {'appflowy_cloud': cloud, 'appflowy_search': search,
-                                       'appflowy_backup': service},
+    # This Backup adapter cannot drain MCP or select its restored Redis database and bucket.
+    # Native stack merge ignores an empty override. Both Cloud and Web trim whitespace
+    # before parsing the origin, so a single space clears discovery on redeploy as well.
+    no_mcp_origin = {'APPFLOWY_MCP_BASE_URL': ' '}
+    cloud['environment'].update(no_mcp_origin)
+    return {'version': '3.8', 'services': {
+                'appflowy_cloud': cloud,
+                'appflowy_web': {'environment': no_mcp_origin},
+                'appflowy_mcp': {'deploy': {'replicas': 0}},
+                'appflowy_search': copy.deepcopy(override['services']['appflowy_search']),
+                'appflowy_backup': service},
             'volumes': {'backup_work': None, 'backup_coordinator_socket': None}}
 
 
@@ -265,6 +307,8 @@ def check_parity(source: dict, stack: dict) -> None:
         if actual != expected:
             raise ValueError(f'Unexpected service configuration drift: {name}')
     for name, value in source.items():
+        if name == 'networks':
+            value = swarm_networks(source)
         if name != 'services' and stack.get(name) != value:
             raise ValueError(f'Unexpected top-level configuration drift: {name}')
 
@@ -282,6 +326,7 @@ def main() -> int:
         '# Generated by python3 docker-swarm/generate.py from root Compose Backup settings.\n'
         '# Opt-in single-manager Backup. Read README.md#backup-and-restore before enabling.\n'
         '# Start Backup after application readiness: docker service scale <stack>_appflowy_backup=1\n'
+        '# Cloud and Web trim the single-space MCP origin. Native stack merge ignores empty overrides.\n'
         + yaml.safe_dump(backup, sort_keys=False, width=120)
     )
     if args.check:

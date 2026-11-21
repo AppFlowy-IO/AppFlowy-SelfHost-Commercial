@@ -317,6 +317,29 @@ JWT secret key
 {{- .Values.global.jwt.secretKey | default "jwt-secret" }}
 {{- end }}
 
+{{- define "appflowy.jwt.audience" -}}
+{{- $audience := .Values.global.jwt.audience | default "" | toString -}}
+{{- if or (contains "," $audience) (ne $audience (trim $audience)) (eq $audience `""`) -}}
+{{- fail "global.jwt.audience must be empty or a single audience without commas or surrounding whitespace" -}}
+{{- end -}}
+{{- $audience -}}
+{{- end -}}
+
+{{- define "appflowy.mcp.gotrueExpectedAudiences" -}}
+{{- $expected := include "appflowy.jwt.audience" . | default `""` -}}
+{{- $override := index .Values "appflowy-mcp" "config" "gotrueExpectedAudiences" | default "" | trim -}}
+{{- if and .Values.gotrue.enabled $override -}}
+{{- $matches := eq $override $expected -}}
+{{- if ne $expected `""` -}}
+{{- $matches = has $expected (regexSplit "[[:space:]]*,[[:space:]]*" $override -1) -}}
+{{- end -}}
+{{- if not $matches -}}
+{{- fail "appflowy-mcp.config.gotrueExpectedAudiences must accept global.jwt.audience when GoTrue is bundled" -}}
+{{- end -}}
+{{- end -}}
+{{- default $expected $override -}}
+{{- end -}}
+
 {{/*
 =============================================================================
 URL Helpers
@@ -328,6 +351,33 @@ Base URL
 */}}
 {{- define "appflowy.baseUrl" -}}
 {{ .Values.global.scheme }}://{{ .Values.global.domain }}
+{{- end }}
+
+{{- define "appflowy.webUrl" -}}
+{{- default (include "appflowy.baseUrl" .) .Values.global.webUrl -}}
+{{- end }}
+
+{{/* MCP uses a browser origin, while the Web URL may include a path. */}}
+{{- define "appflowy.mcp.corsOrigins" -}}
+{{- $configured := index .Values "appflowy-mcp" "config" "corsAllowedOrigins" -}}
+{{- if trimAll " ,\t\r\n" $configured -}}
+{{- $configured -}}
+{{- else -}}
+{{- $url := urlParse (include "appflowy.webUrl" .) -}}
+{{- if or (not (has $url.scheme (list "http" "https"))) (empty $url.host) (not (empty $url.userinfo)) (regexMatch "[[:space:]\\\\]" $url.host) -}}
+{{- fail "global.webUrl must be an HTTP(S) URL with a host and no credentials for MCP CORS" -}}
+{{- end -}}
+{{- $host := lower $url.host -}}
+{{- if not (regexMatch "^([a-z0-9._-]+|\\[[0-9a-f:]+\\])(:[0-9]+)?$" $host) -}}
+{{- fail "MCP CORS needs an ASCII/punycode hostname or an IPv6 address; set an explicit corsAllowedOrigins for other browser origins" -}}
+{{- end -}}
+{{- $port := trimPrefix ":" (regexFind ":[0-9]+$" $host) -}}
+{{- if and $port (or (lt (int $port) 1) (gt (int $port) 65535)) -}}
+{{- fail "global.webUrl has an invalid port for MCP CORS" -}}
+{{- end -}}
+{{- $host = trimSuffix (ternary ":443" ":80" (eq $url.scheme "https")) $host -}}
+{{- printf "%s://%s" $url.scheme $host -}}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -366,6 +416,73 @@ http://{{ include "appflowy.fullname" . }}-ai:{{ index .Values "appflowy-ai" "se
 {{- end }}
 
 {{/*
+An MCP public origin from a value, trimmed and without trailing slashes; empty when unset. Fails
+the render unless it is an http(s) origin without a path, query, fragment or credentials, the
+rules the MCP service (which fails startup) and Cloud (which advertises nothing) apply to
+APPFLOWY_MCP_BASE_URL. Takes a dict with "value" and the values "name" for the message.
+*/}}
+{{- define "appflowy.mcp.origin" -}}
+{{- $origin := .value | default "" | toString | trim | trimSuffix "/" -}}
+{{- if and $origin (not (regexMatch "^https?://[^/?#@[:space:]]+$" $origin)) -}}
+{{- fail (printf "%s must be an http(s) origin without a path such as /mcp" .name) -}}
+{{- end -}}
+{{- $origin -}}
+{{- end }}
+
+{{/*
+Public origin of the MCP service, without /mcp, from appflowy-mcp.config.publicBaseUrl: the only
+source of the origin that MCP, Cloud's server-info and AppFlowy Web use. AI apps connect to
+<origin>/mcp and it is the OAuth issuer, so changing it makes connected AI apps reconnect. The
+bundled service defaults to the AppFlowy base URL because the chart routes the MCP paths on
+global.domain. With appflowy-mcp.enabled=false it is the origin of an MCP service deployed
+outside this chart, and empty when none is configured.
+*/}}
+{{- define "appflowy.mcp.baseUrl" -}}
+{{- $configured := include "appflowy.mcp.origin" (dict "value" (index .Values "appflowy-mcp" "config" "publicBaseUrl") "name" "appflowy-mcp.config.publicBaseUrl") -}}
+{{- if $configured -}}
+{{- $configured -}}
+{{- else if index .Values "appflowy-mcp" "enabled" -}}
+{{- include "appflowy.baseUrl" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE for Cloud and MCP, or nothing. Empty leaves the
+variable unset, so the services' built-in default applies (and Admin reports it as the default).
+Any other value is passed as written, 0 included, which MCP refuses at startup.
+*/}}
+{{- define "appflowy.mcp.oauthIpRateLimit" -}}
+{{- $value := index .Values "appflowy-mcp" "config" "oauthIpRateLimitPerMinute" -}}
+{{- if not (kindIs "invalid" $value) -}}
+{{- toString $value | trim -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+The MCP policy's bootstrap variables, from appflowy-mcp.config. The MCP service and Cloud must
+resolve the policy with the same values (Cloud for server-info and the Admin console's MCP page),
+so both containers render this one list: the bundled service, and Cloud whenever the chart knows
+an MCP origin, including one deployed outside this chart (appflowy-mcp.enabled=false with
+config.publicBaseUrl), whose values appflowy-mcp.config must then describe. Whether MCP is on is
+not among them: MCP is on by default, and only the Admin console's MCP page turns it off.
+*/}}
+{{- define "appflowy.mcp.policyEnv" -}}
+{{- $config := index .Values "appflowy-mcp" "config" -}}
+{{- with include "appflowy.mcp.oauthIpRateLimit" . }}
+- name: APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE
+  value: {{ . | quote }}
+{{- end }}
+{{- with $config.allowedEmailDomains }}
+- name: APPFLOWY_MCP_ALLOWED_EMAIL_DOMAINS
+  value: {{ . | quote }}
+{{- end }}
+{{- with $config.allowedEmails }}
+- name: APPFLOWY_MCP_ALLOWED_EMAILS
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
 =============================================================================
 Service Name Helpers
 =============================================================================
@@ -397,6 +514,10 @@ Service Name Helpers
 
 {{- define "appflowy.search.fullname" -}}
 {{- printf "%s-search" (include "appflowy.fullname" .) }}
+{{- end }}
+
+{{- define "appflowy.mcp.fullname" -}}
+{{- printf "%s-mcp" (include "appflowy.fullname" .) }}
 {{- end }}
 
 {{/*

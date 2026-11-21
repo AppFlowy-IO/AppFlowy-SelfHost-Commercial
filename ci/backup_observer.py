@@ -6,9 +6,9 @@ import time
 from urllib.parse import urlsplit
 
 
-RESOURCE_SERVICES = ('appflowy_cloud', 'appflowy_worker', 'appflowy_search')
+RESOURCE_SERVICES = ('appflowy_cloud', 'appflowy_worker', 'appflowy_search', 'appflowy_mcp')
 REDIS_KEYS = {'appflowy_cloud': 'APPFLOWY_REDIS_URI', 'appflowy_worker': 'APPFLOWY_WORKER_REDIS_URL',
-              'appflowy_search': 'APPFLOWY_SEARCH_REDIS_URL'}
+              'appflowy_search': 'APPFLOWY_SEARCH_REDIS_URL', 'appflowy_mcp': 'APPFLOWY_REDIS_URI'}
 
 
 def environment(container):

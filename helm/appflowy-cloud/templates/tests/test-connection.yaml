@@ -78,6 +78,16 @@ spec:
           curl -sf http://{{ include "appflowy.web.fullname" . }}:{{ index .Values "appflowy-web" "service" "port" }}/ && echo "AppFlowy Web: OK" || exit 1
     {{- end }}
 
+    {{- if index .Values "appflowy-mcp" "enabled" }}
+    - name: test-appflowy-mcp
+      image: curlimages/curl:latest
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing AppFlowy MCP health endpoint..."
+          curl -sf http://{{ include "appflowy.mcp.fullname" . }}:{{ index .Values "appflowy-mcp" "service" "port" }}/api/health && echo "AppFlowy MCP: OK" || exit 1
+    {{- end }}
+
     {{- if index .Values "appflowy-ai" "enabled" }}
     - name: test-appflowy-ai
       image: curlimages/curl:latest

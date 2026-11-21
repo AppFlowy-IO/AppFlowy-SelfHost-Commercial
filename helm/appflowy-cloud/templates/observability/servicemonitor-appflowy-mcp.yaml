@@ -1,0 +1,33 @@
+{{- if and (index .Values "appflowy-mcp" "enabled") (index .Values "appflowy-mcp" "metrics" "enabled") (index .Values "appflowy-mcp" "metrics" "serviceMonitor" "enabled") }}
+{{- $mcp := index .Values "appflowy-mcp" }}
+{{- $metrics := $mcp.metrics }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "appflowy.mcp.fullname" . }}
+  labels:
+    {{- include "appflowy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: appflowy-mcp
+    {{- with $metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- if $metrics.serviceMonitor.namespace }}
+  namespace: {{ $metrics.serviceMonitor.namespace }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "appflowy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: appflowy-mcp
+  endpoints:
+    # The Service's only port; /metrics is not routed by the MCP Ingress.
+    - port: http
+      path: {{ $metrics.path | default "/metrics" }}
+      interval: {{ $metrics.serviceMonitor.interval | quote }}
+      scrapeTimeout: {{ $metrics.serviceMonitor.scrapeTimeout | quote }}
+  {{- if $metrics.serviceMonitor.namespace }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+{{- end }}

@@ -100,10 +100,16 @@ requests and keep the limits. At 100 users, the chart defaults are enough, excep
 | gotrue | 0.1 / 0.5 | 128 MiB / 512 MiB |
 | appflowy-ai | 0.1 / 1 | 256 MiB / 1 GiB |
 | appflowy-web, admin-frontend (each) | 0.05 / 0.2 | 128 MiB / 256 MiB |
+| appflowy-mcp | chart defaults: 0.05 / 0.5 | chart defaults: 128 MiB / 512 MiB |
 | nginx or ingress controller | 0.1 / 1 | 256 MiB / 768 MiB |
 | postgresql (bundled chart) | match the PostgreSQL server row | match the PostgreSQL server row |
 | redis (bundled chart) | 0.5 / 1 | 8 GiB / 12 GiB |
 | minio (bundled chart) | 0.5 / 2 | 1 GiB / 4 GiB |
+
+`appflowy-mcp` is on by default but stays close to idle until MCP clients connect. Its load then
+follows MCP tool calls, not online users: it runs at most `appflowy-mcp.config.maxInFlight` (128)
+calls at once over its own pool of `databaseMaxConnections` (8). Start from the chart defaults,
+and raise the CPU limit if the container is throttled once MCP is in use.
 
 Three rules keep these values healthy:
 
@@ -133,6 +139,7 @@ round.
 | appflowy_cloud audit log | `APPFLOWY_AUDIT_DB_MAX_CONNECTIONS` | 4 |
 | appflowy_worker | `APPFLOWY_WORKER_DATABASE_MAX_CONNECTIONS` | 16 |
 | appflowy_search | `APPFLOWY_SEARCH_DATABASE_MAX_CONNECTIONS` and `APPFLOWY_SEARCH_EMBEDDING_DB_MAX_CONNECTIONS` | 20 and 10 |
+| appflowy_mcp | `APPFLOWY_MCP_DATABASE_MAX_CONNECTIONS` (Helm: `appflowy-mcp.config.databaseMaxConnections`, per replica) | 8 |
 | gotrue | `GOTRUE_DB_MAX_POOL_SIZE` | unlimited when unset; set it to 10 |
 | AI, backup, and administrative sessions | — | reserve 20 |
 

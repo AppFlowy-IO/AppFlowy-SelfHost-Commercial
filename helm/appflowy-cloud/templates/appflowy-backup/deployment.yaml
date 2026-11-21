@@ -15,7 +15,7 @@
 {{- if or .Values.gotrue.autoscaling.enabled (index .Values "appflowy-cloud" "autoscaling" "enabled") }}
 {{- fail "Disable Cloud and GoTrue autoscaling before enabling Kubernetes backup" }}
 {{- end }}
-{{- range $name := list "gotrue" "appflowy-cloud" "appflowy-worker" "appflowy-search" "appflowy-ai" }}
+{{- range $name := list "gotrue" "appflowy-cloud" "appflowy-worker" "appflowy-search" "appflowy-ai" "appflowy-mcp" }}
 {{- $component := index $.Values $name }}
 {{- if and $component.enabled (ne (int $component.replicaCount) 1) }}
 {{- fail (printf "%s.replicaCount must be 1 when Kubernetes backup is enabled" $name) }}
@@ -24,6 +24,7 @@
 {{- $writers := dict "appflowy_cloud" (include "appflowy.cloud.fullname" .) "gotrue" (include "appflowy.gotrue.fullname" .) "appflowy_search" (include "appflowy.search.fullname" .) }}
 {{- if index .Values "appflowy-worker" "enabled" }}{{- $_ := set $writers "appflowy_worker" (include "appflowy.worker.fullname" .) }}{{- end }}
 {{- if index .Values "appflowy-ai" "enabled" }}{{- $_ := set $writers "ai" (include "appflowy.ai.fullname" .) }}{{- end }}
+{{- if index .Values "appflowy-mcp" "enabled" }}{{- $_ := set $writers "appflowy_mcp" (include "appflowy.mcp.fullname" .) }}{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

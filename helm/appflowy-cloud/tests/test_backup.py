@@ -45,7 +45,8 @@ class BackupChartTests(unittest.TestCase):
         self.assertFalse(any(item['kind'] == 'ConfigMap' and item['metadata']['name'] ==
                              'appflowy-ci-backup-runtime' for item in documents))
         for service, redis in (('cloud', 'APPFLOWY_REDIS_URI'), ('worker', 'APPFLOWY_WORKER_REDIS_URL'),
-                               ('search', 'APPFLOWY_SEARCH_REDIS_URL'), ('ai', 'AI_REDIS_URL')):
+                               ('search', 'APPFLOWY_SEARCH_REDIS_URL'), ('ai', 'AI_REDIS_URL'),
+                               ('mcp', 'APPFLOWY_REDIS_URI')):
             pod = self.deployment(documents, service)['spec']['template']['spec']
             entries = pod['containers'][0]['env']
             environment = {entry['name']: entry for entry in entries}
@@ -92,6 +93,7 @@ class BackupChartTests(unittest.TestCase):
         deployment_rule = next(rule for rule in role['rules'] if rule['resources'] == ['deployments'])
         self.assertNotIn('appflowy-ci-web', deployment_rule['resourceNames'])
         self.assertIn('appflowy-ci-gotrue', deployment_rule['resourceNames'])
+        self.assertIn('appflowy-ci-mcp', deployment_rule['resourceNames'])
 
     def test_unsafe_platform_configurations_fail_rendering(self):
         for value, error in (

@@ -52,6 +52,7 @@ or [role and permission mapping](SCIM_OPERATIONS.md#understand-roles-and-permiss
 | Turn on AI Meeting transcription | [AI Meeting configuration](AI_MEETING_CONFIG.md) |
 | Configure search | [Search configuration](SEARCH_CONFIG.md) |
 | Connect Google Drive or Google Calendar | [Connections](CONNECTION.md) |
+| Connect Claude, ChatGPT, Cursor, and other AI apps | [AI apps (MCP)](docker-compose.md#ai-apps-mcp) |
 | Find the server API specification | [OpenAPI](OPENAPI.md) |
 
 Use screenshots as visual guidance: labels can differ between releases. The
