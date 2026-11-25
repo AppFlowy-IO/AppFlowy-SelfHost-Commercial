@@ -50,7 +50,7 @@ The output is a private key. Store it like `GOTRUE_JWT_SECRET`.
 
 ## Step 3: Enable the exchange in GoTrue
 
-Add the settings to the root `.env` and restart GoTrue. There is no separate switch: these settings turn the exchange on, and GoTrue refuses to start when only some of them are set. Leave the client list out for now: with none configured, GoTrue refuses every exchange and lets an administrator register the first backend.
+Add the settings to the root `.env` and restart GoTrue. There is no separate switch: these settings turn the exchange on, and GoTrue refuses to start when only some of them are set. Its log then says `GoTrue could not load its configuration` and names the setting. Leave the client list out for now: with none configured, GoTrue refuses every exchange and lets an administrator register the first backend.
 
 ```dotenv
 GOTRUE_TOKEN_EXCHANGE_TENANT_ID=<lowercase Entra tenant UUID>
@@ -122,15 +122,16 @@ Send the returned `access_token` as `Authorization: Bearer <token>` to the two o
 
 | Response | Cause |
 | --- | --- |
+| GoTrue does not start; its log says `GoTrue could not load its configuration` | A setting is missing or malformed. The log names a delegated access setting, for example `token exchange requires GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS`. For any other setting the reason is not logged, because it can quote the setting's value: run `docker compose run --rm gotrue ./auth migrate` to read it. |
 | Exchange: `invalid_client` | Wrong client ID or secret, or the client is missing from `GOTRUE_TOKEN_EXCHANGE_CLIENTS`. |
 | Exchange: `invalid_grant` | The Entra token is expired, is for another tenant, audience or dashboard, or its user has no AppFlowy account linked through the OIDC provider. |
 | Exchange: `invalid_scope` | The requested scope is not allowed for the client or absent from the Entra token. |
-| Row API: 401 with `WWW-Authenticate: Bearer error="invalid_token"` | The header's `error_description` names the cause when GoTrue issued the token: wrong issuer or audience setting in Cloud, an expired token, or clocks out of step. A revoked session and a deactivated user also answer 401. |
+| Row API: 401 with `WWW-Authenticate: Bearer error="invalid_token"` | The header's `error_description` names the cause when GoTrue issued the token: wrong issuer or audience setting in Cloud, an expired token, clocks out of step, or a session that was revoked or whose user is deactivated. Request a new token; if the user is deactivated, the exchange answers `invalid_grant`. |
 | Row API: 403 with `error="insufficient_scope"` | The token lacks `data.read` for the read or `data.write` for the edit. |
 | Row API: 503 with `Retry-After` | Cloud cannot read GoTrue's signing keys and holds none it still trusts. |
 | Row API: 200 with code `1012` | The user's own AppFlowy permissions do not allow the operation. |
 
-AppFlowy Cloud logs the cause of each refused token that GoTrue issued.
+AppFlowy Cloud logs the cause of each refused token that GoTrue issued as an `INFO` line, `Refused a delegated access token`. When it cannot read GoTrue's signing keys it logs an `ERROR` line, `Unable to refresh delegated signing keys`.
 
 ## Operate it
 
