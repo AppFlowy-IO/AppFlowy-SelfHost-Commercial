@@ -39,20 +39,18 @@ class DelegatedAccessConfigurationTests(unittest.TestCase):
                 services = self.services(file)
                 gotrue = {name: value for name, value in services['gotrue']['environment'].items()
                           if name.startswith(GOTRUE_PREFIX)}
-                # GoTrue reads the remaining settings only once the first is true, and rejects a
-                # numeric limit that is present but empty.
+                # GoTrue has no switch for this. Exchange is off while these four are empty; the
+                # limits do not turn it on, and GoTrue rejects one that is present but empty.
                 self.assertEqual(gotrue, {
-                    GOTRUE_PREFIX + 'ENABLED': 'false', GOTRUE_PREFIX + 'TENANT_ID': '',
-                    GOTRUE_PREFIX + 'PROVIDER': '', GOTRUE_PREFIX + 'CLIENTS': '',
-                    GOTRUE_PREFIX + 'SIGNING_KEYS': '', GOTRUE_PREFIX + 'RATE_LIMIT': '150',
-                    GOTRUE_PREFIX + 'MAX_CONCURRENT': '8'})
+                    GOTRUE_PREFIX + 'TENANT_ID': '', GOTRUE_PREFIX + 'PROVIDER': '',
+                    GOTRUE_PREFIX + 'CLIENTS': '', GOTRUE_PREFIX + 'SIGNING_KEYS': '',
+                    GOTRUE_PREFIX + 'RATE_LIMIT': '150', GOTRUE_PREFIX + 'MAX_CONCURRENT': '8'})
                 cloud = services['appflowy_cloud']['environment']
                 # Cloud treats two empty settings as off and refuses to start with only one.
                 self.assertEqual([cloud[name] for name in CLOUD_SETTINGS], ['', ''])
 
     def test_operator_settings_reach_gotrue_and_cloud_unchanged(self):
         configured = {
-            GOTRUE_PREFIX + 'ENABLED': 'true',
             GOTRUE_PREFIX + 'TENANT_ID': '44444444-4444-4444-8444-444444444444',
             GOTRUE_PREFIX + 'PROVIDER': 'custom:entra',
             GOTRUE_PREFIX + 'CLIENTS': CLIENTS,
@@ -78,7 +76,7 @@ class DelegatedAccessConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='delegated-access-env-') as directory:
             env_file = Path(directory) / '.env'
             env_file.write_text((ROOT / 'deploy.env').read_text() + '\n'.join((
-                GOTRUE_PREFIX + 'ENABLED=true',
+                GOTRUE_PREFIX + 'TENANT_ID=44444444-4444-4444-8444-444444444444',
                 GOTRUE_PREFIX + "CLIENTS='" + CLIENTS + "'",
                 GOTRUE_PREFIX + "SIGNING_KEYS='" + SIGNING_KEYS + "'",
                 'APPFLOWY_TOKEN_EXCHANGE_ISSUER=${API_EXTERNAL_URL}',
@@ -98,7 +96,8 @@ class DelegatedAccessConfigurationTests(unittest.TestCase):
                          gotrue['API_EXTERNAL_URL'])
 
     def test_only_gotrue_holds_the_signing_key_and_only_cloud_accepts_the_tokens(self):
-        configured = {GOTRUE_PREFIX + 'ENABLED': 'true', GOTRUE_PREFIX + 'SIGNING_KEYS': SIGNING_KEYS,
+        configured = {GOTRUE_PREFIX + 'TENANT_ID': '44444444-4444-4444-8444-444444444444',
+                      GOTRUE_PREFIX + 'SIGNING_KEYS': SIGNING_KEYS,
                       'APPFLOWY_TOKEN_EXCHANGE_ISSUER': 'https://appflowy.example.test/gotrue',
                       'APPFLOWY_TOKEN_EXCHANGE_AUDIENCE': '33333333-3333-4333-8333-333333333333'}
         for file in COMPOSE_FILES:

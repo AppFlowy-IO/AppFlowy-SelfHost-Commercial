@@ -276,10 +276,11 @@ gotrue:
       privateKey: ""
 
     # Delegated row access for a dashboard backend (docs/DELEGATED_ACCESS.md). GoTrue exchanges
-    # a signed-in user's Microsoft Entra access token for a short-lived AppFlowy token. Set
-    # appflowy-cloud.config.tokenExchangeAudience as well so that Cloud accepts it.
+    # a signed-in user's Microsoft Entra access token for a short-lived AppFlowy token. There
+    # is no switch: it is off while tenantId, provider, clients and signingKeys are all empty,
+    # and the chart requires tenantId and provider once any of them is set. Set
+    # appflowy-cloud.config.tokenExchangeAudience as well so that Cloud accepts the tokens.
     tokenExchange:
-      enabled: false
       # Lowercase Entra tenant UUID, and the identifier of that tenant's OIDC provider.
       tenantId: ""
       provider: ""  # for example custom:entra

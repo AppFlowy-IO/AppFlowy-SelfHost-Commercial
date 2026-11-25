@@ -50,10 +50,9 @@ The output is a private key. Store it like `GOTRUE_JWT_SECRET`.
 
 ## Step 3: Enable the exchange in GoTrue
 
-Add the settings to the root `.env` and restart GoTrue. Leave the client list out for now: with none configured, GoTrue refuses every exchange and lets an administrator register the first backend.
+Add the settings to the root `.env` and restart GoTrue. There is no separate switch: these settings turn the exchange on, and GoTrue refuses to start when only some of them are set. Leave the client list out for now: with none configured, GoTrue refuses every exchange and lets an administrator register the first backend.
 
 ```dotenv
-GOTRUE_TOKEN_EXCHANGE_ENABLED=true
 GOTRUE_TOKEN_EXCHANGE_TENANT_ID=<lowercase Entra tenant UUID>
 GOTRUE_TOKEN_EXCHANGE_PROVIDER=custom:entra
 GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS='<output of step 2>'
@@ -63,7 +62,7 @@ GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS='<output of step 2>'
 docker compose up -d gotrue
 ```
 
-Docker Swarm reads the same settings from the environment you deploy the stack with. With the Helm chart, set the same values under `gotrue.config.tokenExchange` (`enabled`, `tenantId`, `provider`, `signingKeys`). The chart stores the key in the GoTrue secret.
+Docker Swarm reads the same settings from the environment you deploy the stack with. With the Helm chart, set the same values under `gotrue.config.tokenExchange` (`tenantId`, `provider`, `signingKeys`). The chart stores the key in the GoTrue secret.
 
 ## Step 4: Register the backend
 
@@ -136,7 +135,8 @@ AppFlowy Cloud logs the cause of each refused token that GoTrue issued.
 ## Operate it
 
 - **Remove a user's access.** Deactivate the user in the Admin console or remove their access to the workspace. Cloud checks the user and the session on every request.
-- **Remove a backend.** Delete its entry from `GOTRUE_TOKEN_EXCHANGE_CLIENTS` and restart GoTrue. Tokens already issued expire within five minutes.
+- **Remove a backend.** Delete its entry from `GOTRUE_TOKEN_EXCHANGE_CLIENTS` and restart GoTrue. Tokens already issued expire within five minutes. With the list empty, GoTrue issues no tokens at all.
+- **Turn it off.** Remove the `GOTRUE_TOKEN_EXCHANGE_*` tenant, provider, client and signing-key settings and both `APPFLOWY_TOKEN_EXCHANGE_*` settings, then restart GoTrue and AppFlowy Cloud.
 - **Rotate the signing key.** Add the new private key to `GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS` with `"key_ops":["sign"]`, keep the old key's public part (`kty`, `crv`, `alg`, `kid`, `x`, `y`) with `"key_ops":["verify"]`, and restart GoTrue. Remove the old key after five minutes. Cloud fetches a key it has not seen within a few seconds.
 - **GoTrue restarts.** Cloud keeps accepting tokens signed by the keys it last read for up to five minutes while GoTrue is unreachable.
 - **Audit.** With [audit logging](AUDIT.md) enabled, each delegated read and edit is recorded as `database.rows.read` or `database.row.updated` with the user, the backend's client ID, the exchange session, the rows read or the fields edited, and the backend's address. A refused scope or permission is recorded as `security.delegated_access.denied`. Each delegated read writes one audit record, so have the backend reuse what it has read where it can.

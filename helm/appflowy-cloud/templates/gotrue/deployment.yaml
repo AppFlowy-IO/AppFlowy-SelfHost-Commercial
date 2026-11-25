@@ -182,15 +182,13 @@ spec:
                   key: saml-private-key
             {{- end }}
 
+            {{- if include "appflowy.gotrue.tokenExchangeConfigured" . }}
             {{- with .Values.gotrue.config.tokenExchange }}
-            {{- if .enabled }}
-            # Delegated row access for a dashboard backend
-            - name: GOTRUE_TOKEN_EXCHANGE_ENABLED
-              value: "true"
+            # Delegated row access for a dashboard backend. These settings turn it on.
             - name: GOTRUE_TOKEN_EXCHANGE_TENANT_ID
-              value: {{ .tenantId | quote }}
+              value: {{ required "gotrue.config.tokenExchange.tenantId is required once delegated row access is configured" .tenantId | quote }}
             - name: GOTRUE_TOKEN_EXCHANGE_PROVIDER
-              value: {{ .provider | quote }}
+              value: {{ required "gotrue.config.tokenExchange.provider is required once delegated row access is configured" .provider | quote }}
             - name: GOTRUE_TOKEN_EXCHANGE_CLIENTS
               value: {{ .clients | toJson | quote }}
             - name: GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS

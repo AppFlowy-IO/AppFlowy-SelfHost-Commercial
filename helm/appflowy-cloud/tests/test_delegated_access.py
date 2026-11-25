@@ -20,7 +20,7 @@ SIGNING_KEYS = json.dumps([{'kty': 'EC', 'crv': 'P-256', 'alg': 'ES256', 'kid': 
 
 
 class DelegatedAccessChartTests(unittest.TestCase):
-    def render(self, values=None):
+    def render(self, values=None, success=True):
         command = ['helm', 'template', 'delegated-access-test', str(CHART), '-f', str(ROOT / 'ci/helm-values.yaml')]
         with tempfile.TemporaryDirectory(prefix='delegated-access-values-') as directory:
             if values is not None:
@@ -28,6 +28,9 @@ class DelegatedAccessChartTests(unittest.TestCase):
                 overlay.write_text(yaml.safe_dump(values))
                 command += ['-f', str(overlay)]
             result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if not success:
+            self.assertNotEqual(result.returncode, 0)
+            return result.stderr
         # A rendered chart contains secrets. Keep both streams out of a failure message.
         self.assertEqual(result.returncode, 0, 'helm template failed')
         return [item for item in yaml.safe_load_all(result.stdout) if item]
@@ -51,14 +54,34 @@ class DelegatedAccessChartTests(unittest.TestCase):
                       and item['metadata']['name'] == 'appflowy-ci-gotrue-secret')
         self.assertNotIn('token-exchange-signing-keys', secret['data'])
 
-    def test_enabled_values_configure_gotrue_and_keep_the_key_in_its_secret(self):
+    def test_settings_alone_turn_it_on_and_a_partial_set_is_refused(self):
+        # GoTrue has no switch for exchange, so the chart has none either. Any setting turns it
+        # on, and one given without the tenant and provider must not render as silently off.
+        exchange = lambda **values: {'gotrue': {'config': {'tokenExchange': values}}}
+        for partial, missing in (
+            ({'tenantId': '44444444-4444-4444-8444-444444444444'}, 'tokenExchange.provider'),
+            ({'provider': 'custom:entra'}, 'tokenExchange.tenantId'),
+            ({'signingKeys': SIGNING_KEYS}, 'tokenExchange.tenantId'),
+            ({'clients': CLIENTS}, 'tokenExchange.tenantId'),
+        ):
+            with self.subTest(partial=sorted(partial)):
+                self.assertIn(missing, self.render(exchange(**partial), success=False))
+        documents = self.render(exchange(tenantId='44444444-4444-4444-8444-444444444444',
+                                         provider='custom:entra'))
+        # Enough to start GoTrue with no backends yet; an upgrade keeps the stored key.
+        self.assertEqual(self.exchange_names(documents, 'gotrue'), [
+            'GOTRUE_TOKEN_EXCHANGE_' + name for name in
+            ('CLIENTS', 'MAX_CONCURRENT', 'PROVIDER', 'RATE_LIMIT', 'SIGNING_KEYS', 'TENANT_ID')])
+        self.assertEqual(self.environment(documents, 'gotrue')['GOTRUE_TOKEN_EXCHANGE_CLIENTS']['value'], '{}')
+
+    def test_configured_values_reach_gotrue_and_keep_the_key_in_its_secret(self):
         documents = self.render({'gotrue': {'config': {'tokenExchange': {
-            'enabled': True, 'tenantId': '44444444-4444-4444-8444-444444444444',
+            'tenantId': '44444444-4444-4444-8444-444444444444',
             'provider': 'custom:entra', 'clients': CLIENTS, 'signingKeys': SIGNING_KEYS,
             'rateLimit': 600, 'maxConcurrent': 16}}}})
         gotrue = self.environment(documents, 'gotrue')
         value = lambda name: gotrue['GOTRUE_TOKEN_EXCHANGE_' + name].get('value')
-        self.assertEqual(value('ENABLED'), 'true')
+        self.assertNotIn('GOTRUE_TOKEN_EXCHANGE_ENABLED', gotrue)
         self.assertEqual(value('TENANT_ID'), '44444444-4444-4444-8444-444444444444')
         self.assertEqual(value('PROVIDER'), 'custom:entra')
         self.assertEqual(json.loads(value('CLIENTS')), CLIENTS)
