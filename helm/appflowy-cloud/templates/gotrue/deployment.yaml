@@ -63,7 +63,7 @@ spec:
             - name: GOTRUE_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: admin-password
 
             # JWT configuration
@@ -118,7 +118,7 @@ spec:
             - name: GOTRUE_SMTP_PASS
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: smtp-password
             - name: GOTRUE_SMTP_ADMIN_EMAIL
               value: {{ .Values.gotrue.config.smtp.adminEmail | quote }}
@@ -135,7 +135,7 @@ spec:
             - name: GOTRUE_EXTERNAL_GOOGLE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: google-oauth-secret
             - name: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
               value: "{{ include "appflowy.gotrue.externalUrl" . }}/callback"
@@ -150,7 +150,7 @@ spec:
             - name: GOTRUE_EXTERNAL_GITHUB_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: github-oauth-secret
             - name: GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI
               value: "{{ include "appflowy.gotrue.externalUrl" . }}/callback"
@@ -165,7 +165,7 @@ spec:
             - name: GOTRUE_EXTERNAL_DISCORD_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: discord-oauth-secret
             - name: GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI
               value: "{{ include "appflowy.gotrue.externalUrl" . }}/callback"
@@ -178,7 +178,7 @@ spec:
             - name: GOTRUE_SAML_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "appflowy.gotrue.fullname" . }}-secret
+                  name: {{ include "appflowy.gotrue.secretName" . }}
                   key: saml-private-key
             {{- end }}
 
