@@ -6,6 +6,8 @@ With the bundled services, a fresh Free Tier `appflowy_cloud` container can star
 
 These details come from the source for `appflowyinc/appflowy_cloud:0.21.8`, the image pinned in Docker Compose on November 25, 2026. To check your version, run `docker compose images appflowy_cloud` in your Compose directory. [Compose image pin](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/f58f4ffafab79f11bf895b0bfeb4ec9548223baa/docker-compose.yml#L195) · [Image update](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/pull/97)
 
+If you are planning an upgrade, see [feature controls in the proposed server update](#feature-controls-in-the-proposed-server-update).
+
 ## Connections triggered by features
 
 Cloud skips Firebase push, LDAP sign-in and connected-app requests when the corresponding provider is unconfigured. Once configured, a provider can receive a queued notification or an administrator’s test even when nobody has the feature open. Built-in features have their own destinations. A desktop update check can reach GitHub even if you’ve never connected a GitHub account. Public HTTPS connections normally use TCP port 443.
@@ -61,4 +63,41 @@ If you host PostgreSQL or Redis elsewhere, Cloud connects to the host in `APPFLO
 - **Files and backups.** You can use regional AWS S3 or another S3-compatible store in place of MinIO. Backup archive uploads use the same endpoint by default. Set `APPFLOWY_BACKUP_S3_ENDPOINT` if you keep archives elsewhere. [Backup](BACKUP.md)
 - **Search vectors.** Cloud stores these in PostgreSQL by default. With `VECTOR_STORAGE_TYPE=s3_vectors`, vector operations use the regional AWS endpoint, such as `s3vectors.us-east-1.api.aws`. If you use an AWS role, its credential service can also receive requests. [AWS S3 Vectors endpoints](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-regions-quotas.html)
 
-When tracing a connection, check which process opened it. Worker, Search, AI, GoTrue and MCP make their own requests, and Docker pulls images. Docker’s default health check reads a local `OK` from `127.0.0.1:8000` on the `/api/health` path. Admin runs the broader mail and embedding checks. Firewall logs may also show DNS requests to your resolver or traffic through your configured proxy.
+## Reading a firewall entry
+
+Start with the process that opened the connection. Worker, Search, AI, GoTrue and MCP make their own requests, and Docker pulls images. Your firewall may also record the DNS lookup or a connection through your proxy.
+
+- **A connection to GitHub when a desktop starts.** In `0.21.8`, `appflowy_cloud` can contact `api.github.com` to look up a desktop release. A connected GitHub account can also use that host. If the connection came from a user’s computer, the desktop app may be checking its own feed or downloading an installer. Desktop `0.14.0` is one version that reads its feed directly from GitHub. [Desktop 0.14.0 update feed](https://github.com/AppFlowy-IO/AppFlowy/blob/5cf3a365dec0d59f64bad1ee4bb1050471a39b93/frontend/appflowy_flutter/lib/startup/tasks/auto_update_task.dart#L20-L21)
+- **A connection to a mail relay or AI provider while everyone is idle.** Check whether an administrator opened the health page. In `0.21.8` this can probe the configured SMTP relay and send a sample to the configured embedding model. Docker’s scheduled health check only reads `/api/health` at `127.0.0.1:8000`.
+
+## Feature controls in the proposed server update
+
+These controls apply once you deploy Cloud and Worker images that include the proposed change. The Compose image `0.21.8` follows the behavior described above. The commercial self-host tests ran against images built from the proposal. [Self-host test run](https://github.com/AppFlowy-IO/AppFlowy-CI/actions/runs/45585019147)
+
+| Feature | How to keep the connection off | What to expect |
+| --- | --- | --- |
+| Desktop updates | Leave automatic updates unset or turn them off in Admin (`desktop_auto_update_enabled`). | Cloud still tells an older desktop when it must upgrade. It can return a manual download link cached within the past hour without contacting GitHub. |
+| AI models and meeting transcription | Turn off AI in Admin. With no saved `ai_enabled` value, set `AI_ENABLED=false` in Cloud. Compose defaults it to `true`. | Cloud skips calls to models and AssemblyAI, including Admin’s embedding, vision and transcription checks. You can keep the provider settings for later. |
+| LDAP | Disable the directory in Admin. | Both sign-in and **Test connection** stop before contacting that directory. |
+| Email | Leave SMTP unconfigured, or set `APPFLOWY_MAILER_ENABLED=false` in Cloud and Worker. | Both services skip delivery. Cloud also skips the SMTP health check. |
+| Images in PDF exports | Leave `APPFLOWY_PDF_EXPORT_REMOTE_IMAGES_ENABLED` unset or `false` in Cloud. | PDFs still export. Cloud omits images referenced by URL, including images on your own AppFlowy host. |
+| Disposable email domain list | Leave `APPFLOWY_DISPOSABLE_DOMAINS_URL` unset or empty in Cloud. | Sign-up screening can use the local list. To allow an administrator to import a list, set the URL to your mirror or the upstream list. |
+| Apple token revocation | Leave Cloud’s Apple credentials unset if you don’t use Apple sign-in. | Local account deletion can proceed. Cloud contacts Apple only when it has both `APPFLOWY_APPLE_OAUTH_CLIENT_ID` and `APPFLOWY_APPLE_OAUTH_CLIENT_SECRET` and the client supplies an Apple access or refresh token. |
+
+On installations with multiple Cloud replicas, a cached Admin setting can take up to 60 seconds to reach another replica. Requests already in progress can finish. Commercial license check-ins follow the installation’s enrollment status.
+
+### Example for a configured mail relay
+
+`APPFLOWY_NOTIFICATION_ENABLE_EMAIL` controls notification emails. Invitations, access requests and Worker mail can also use the relay. To keep its credentials and switch off all Cloud and Worker mail after upgrading, save this as `compose.mail-off.yml` alongside `docker-compose.yml`.
+
+```yaml
+services:
+  appflowy_cloud:
+    environment:
+      APPFLOWY_MAILER_ENABLED: "false"
+  appflowy_worker:
+    environment:
+      APPFLOWY_MAILER_ENABLED: "false"
+```
+
+Append `:compose.mail-off.yml` to the existing `COMPOSE_FILE` value in `.env`, then run `docker compose up -d appflowy_cloud appflowy_worker` to apply it. GoTrue uses its own `GOTRUE_SMTP_*` settings for sign-in email.
