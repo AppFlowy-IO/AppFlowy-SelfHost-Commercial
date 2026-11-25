@@ -275,6 +275,25 @@ gotrue:
       enabled: false
       privateKey: ""
 
+    # Delegated row access for a dashboard backend (docs/DELEGATED_ACCESS.md). GoTrue exchanges
+    # a signed-in user's Microsoft Entra access token for a short-lived AppFlowy token. Set
+    # appflowy-cloud.config.tokenExchangeAudience as well so that Cloud accepts it.
+    tokenExchange:
+      enabled: false
+      # Lowercase Entra tenant UUID, and the identifier of that tenant's OIDC provider.
+      tenantId: ""
+      provider: ""  # for example custom:entra
+      # Registered backends by GoTrue client UUID:
+      #   <gotrue-client-uuid>: {entra_client_id: <dashboard-app-id>, audience: <api-app-id>,
+      #                          scopes: [data.read, data.write]}
+      clients: {}
+      # JSON array of ES256 P-256 JWKs used only for these tokens. Stored in the GoTrue
+      # secret; leave empty on an upgrade to keep the stored keys.
+      signingKeys: ""
+      # Exchanges per backend per five minutes, and exchanges in progress at once.
+      rateLimit: 150
+      maxConcurrent: 8
+
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -348,6 +367,11 @@ appflowy-cloud:
     # Audit logging fallback for the switch in Admin -> Audit Log, used until Admin saves one.
     # Empty leaves it unset (off). The bundled appflowy-mcp service receives the same value.
     auditEnable: ""
+
+    # Accept the tokens GoTrue exchanges for a dashboard backend on the database row API.
+    # Set it to the Entra application ID used as "audience" in gotrue.config.tokenExchange
+    # .clients. The chart supplies GoTrue's public URL as the issuer. Empty leaves it off.
+    tokenExchangeAudience: ""
 
     # WebSocket configuration
     websocketMailboxSize: 6000

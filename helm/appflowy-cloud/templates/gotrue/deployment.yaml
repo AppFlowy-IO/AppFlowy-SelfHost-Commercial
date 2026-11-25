@@ -182,6 +182,29 @@ spec:
                   key: saml-private-key
             {{- end }}
 
+            {{- with .Values.gotrue.config.tokenExchange }}
+            {{- if .enabled }}
+            # Delegated row access for a dashboard backend
+            - name: GOTRUE_TOKEN_EXCHANGE_ENABLED
+              value: "true"
+            - name: GOTRUE_TOKEN_EXCHANGE_TENANT_ID
+              value: {{ .tenantId | quote }}
+            - name: GOTRUE_TOKEN_EXCHANGE_PROVIDER
+              value: {{ .provider | quote }}
+            - name: GOTRUE_TOKEN_EXCHANGE_CLIENTS
+              value: {{ .clients | toJson | quote }}
+            - name: GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "appflowy.gotrue.fullname" $ }}-secret
+                  key: token-exchange-signing-keys
+            - name: GOTRUE_TOKEN_EXCHANGE_RATE_LIMIT
+              value: {{ .rateLimit | quote }}
+            - name: GOTRUE_TOKEN_EXCHANGE_MAX_CONCURRENT
+              value: {{ .maxConcurrent | quote }}
+            {{- end }}
+            {{- end }}
+
           livenessProbe:
             httpGet:
               path: /health
