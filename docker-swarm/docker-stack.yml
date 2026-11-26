@@ -210,7 +210,7 @@ services:
         parallelism: 1
         order: stop-first
   admin_frontend:
-    image: appflowyinc/admin_frontend:0.20.4@sha256:10d136fc7c476346c76c7195b7833dc0f234a3418f35aca0f52cc4e8d95f3567
+    image: appflowyinc/admin_frontend:0.20.5@sha256:bc935929b81ebaf7a9a282962695fa679c6eb7f912b2e48342e6bcacae8fc0ae
     environment:
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
