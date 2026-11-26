@@ -401,7 +401,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_web:
-    image: appflowyinc/appflowy_web:0.20.15@sha256:c0cec44bb86af97696c104c80f9bf6f551bd546d2c12df75bb3747d5f52cf0fd
+    image: appflowyinc/appflowy_web:0.21.0@sha256:8ea357716b711a9d2c9bb11c613fcc049810ea3bd3630bcda9091c0b24a1eeb8
     environment:
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL}
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_BASE_URL}/gotrue
