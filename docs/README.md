@@ -14,6 +14,7 @@ operational limits.
 | Deploy to Kubernetes | [Helm chart](../helm/appflowy-cloud/README.md) |
 | Back up and restore the instance | [Server backup](BACKUP.md) |
 | Investigate administrative and permission changes | [Audit logging](AUDIT.md) |
+| Send audit events to a SIEM or log collector | [SIEM integration](SIEM.md) |
 | Validate deployment configuration in CI | [Deployment CI](deployment-ci.md) |
 | Redeem a license invitation | [Invitation code](LICENSE_INVITE_CODE.md) |
 | Manage your billing card | [Billing Q&A](BILLING_QA.md) |
