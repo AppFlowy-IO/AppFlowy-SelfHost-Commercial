@@ -395,6 +395,15 @@ GoTrue external URL
 {{- end }}
 
 {{/*
+Delegated row access has no switch: giving any of its GoTrue settings a value turns it on.
+*/}}
+{{- define "appflowy.gotrue.tokenExchangeConfigured" -}}
+{{- with .Values.gotrue.config.tokenExchange -}}
+{{- if or .tenantId .provider .signingKeys .clients -}}true{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 GoTrue internal URL (service-to-service)
 */}}
 {{- define "appflowy.gotrue.internalUrl" -}}

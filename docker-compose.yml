@@ -128,6 +128,16 @@ services:
       # SAML 2.0 OAuth config
       - GOTRUE_SAML_ENABLED=${GOTRUE_SAML_ENABLED}
       - GOTRUE_SAML_PRIVATE_KEY=${GOTRUE_SAML_PRIVATE_KEY}
+      # Delegated row access for a dashboard backend (docs/DELEGATED_ACCESS.md). There is no
+      # switch: it is off while the first four settings are empty, and giving any of them a
+      # value turns it on. GoTrue then requires the tenant, provider and signing keys. The two
+      # limits repeat GoTrue's defaults because it rejects a limit that is present but empty.
+      - GOTRUE_TOKEN_EXCHANGE_TENANT_ID=${GOTRUE_TOKEN_EXCHANGE_TENANT_ID:-}
+      - GOTRUE_TOKEN_EXCHANGE_PROVIDER=${GOTRUE_TOKEN_EXCHANGE_PROVIDER:-}
+      - GOTRUE_TOKEN_EXCHANGE_CLIENTS=${GOTRUE_TOKEN_EXCHANGE_CLIENTS:-}
+      - GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS=${GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS:-}
+      - GOTRUE_TOKEN_EXCHANGE_RATE_LIMIT=${GOTRUE_TOKEN_EXCHANGE_RATE_LIMIT:-150}
+      - GOTRUE_TOKEN_EXCHANGE_MAX_CONCURRENT=${GOTRUE_TOKEN_EXCHANGE_MAX_CONCURRENT:-8}
 
   appflowy_cloud:
     # Restore writes only the selected bucket, Redis database and search directory here.
@@ -175,6 +185,10 @@ services:
       # Audit fallback until Admin -> Audit Log saves the switch. appflowy_mcp resolves it too
       # and receives the same value (see deploy.env).
       - APPFLOWY_AUDIT_ENABLE=${APPFLOWY_AUDIT_ENABLE:-}
+      # Accept the tokens GoTrue exchanges for a dashboard on the database row API. Cloud
+      # starts with both empty (off) or both set, never with one (docs/DELEGATED_ACCESS.md).
+      - APPFLOWY_TOKEN_EXCHANGE_ISSUER=${APPFLOWY_TOKEN_EXCHANGE_ISSUER:-}
+      - APPFLOWY_TOKEN_EXCHANGE_AUDIENCE=${APPFLOWY_TOKEN_EXCHANGE_AUDIENCE:-}
       - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
       - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
       - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
