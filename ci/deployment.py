@@ -756,6 +756,9 @@ class Deployment:
         self.guard()
         for name in ('core-acceptance.json', 'acceptance.json'):
             (self.artifacts / name).unlink(missing_ok=True)
+        if self.mode == 'compose':
+            from check_login_ingress import check
+            check(ROOT / 'docker/nginx/nginx.conf')
         self.smoke('create')
         self.check_mcp_settings()
         self.browser()

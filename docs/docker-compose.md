@@ -65,6 +65,14 @@ See [Backup](#backup) for details.
 
 ### Server logs only
 
+The Compose proxy records a small JSON status line for a GoTrue token exchange, an LDAP login,
+or Cloud verification. It carries the request ID, operation, time and HTTP status. A
+verification URL contains an access token; the proxy keeps that URL, query string and referrer
+out of its access logs. For example, if a login fails, take the `X-Request-Id` from its response
+and search the Nginx service output for that exact ID. The current pinned GoTrue image generates
+its own native request ID internally. On a legacy GoTrue 5xx, `error_id` in its response body
+identifies its native log, while the proxy response ID identifies the Nginx record.
+
 ```dotenv
 APPFLOWY_BACKUP_PROFILE=
 APPFLOWY_SERVER_LOGS_PROFILE=server-logs

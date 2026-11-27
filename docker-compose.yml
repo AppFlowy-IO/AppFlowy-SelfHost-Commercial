@@ -82,6 +82,8 @@ services:
       # The initial GoTrue Admin user password to create, if not already exists.
       # If the user already exists, the update will be skipped.
       - GOTRUE_ADMIN_PASSWORD=${GOTRUE_ADMIN_PASSWORD}
+      # GoTrue merges these with its standard CORS request headers.
+      - GOTRUE_CORS_ALLOWED_HEADERS=X-Request-Id${GOTRUE_CORS_ALLOWED_HEADERS:+,}${GOTRUE_CORS_ALLOWED_HEADERS:-}
       - GOTRUE_DISABLE_SIGNUP=${GOTRUE_DISABLE_SIGNUP:-false}
       - GOTRUE_SITE_URL=appflowy-flutter://                           # redirected to AppFlowy application
       - GOTRUE_URI_ALLOW_LIST=** # adjust restrict if necessary
