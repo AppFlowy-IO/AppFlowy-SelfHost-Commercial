@@ -34,7 +34,7 @@ services:
     command:
     - appflowy_search
   appflowy_backup:
-    image: appflowyinc/appflowy_backup:0.22.1@sha256:d9ce1cbe93d7385663dba979f1b5981b145eace336a0b11ee1a58fae24195cb5
+    image: appflowyinc/appflowy_backup:0.22.2@sha256:d2e4ae2b2d38df132ef5ebba3528ffb5aca7e3567ac263d9cd27743361774a85
     environment:
       APPFLOWY_S3_BUCKET: ${APPFLOWY_S3_BUCKET}
       APPFLOWY_REDIS_URI: ${APPFLOWY_REDIS_URI}
