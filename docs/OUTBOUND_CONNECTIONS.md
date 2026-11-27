@@ -2,7 +2,7 @@
 
 [Documentation](README.md)
 
-Without a license, a fresh `appflowy_cloud` container contacts only the other services of your deployment, at startup and while idle. A connection to a host outside your network starts only when someone uses a feature that needs one or an administrator sets up a provider, and installing a commercial license adds regular check-ins with the license issuer. By contrast, the bundled MinIO checks `dl.min.io` for updates every time it starts, until you [turn that off](#example-turn-off-minios-update-check).
+Without a license, a fresh `appflowy_cloud` container contacts only the other services of your deployment, at startup and while idle. A connection to a host outside your network starts only when someone uses a feature that needs one or an administrator sets up a provider, and installing a commercial license adds regular check-ins with the license issuer.
 
 This guide covers Cloud and the other containers of the Compose deployment: what starts each connection, where it goes and how to keep it off. It describes self-hosted release 0.22.1, whose server images are tagged `0.22.1`. To check your Cloud image, run `docker compose images appflowy_cloud` in your Compose directory. Images `0.22.0` and earlier make more of these connections by default; see [releases before 0.22.1](#releases-before-0221).
 
@@ -13,7 +13,7 @@ Connections to public web hosts use HTTPS on TCP port 443 unless a configured UR
 The switches for PDF images, the email domain list, mail and the billing relay are in **Admin → Environment**, named after their environment variables. AI has **Enable AI Features** on Admin’s AI page, and desktop updates have their own **Desktop updates** page.
 
 - **Order.** A value saved in Admin decides. Without one, Cloud uses the environment variable of the same name, read when the container starts, and then the default given below. AI uses `AI_ENABLED`, and desktop updates have no variable. **Reset** deletes the saved value.
-- **Environment variables.** `docker-compose.yml` passes `AI_ENABLED` to Cloud, but not the four `APPFLOWY_*` switches or most other Cloud variables in this guide. To set one, add it under `appflowy_cloud` in an override file, like the [MinIO example](#example-turn-off-minios-update-check). An Admin setting needs no such change.
+- **Environment variables.** `docker-compose.yml` passes `AI_ENABLED` to Cloud, but not the four `APPFLOWY_*` switches or most other Cloud variables in this guide. To set one, add it under `appflowy_cloud` in an override file, as in the [example](#example-set-variables-with-an-override-file). An Admin setting needs no such change.
 - **Timing.** The Cloud replica that saves a value applies it at once. Other Cloud replicas, the Worker and Search follow within 60 seconds. Requests already running finish with the value they read.
 - **Failures.** While the saved settings cannot be read, for example during a database outage, each feature stays off for that attempt. Cloud keeps the AI setting it last confirmed.
 - **Invalid values.** The on/off variables accept `true`, `false`, `1` and `0`, and the list source accepts an `http` or `https` URL. Any other value stops Cloud at startup with an error that names the variable. An invalid `AI_ENABLED` keeps AI off and logs an error instead.
@@ -36,7 +36,7 @@ Self-hosted Cloud never sends mobile push notifications through Firebase, even w
 
 ## When does Cloud contact AppFlowy about a license?
 
-**Billing pages in Admin.** Admin’s license and upgrade pages reach AppFlowy Billing at `beta.appflowy.cloud` through Cloud’s `/api/commercial/billing/` routes. Cloud relays these requests when you verify a commercial account, look up plans, manage a subscription, redeem an invitation or manage registered devices. The routes need no AppFlowy session, so while the relay is on, anyone who can reach your server can make it contact AppFlowy Billing. The relay is on by default. If you don’t use these pages, turn off `APPFLOWY_COMMERCIAL_BILLING_ENABLED` in **Admin → Environment**; the routes then answer that the feature is unavailable.
+**Billing pages in Admin.** Admin’s license and upgrade pages reach AppFlowy Billing at `beta.appflowy.cloud` through Cloud’s `/api/commercial/billing/` routes. Cloud relays these requests when you verify a commercial account, look up plans, manage a subscription, redeem an invitation or manage registered devices. The routes need no AppFlowy session, so while the relay is on, anyone who can reach your server can make it contact AppFlowy Billing. The bundled Nginx accepts at most 2 requests per second from one address on these routes, in bursts of up to 20; the Helm chart’s Ingress has no such limit. The relay is on by default. If you don’t use these pages, turn off `APPFLOWY_COMMERCIAL_BILLING_ENABLED` in **Admin → Environment**; the routes then answer that the feature is unavailable.
 
 **Installing or checking a license.** Cloud contacts the issuer named in the signed license, normally `beta.appflowy.cloud`:
 
@@ -71,27 +71,31 @@ Each container opens its own connections, and Docker contacts its registry, norm
 
 | Container | What starts a connection? | Where does it go? | How to keep it off |
 | --- | --- | --- | --- |
-| `minio` | Every start: MinIO checks for a newer release. | `dl.min.io` | Set `MINIO_UPDATE=off`, as in the [example below](#example-turn-off-minios-update-check). |
+| `minio` | Nothing while `MINIO_UPDATE=off`, which Docker Compose, Docker Swarm and the Helm chart set. Without it, MinIO checks for a newer release every time it starts. | `dl.min.io` | Keep `MINIO_UPDATE=off` if you run MinIO with settings of your own. |
 | `gotrue` | Sign-in email, such as magic links and password recovery, sign-in through an OAuth or SAML provider you enable, and the metadata URL of a SAML provider an administrator adds. | The relay in `GOTRUE_SMTP_HOST`, and your sign-in providers. | Leave `GOTRUE_SMTP_HOST` empty to send no email. The 0.22.1 image also sends none while `.env` still holds the example SMTP block of `deploy.env`: `smtp.gmail.com` with the example user and password. OAuth and SAML providers stay off until you enable them. |
 | `ai` | AI requests that Cloud forwards, such as chat and writing tools, and web search once it is turned on. | Your configured AI providers, including the image URLs they return. Web search uses Brave Search, Tavily or DuckDuckGo and fetches the pages it finds. | Turn off **Enable AI Features** in Admin. Web search is off until it is turned on in Admin’s AI tools settings. |
 | `appflowy_search` | Indexing and search create embeddings. | Your configured embedding provider. | Turn off **Enable AI Features** in Admin. |
 | `appflowy_worker` | Workspace export and import results sent by email. | The `APPFLOWY_MAILER_SMTP_*` relay. | As for [email from Cloud](#features-that-contact-other-hosts). |
 | `appflowy_mcp` | An AI app that identifies itself with a metadata URL connects, or a connection list shows one. The first sign-in steps of an AI app need no AppFlowy account. | The app’s metadata URL. | Turn off MCP on Admin’s MCP page. MCP also stays off without a One, Team or Enterprise license. [Turning MCP off or on](docker-compose.md#turning-mcp-off-or-on) |
+| `appflowy_web` | A member imports a YouTube video into an AI Meeting block. | `www.youtube.com`: the video page, its player data and captions. | No switch; only signed-in workspace members can import. [Import from YouTube](AI_MEETING_CONFIG.md#import-from-youtube) |
 | `admin_frontend` | An administrator tests a SAML metadata URL. | That URL and up to 3 redirects. | The test runs only when an administrator starts it. |
 | `appflowy_backup` | With the backup profile enabled, scheduled and manual backups upload archives. | Your object storage, in a private backup bucket. | The backup profile is off by default. [Backup](BACKUP.md) |
 
-### Example: turn off MinIO’s update check
+### Example: set variables with an override file
 
-The bundled MinIO asks `dl.min.io` for a newer release every time it starts. To turn that off, save this as `compose.offline.yml` alongside `docker-compose.yml`.
+`docker-compose.yml` doesn’t pass the outbound switches to Cloud or the Worker. To set one there, for example to keep mail off until an administrator saves a value in Admin, save this as `compose.offline.yml` alongside `docker-compose.yml`.
 
 ```yaml
 services:
-  minio:
+  appflowy_cloud:
     environment:
-      MINIO_UPDATE: "off"
+      APPFLOWY_MAILER_ENABLED: "false"
+  appflowy_worker:
+    environment:
+      APPFLOWY_MAILER_ENABLED: "false"
 ```
 
-Append `:compose.offline.yml` to the existing `COMPOSE_FILE` value in `.env`, then run `docker compose up -d minio` to apply it. To set one of Cloud’s variables the same way, add an `appflowy_cloud` entry with its own `environment` to this file and run `docker compose up -d appflowy_cloud`.
+Append `:compose.offline.yml` to the existing `COMPOSE_FILE` value in `.env`, then run `docker compose up -d appflowy_cloud appflowy_worker` to apply it. A value saved in Admin still takes precedence.
 
 ## Reading a firewall entry
 
@@ -99,7 +103,8 @@ Start with the container that opened the connection. Your firewall may also reco
 
 - **GitHub from `appflowy_cloud`.** Automatic updates are on in **Admin → Desktop updates**, or a member uses a connected GitHub account. If the connection came from a user’s computer, the desktop app may be checking its own update feed or downloading an installer. Desktop `0.14.0` is one version that reads its feed directly from GitHub. [Desktop 0.14.0 update feed](https://github.com/AppFlowy-IO/AppFlowy/blob/5cf3a365dec0d59f64bad1ee4bb1050471a39b93/frontend/appflowy_flutter/lib/startup/tasks/auto_update_task.dart#L20-L21)
 - **`beta.appflowy.cloud` from a server without a license.** Someone opened Admin’s license or upgrade pages, or another client called `/api/commercial/billing/`. See [billing pages in Admin](#when-does-cloud-contact-appflowy-about-a-license).
-- **`dl.min.io` when the deployment starts.** This is MinIO’s update check; see the [example](#example-turn-off-minios-update-check).
+- **`dl.min.io` when the deployment starts.** MinIO checked for updates because it runs without `MINIO_UPDATE=off`, for example from an older Compose file.
+- **`www.youtube.com` from `appflowy_web`.** A member imported a YouTube video into an AI Meeting block.
 - **GitHub, Pixabay or Medium from a user’s computer after an email.** AppFlowy’s emails load their images from `raw.githubusercontent.com`, and access request emails can show default icons from `cdn.pixabay.com` and `miro.medium.com`. The recipient’s mail app fetches them, not your server.
 - **A mail relay or AI provider while everyone is idle.** Check whether an administrator opened Admin’s health page. While mail and AI are on, it tests the mail relay and sends the words `health check` to the configured embedding model. Docker’s scheduled health check only reads `/api/health` at `127.0.0.1:8000`, which contacts nothing.
 
