@@ -91,25 +91,32 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 - **SIEM audit feed (Team and Enterprise)** — With audit logging enabled, system administrators could grant collectors read-only access to one workspace or the whole installation. Collectors could resume from a saved checkpoint. [SIEM setup](docs/SIEM.md)
 - **Database row API** — Cursor-based sync picked up edits that became visible after an earlier poll. Relation cells returned linked row IDs in pages, with optional titles for rows the caller could read.
 - **Delegated database access (opt-in)** — Dashboards could exchange Microsoft Entra ID tokens to read database fields and sync, create or edit rows as the signed-in user. This required a GoTrue build configured for token exchange and matching `APPFLOWY_TOKEN_EXCHANGE_ISSUER` and `APPFLOWY_TOKEN_EXCHANGE_AUDIENCE` settings in Cloud.
+- **Outbound connection controls** — Administrators could switch optional outbound connections in Admin → Environment: images from other websites in PDF exports, the disposable email domain list source, Cloud and Worker mail, and the AppFlowy Billing relay behind Admin’s license and upgrade pages. [Outbound connections](docs/OUTBOUND_CONNECTIONS.md)
 
 #### Improvements
 
 - **Workspace search** — Keyword search matched Russian word forms and е/ё spellings and handled typos in other non-Latin scripts. English queries such as “show my todo tasks” found open assignments in recently visited documents and grids.
 - **Search indexing** — Reused embeddings for unchanged passages after edits and let other indexing work proceed while a task waited for a snapshot.
+- **Optional connections off by default** — On self-hosted servers, desktop update lookups, images from other websites in PDF exports, disposable email domain list imports, the public address lookup during license binding and web search in AI chat stayed off until an administrator turned them on. The example SMTP settings of `deploy.env` no longer made Cloud, the Worker or GoTrue try the example mail relay.
+- **AI switch** — **Enable AI Features** applied the same rule in Cloud, Search, the Worker and the AI service. While it was off, Admin’s embedding, vision and AssemblyAI tests contacted no provider, and AI provider and model settings stayed available. A database outage or an invalid stored value no longer switched AI on in some services.
+- **PDF export** — Images uploaded to the exported workspace were read from storage and embedded whatever the remote image setting. Images that could not be decoded printed as placeholders instead of failing the export, and math blocks printed their equation source.
 
 #### Bug Fixes
 
 - Recovered stalled sidebar renames and favorite updates after incomplete syncs, preserving favorite order.
 - Fixed row pages failing to reopen from another linked view of the same database. Page and linked-view creation retried after temporary lock conflicts.
 - Protected resumed uploads from cleanup. Backup flagged missing row-page content and rejected captures when a ready attachment was missing or had the wrong size.
+- Treated AI provider settings that still held `deploy.env` template text as unset, so those providers no longer appeared available. Template center edits on self-hosted servers required a system administrator.
+- Finished workspace exports without their result email while mail was off, instead of retrying for days. Account deletion contacted Apple only when Apple credentials were configured.
 
 #### ⚠️ Action Required
 
 - **Server and Backup upgrade** — Let Cloud apply its PostgreSQL migrations before starting the updated MCP service or running Backup jobs. Match Backup to your PostgreSQL major version. Incremental captures still need staging space for a full dump. Restoring one requires format-4-capable tools, the full base and every intervening increment. [Backup image selection](docs/BACKUP.md#choose-the-backup-image)
 - **SIEM recovery** — After a full restore, or a logical PostgreSQL restore that resets the feed, issue fresh collector tokens and replay retained events. Deduplicate by event ID.
 - **Worker rollback** — To revert to a Worker without delayed indexing retries, stop the upgraded Workers and let in-flight jobs finish. With indexing enabled, run the upgraded server’s `promote_due.lua` once per second until `af:realtime_index_task_retries` is empty.
+- **Optional outbound features** — Turn back on what you rely on: **Enable auto update** in Admin → Desktop updates, `APPFLOWY_PDF_EXPORT_REMOTE_IMAGES_ENABLED` and an `APPFLOWY_DISPOSABLE_DOMAINS_URL` source in Admin → Environment, and web search in Admin’s AI tools settings. If `.env` sets `AI_ENABLED`, use `true`, `false`, `1` or `0`; any other value now keeps AI off. [Outbound connections](docs/OUTBOUND_CONNECTIONS.md)
 
-**Baseline:** [`50a7a1efb23ca144e40e35d9a78ab1b760dbb322`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/50a7a1efb23ca144e40e35d9a78ab1b760dbb322)
+**Baseline:** [`bc6314249a52fa56964b742aac496aded403fe18`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/bc6314249a52fa56964b742aac496aded403fe18)
 
 ### 🚀 v0.21.10
 
