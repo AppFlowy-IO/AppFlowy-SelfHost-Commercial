@@ -74,6 +74,12 @@ You can also set AssemblyAI in `.env`. Both ways work together: a value saved in
 - Docker Compose and Docker Swarm pass these variables to `appflowy_cloud`. The Helm chart does not, so use the Meeting tab on Kubernetes.
 - The card's **Source** line tells you which one is in use. **Reset to environment** removes what was saved in Admin and returns to these variables.
 
+## Import from YouTube
+
+Members can import a YouTube video’s captions into an AI Meeting block. The `appflowy_web` container reads them from `www.youtube.com`, so it needs outbound HTTPS access to YouTube. The import uses no AssemblyAI transcription minutes.
+
+The bundled Nginx and the Helm chart’s Ingress send `/api/youtube-audio` to AppFlowy Web, while every other `/api` path goes to `appflowy_cloud`. If you use your own reverse proxy, route that path to `appflowy_web` too.
+
 ## Troubleshooting
 
 | Problem | What to check |
