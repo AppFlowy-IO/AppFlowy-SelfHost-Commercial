@@ -173,6 +173,10 @@ minio:
     - /bitnami/minio/data
     - --console-address
     - ":9001"
+  # MinIO otherwise asks dl.min.io for a newer release each time it starts.
+  extraEnvVars:
+    - name: MINIO_UPDATE
+      value: "off"
   auth:
     rootUser: minioadmin
     rootPassword: "minioadmin"  # MUST be set
