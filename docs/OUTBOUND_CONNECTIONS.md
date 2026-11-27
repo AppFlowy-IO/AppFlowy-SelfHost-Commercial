@@ -2,102 +2,126 @@
 
 [Documentation](README.md)
 
-With the bundled services, a fresh Free Tier `appflowy_cloud` container can start and stay idle on your own network. Enrolling a commercial license adds regular check-ins with the license issuer.
+Without a license, a fresh `appflowy_cloud` container contacts only the other services of your deployment, at startup and while idle. A connection to a host outside your network starts only when someone uses a feature that needs one or an administrator sets up a provider, and installing a commercial license adds regular check-ins with the license issuer. By contrast, the bundled MinIO checks `dl.min.io` for updates every time it starts, until you [turn that off](#example-turn-off-minios-update-check).
 
-These details come from the source for `appflowyinc/appflowy_cloud:0.21.8`, the image pinned in Docker Compose on November 25, 2026. To check your version, run `docker compose images appflowy_cloud` in your Compose directory. [Compose image pin](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/blob/f58f4ffafab79f11bf895b0bfeb4ec9548223baa/docker-compose.yml#L195) · [Image update](https://github.com/AppFlowy-IO/AppFlowy-SelfHost-Commercial/pull/97)
+This guide covers Cloud and the other containers of the Compose deployment: what starts each connection, where it goes and how to keep it off. It describes self-hosted release 0.22.1, whose server images are tagged `0.22.1`. To check your Cloud image, run `docker compose images appflowy_cloud` in your Compose directory. Images `0.22.0` and earlier make more of these connections by default; see [releases before 0.22.1](#releases-before-0221).
 
-If you are planning an upgrade, see [feature controls in the proposed server update](#feature-controls-in-the-proposed-server-update).
+Connections to public web hosts use HTTPS on TCP port 443 unless a configured URL names another port. Mail and LDAP use the ports you configure.
 
-## Connections triggered by features
+## How the switches work
 
-Cloud skips Firebase push, LDAP sign-in and connected-app requests when the corresponding provider is unconfigured. Once configured, a provider can receive a queued notification or an administrator’s test even when nobody has the feature open. Built-in features have their own destinations. A desktop update check can reach GitHub even if you’ve never connected a GitHub account. Public HTTPS connections normally use TCP port 443.
+The switches for PDF images, the email domain list, mail and the billing relay are in **Admin → Environment**, named after their environment variables. AI has **Enable AI Features** on Admin’s AI page, and desktop updates have their own **Desktop updates** page.
 
-### Features that use a provider
+- **Order.** A value saved in Admin decides. Without one, Cloud uses the environment variable of the same name, read when the container starts, and then the default given below. AI uses `AI_ENABLED`, and desktop updates have no variable. **Reset** deletes the saved value.
+- **Environment variables.** `docker-compose.yml` passes `AI_ENABLED` to Cloud, but not the four `APPFLOWY_*` switches or most other Cloud variables in this guide. To set one, add it under `appflowy_cloud` in an override file, like the [MinIO example](#example-turn-off-minios-update-check). An Admin setting needs no such change.
+- **Timing.** The Cloud replica that saves a value applies it at once. Other Cloud replicas, the Worker and Search follow within 60 seconds. Requests already running finish with the value they read.
+- **Failures.** While the saved settings cannot be read, for example during a database outage, each feature stays off for that attempt. Cloud keeps the AI setting it last confirmed.
+- **Invalid values.** The on/off variables accept `true`, `false`, `1` and `0`, and the list source accepts an `http` or `https` URL. Any other value stops Cloud at startup with an error that names the variable. An invalid `AI_ENABLED` keeps AI off and logs an error instead.
 
-| Feature | What triggers a request? | Where does it go? |
-| --- | --- | --- |
-| Mobile push | Cloud needs both a Firebase service account key file and a queued notification. It gets an access token, then sends the notification and device token. | The service account’s token endpoint (usually `oauth2.googleapis.com`), then `fcm.googleapis.com`. |
-| LDAP sign-in | A sign-in uses an enabled directory. An administrator can also test a saved directory **even when sign-in is disabled**. | Your LDAP server, usually TCP 389 for LDAP or StartTLS, or 636 for LDAPS. [LDAP setup](LDAP.md) |
-| Connected apps | Only enabled providers receive token and API requests when someone links or uses an account. Cloud refreshes tokens on demand. Disconnecting removes the local connection. | Google Drive and Calendar use `oauth2.googleapis.com` and `www.googleapis.com`. Slack uses `slack.com`, Notion uses `api.notion.com`, and GitHub uses `github.com` and `api.github.com`. [Connections](CONNECTION.md) |
-| AI models | Cloud calls an active model for search summaries, presentation media or meeting transcription. Admin’s overall health check can send the words `health check` to a configured embedding model **even with user-facing AI off**. | `api.openai.com`, `api.anthropic.com`, `dashscope.aliyuncs.com` or `generativelanguage.googleapis.com`. Azure OpenAI, DeepSeek and custom providers use a configured URL. A local model keeps those calls on your network. [AI models](MODEL_CONFIG.md) |
-| AI Meeting with AssemblyAI | Meeting transcription needs AI enabled and a key in Admin or the environment. Cloud uploads recordings, retrieves transcripts or gets a token for live audio. **Test connection** checks both endpoints, even with a key you haven’t saved yet. | `api.assemblyai.com` and `streaming.assemblyai.com`, or your configured endpoints. The client opens the live audio stream. [AI Meeting](AI_MEETING_CONFIG.md) |
+## Features that contact other hosts
 
-### Built-in actions
+| Feature | What starts a connection? | Where does it go? | Default in 0.22.1, and how to keep it off |
+| --- | --- | --- | --- |
+| Desktop updates | A desktop app checks for an update; the request needs no sign-in. Cloud reuses a successful answer for 15 minutes. | `api.github.com`. If the release has an update manifest, also `github.com` and its download host, such as `release-assets.githubusercontent.com`. The app downloads installers itself. | **Off.** **Admin → Desktop updates → Enable auto update** turns lookups on. While it is off, Cloud contacts no GitHub host and still tells older desktops when they must upgrade. |
+| Images in PDF exports | An export that includes images refers to an image by URL. Images uploaded to the exported workspace are read from storage instead. | The image’s host, and up to 3 redirects. Private addresses are refused, and no proxy is used. | **Off.** `APPFLOWY_PDF_EXPORT_REMOTE_IMAGES_ENABLED`. While it is off, these images print as placeholders, including uploads from other workspaces and other URLs on your own host. The view export’s `include_images=false` skips all images. |
+| Disposable email domain list | An administrator imports the list. Startup and sign-ups never download it. | The configured source. Redirects are refused. | **No source,** so an import reports an error. To allow imports, set `APPFLOWY_DISPOSABLE_DOMAINS_URL` to your mirror or the [upstream list](https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/main/disposable_email_blocklist.conf). |
+| Email from Cloud and the Worker | Workspace and guest invitations, guest approvals, access requests, and workspace export and import results. Mention emails too, once `APPFLOWY_NOTIFICATION_ENABLE_EMAIL=true` is set for Cloud. Before some invitations, guest approvals and exports, Cloud checks that it can reach the relay. Admin’s mail and overall health checks test it too. | The relay in `APPFLOWY_MAILER_SMTP_HOST` and `APPFLOWY_MAILER_SMTP_PORT`. | **Nothing is sent** until the SMTP settings are complete, and the example password of `deploy.env` counts as unset. To keep your settings but stop mail, turn off `APPFLOWY_MAILER_ENABLED` in Admin, which applies to Cloud and the Worker. |
+| AI models | Cloud calls a model for search summaries, embeddings, presentation media, meeting transcription and Admin’s model tests. Chat and writing tools go through the `ai` container, and indexing through `appflowy_search`. | Only providers configured in Admin’s AI pages or `.env`, such as `api.openai.com`, `api.anthropic.com`, `generativelanguage.googleapis.com` and `dashscope.aliyuncs.com`. Azure OpenAI, DeepSeek, custom and local providers use the URL you configure. | **On, with no provider configured.** Turning off **Enable AI Features** on Admin’s AI page stops Cloud, Search and the AI service from calling providers, including Admin’s tests. `AI_ENABLED=false` in `.env` reaches only Cloud, so Search keeps calling a configured embedding model. [AI models](MODEL_CONFIG.md) |
+| AI Meeting with AssemblyAI | With AI on and a key in Admin or `ASSEMBLYAI_API_KEY`, Cloud uploads recordings, fetches transcripts and gets a token for live audio. The app opens the live audio stream itself. **Test connection** can use a key and endpoints you haven’t saved yet. | `api.assemblyai.com` and `streaming.assemblyai.com`, as set in `ASSEMBLYAI_API_BASE` and `ASSEMBLYAI_STREAMING_API_BASE`, or the endpoints saved in Admin’s meeting settings. | **No key is shipped.** Turning off AI stops these requests and the test. [AI Meeting](AI_MEETING_CONFIG.md) |
+| LDAP sign-in | Someone signs in through an enabled directory. An administrator’s **Test connection** contacts the directory **even while it is disabled**. | Your LDAP server, usually TCP 389 for LDAP or StartTLS, or 636 for LDAPS. | **No directory is configured.** Disabling a directory stops sign-in through it, and saving one contacts nothing. [LDAP setup](LDAP.md) |
+| Connected apps | A member links an account or uses a connected app. Cloud refreshes a token only when a request needs it. Disconnecting deletes only the local connection. | Google Drive and Calendar use `oauth2.googleapis.com` and `www.googleapis.com`. Slack uses `slack.com`, Notion uses `api.notion.com`, and GitHub uses `github.com` and `api.github.com`. | **No provider is enabled.** Only providers enabled in Admin receive requests. [Connections](CONNECTION.md) |
+| Apple account deletion | Someone deletes their own Apple-linked account, and their app sends its Apple token. | `appleid.apple.com` | **Off.** Cloud needs both `APPFLOWY_APPLE_OAUTH_CLIENT_ID` and `APPFLOWY_APPLE_OAUTH_CLIENT_SECRET`, which Docker Compose doesn’t pass to it. The account is deleted locally either way. |
 
-| Action | What triggers a request? | Where does it go? |
-| --- | --- | --- |
-| Desktop update check | Cloud looks up a release only when a client asks. **Turning off automatic updates still allows this lookup.** Cloud caches a successful result for 15 minutes. | `api.github.com` for release details. If a manifest is available, `github.com` and its download host, such as `release-assets.githubusercontent.com`. The client downloads the installer. |
-| Disposable email list sync | An administrator requests a sync to download the list used to screen sign-ups. Ordinary sign-ups use the local list. | `raw.githubusercontent.com` or the mirror set in `APPFLOWY_DISPOSABLE_DOMAINS_URL`. |
-| Email | Invitations, workspace access requests and notifications can send mail. An access request can try the sample relay even if you never set up notification emails. Admin’s mail and overall health checks also test the relay when its settings pass validation. | Your SMTP relay and port. The Compose example supplies `smtp.gmail.com:465` with TLS. |
-| Apple account deletion | When someone deletes an Apple-linked account and supplies an Apple access or refresh token, Cloud asks Apple to revoke it. | `appleid.apple.com`. |
-| PDF export | Exports include images by default. Cloud downloads a remote image when it appears in the content being exported. On the view export, `include_images=false` skips these downloads. | The image URLs in the content and any redirects. These can use different hosts and ports. |
+Self-hosted Cloud never sends mobile push notifications through Firebase, even with a service account key.
 
 ## When does Cloud contact AppFlowy about a license?
 
-**Billing in Admin.** Cloud contacts `beta.appflowy.cloud` over HTTPS when you verify a commercial account, look up plans, manage a subscription, redeem an invitation or manage registered devices.
+**Billing pages in Admin.** Admin’s license and upgrade pages reach AppFlowy Billing at `beta.appflowy.cloud` through Cloud’s `/api/commercial/billing/` routes. Cloud relays these requests when you verify a commercial account, look up plans, manage a subscription, redeem an invitation or manage registered devices. The routes need no AppFlowy session, so while the relay is on, anyone who can reach your server can make it contact AppFlowy Billing. The relay is on by default. If you don’t use these pages, turn off `APPFLOWY_COMMERCIAL_BILLING_ENABLED` in **Admin → Environment**; the routes then answer that the feature is unavailable.
 
-**Commercial account token exchange in `0.21.8`.** When an administrator uses this action, Cloud sends the account email and the installation’s **GoTrue JWT signing secret** (the key used to sign login tokens) to `beta.appflowy.cloud` over HTTPS. The published `0.21.9` Cloud image omits this exchange. [Cloud 0.21.9 image build](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/runs/44224795649)
+**Installing or checking a license.** Cloud contacts the issuer named in the signed license, normally `beta.appflowy.cloud`:
 
-**Applying or verifying a license.** Cloud contacts the issuer named in the signed license, normally `beta.appflowy.cloud`, when you apply or refresh the license and when its next verification is due. To bind the installation, Cloud sends its public IP address, configured host, machine hostname, license ID and installation identifiers.
+- When an administrator installs a license, Cloud binds the installation. It sends the license ID, the machine’s hostname, the host of `APPFLOWY_BASE_URL`, a machine fingerprint and installation identifiers. The address it reports is `0.0.0.0`, unless `APPFLOWY_IP_SERVICES` in Cloud’s environment lists IP lookup services, comma-separated, for Cloud to ask in order. `APPFLOWY_DISABLE_IP_DETECTION=true` keeps that lookup off whatever the list says.
+- When the license’s next check is due, and when an administrator refreshes it, Cloud verifies the license with its ID, the hostname, the fingerprint and the installation ID. A check that is already due runs at startup, and failed checks are retried with growing delays.
 
-During binding, Cloud looks up its public IP over HTTPS. It tries `checkip.amazonaws.com`, `api.ipify.org`, `ipv4.icanhazip.com` and `ifconfig.me/ip` in order and stops at the first valid answer. To choose your own lookup services, set `APPFLOWY_IP_SERVICES` to a comma-separated list of URLs in the Cloud container environment. `APPFLOWY_DISABLE_IP_DETECTION=true` skips just the IP lookup.
+**Usage reports.** Within 30 minutes of a valid license being installed, Cloud enrolls the installation with the issuer, using the signed license and proof of the installation’s identity. An enrolled installation reports right after enrolling and then every 24 hours, even when nobody signs in. Reporting continues after the license expires or is removed. Each report holds the installation ID, configured host, machine hostname, server version, collection time and status, the counts of regular users, guests and system administrators when available, and a copy of the installed license.
 
-**Usage reporting after enrollment.** Cloud uses a signed license and proof of installation identity to register with the issuer. In `0.21.8`, an enrolled installation sends a report to that issuer **at startup and every 30 minutes**, even when nobody is signed in. Reporting can continue after the license expires or is removed. A fresh installation without a license or prior enrollment skips these reports.
-
-Each report includes the installation fingerprint, configured host, machine hostname, server version, collection time and status. It includes counts of regular users, guests and system administrators when available, along with a copy of the installed license when present.
+Without a license or an earlier enrollment, Cloud makes no license checks or usage reports. Neither has a switch.
 
 ## Services on your deployment network
 
 | Service | Default Compose destination | When Cloud uses it |
 | --- | --- | --- |
-| PostgreSQL | `postgres:5432` (TCP) | At startup and during normal use to read and save data and listen for changes. |
-| Redis | `redis:6379` (TCP) | At startup and during normal use for caches, queues and live collaboration. |
-| MinIO | `http://minio:9000` | Checks the bucket at startup and creates it if configured. Stores files, snapshots and installation state. |
-| GoTrue | `http://gotrue:9999` | Checks the sign-in service at startup, then handles sign-in and account administration. |
-| Search | `http://appflowy_search:4002` | Checks the configured service regularly, even when nobody searches. Also sends search and index management requests. An empty `APPFLOWY_SEARCH_SERVICE_URL` skips the automatic probes. |
-| AI service | `http://ai:5001` | Handles chat, presentations, service checks and AI license changes. |
-| Server log collector | `http://appflowy_log_collector:8088` | With the server logs profile enabled, an administrator can list, preview or export logs. [Server logs](docker-compose.md#server-logs) |
+| PostgreSQL | `postgres:5432` (TCP) | At startup and during normal use, to read and save data and listen for changes. |
+| Redis | `redis:6379` (TCP) | At startup and during normal use, for caches, queues and live collaboration. |
+| MinIO | `http://minio:9000` | At every start, Cloud creates its bucket if it is missing and reads the bucket’s settings. Cloud doesn’t start while MinIO is unreachable. It stores files, snapshots and installation state there. |
+| GoTrue | `http://gotrue:9999` | One check at startup, then sign-in and account administration. |
+| Search | `http://appflowy_search:4002` | A health check right after startup and every 10 seconds, even when nobody searches, and search and indexing requests. An empty `APPFLOWY_SEARCH_SERVICE_URL` turns the checks off. |
+| AI service | `http://ai:5001` | AI requests, a check when someone creates a Chat page, presentations and license changes. Cloud never polls it. |
+| Server log collector | `http://appflowy_log_collector:8088` | With the server logs profile enabled, when an administrator lists, previews or exports logs. [Server logs](docker-compose.md#server-logs) |
 
 If you host PostgreSQL or Redis elsewhere, Cloud connects to the host in `APPFLOWY_DATABASE_URL` or `APPFLOWY_REDIS_URI`. [Deployment settings](../deploy.env)
 
-- **Files and backups.** You can use regional AWS S3 or another S3-compatible store in place of MinIO. Backup archive uploads use the same endpoint by default. Set `APPFLOWY_BACKUP_S3_ENDPOINT` if you keep archives elsewhere. [Backup](BACKUP.md)
-- **Search vectors.** Cloud stores these in PostgreSQL by default. With `VECTOR_STORAGE_TYPE=s3_vectors`, vector operations use the regional AWS endpoint, such as `s3vectors.us-east-1.api.aws`. If you use an AWS role, its credential service can also receive requests. [AWS S3 Vectors endpoints](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-regions-quotas.html)
+- **Files and backups.** You can use regional AWS S3 or another S3-compatible store in place of MinIO. Backup keeps its archives in a private bucket in the same storage. [Backup](BACKUP.md)
+- **Search vectors.** Cloud and Search store them in PostgreSQL by default. With `VECTOR_STORAGE_TYPE=s3_vectors`, they use the regional AWS endpoint, such as `s3vectors.us-east-1.api.aws`. Without `APPFLOWY_S3_VECTOR_ACCESS_KEY` and `APPFLOWY_S3_VECTOR_SECRET_KEY`, the AWS SDK looks for credentials itself and can contact AWS STS or the instance metadata service at `169.254.169.254`. [AWS S3 Vectors endpoints](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-regions-quotas.html)
+- **Outbound proxies.** Cloud’s web requests use `HTTP_PROXY` and `HTTPS_PROXY` when they are set in its environment, except image downloads for PDF exports. Add the services above to `NO_PROXY` so that requests to them stay on your network.
 
-## Reading a firewall entry
+## Other containers
 
-Start with the process that opened the connection. Worker, Search, AI, GoTrue and MCP make their own requests, and Docker pulls images. Your firewall may also record the DNS lookup or a connection through your proxy.
+Each container opens its own connections, and Docker contacts its registry, normally Docker Hub, when it pulls an image.
 
-- **A connection to GitHub when a desktop starts.** In `0.21.8`, `appflowy_cloud` can contact `api.github.com` to look up a desktop release. A connected GitHub account can also use that host. If the connection came from a user’s computer, the desktop app may be checking its own feed or downloading an installer. Desktop `0.14.0` is one version that reads its feed directly from GitHub. [Desktop 0.14.0 update feed](https://github.com/AppFlowy-IO/AppFlowy/blob/5cf3a365dec0d59f64bad1ee4bb1050471a39b93/frontend/appflowy_flutter/lib/startup/tasks/auto_update_task.dart#L20-L21)
-- **A connection to a mail relay or AI provider while everyone is idle.** Check whether an administrator opened the health page. In `0.21.8` this can probe the configured SMTP relay and send a sample to the configured embedding model. Docker’s scheduled health check only reads `/api/health` at `127.0.0.1:8000`.
+| Container | What starts a connection? | Where does it go? | How to keep it off |
+| --- | --- | --- | --- |
+| `minio` | Every start: MinIO checks for a newer release. | `dl.min.io` | Set `MINIO_UPDATE=off`, as in the [example below](#example-turn-off-minios-update-check). |
+| `gotrue` | Sign-in email, such as magic links and password recovery, sign-in through an OAuth or SAML provider you enable, and the metadata URL of a SAML provider an administrator adds. | The relay in `GOTRUE_SMTP_HOST`, and your sign-in providers. | Leave `GOTRUE_SMTP_HOST` empty to send no email. The 0.22.1 image also sends none while `.env` still holds the example SMTP block of `deploy.env`: `smtp.gmail.com` with the example user and password. OAuth and SAML providers stay off until you enable them. |
+| `ai` | AI requests that Cloud forwards, such as chat and writing tools, and web search once it is turned on. | Your configured AI providers, including the image URLs they return. Web search uses Brave Search, Tavily or DuckDuckGo and fetches the pages it finds. | Turn off **Enable AI Features** in Admin. Web search is off until it is turned on in Admin’s AI tools settings. |
+| `appflowy_search` | Indexing and search create embeddings. | Your configured embedding provider. | Turn off **Enable AI Features** in Admin. |
+| `appflowy_worker` | Workspace export and import results sent by email. | The `APPFLOWY_MAILER_SMTP_*` relay. | As for [email from Cloud](#features-that-contact-other-hosts). |
+| `appflowy_mcp` | An AI app that identifies itself with a metadata URL connects, or a connection list shows one. The first sign-in steps of an AI app need no AppFlowy account. | The app’s metadata URL. | Turn off MCP on Admin’s MCP page. MCP also stays off without a One, Team or Enterprise license. [Turning MCP off or on](docker-compose.md#turning-mcp-off-or-on) |
+| `admin_frontend` | An administrator tests a SAML metadata URL. | That URL and up to 3 redirects. | The test runs only when an administrator starts it. |
+| `appflowy_backup` | With the backup profile enabled, scheduled and manual backups upload archives. | Your object storage, in a private backup bucket. | The backup profile is off by default. [Backup](BACKUP.md) |
 
-## Feature controls in the proposed server update
+### Example: turn off MinIO’s update check
 
-These controls apply once you deploy Cloud and Worker images that include the proposed change. The Compose image `0.21.8` follows the behavior described above. The commercial self-host tests ran against images built from the proposal. [Self-host test run](https://github.com/AppFlowy-IO/AppFlowy-CI/actions/runs/45585019147)
-
-| Feature | How to keep the connection off | What to expect |
-| --- | --- | --- |
-| Desktop updates | Leave automatic updates unset or turn them off in Admin (`desktop_auto_update_enabled`). | Cloud still tells an older desktop when it must upgrade. It can return a manual download link cached within the past hour without contacting GitHub. |
-| AI models and meeting transcription | Turn off AI in Admin. With no saved `ai_enabled` value, set `AI_ENABLED=false` in Cloud. Compose defaults it to `true`. | Cloud skips calls to models and AssemblyAI, including Admin’s embedding, vision and transcription checks. You can keep the provider settings for later. |
-| LDAP | Disable the directory in Admin. | Both sign-in and **Test connection** stop before contacting that directory. |
-| Email | Leave SMTP unconfigured, or set `APPFLOWY_MAILER_ENABLED=false` in Cloud and Worker. | Both services skip delivery. Cloud also skips the SMTP health check. |
-| Images in PDF exports | Leave `APPFLOWY_PDF_EXPORT_REMOTE_IMAGES_ENABLED` unset or `false` in Cloud. | PDFs still export. Cloud omits images referenced by URL, including images on your own AppFlowy host. |
-| Disposable email domain list | Leave `APPFLOWY_DISPOSABLE_DOMAINS_URL` unset or empty in Cloud. | Sign-up screening can use the local list. To allow an administrator to import a list, set the URL to your mirror or the upstream list. |
-| Apple token revocation | Leave Cloud’s Apple credentials unset if you don’t use Apple sign-in. | Local account deletion can proceed. Cloud contacts Apple only when it has both `APPFLOWY_APPLE_OAUTH_CLIENT_ID` and `APPFLOWY_APPLE_OAUTH_CLIENT_SECRET` and the client supplies an Apple access or refresh token. |
-
-On installations with multiple Cloud replicas, a cached Admin setting can take up to 60 seconds to reach another replica. Requests already in progress can finish. Commercial license check-ins follow the installation’s enrollment status.
-
-### Example for a configured mail relay
-
-`APPFLOWY_NOTIFICATION_ENABLE_EMAIL` controls notification emails. Invitations, access requests and Worker mail can also use the relay. To keep its credentials and switch off all Cloud and Worker mail after upgrading, save this as `compose.mail-off.yml` alongside `docker-compose.yml`.
+The bundled MinIO asks `dl.min.io` for a newer release every time it starts. To turn that off, save this as `compose.offline.yml` alongside `docker-compose.yml`.
 
 ```yaml
 services:
-  appflowy_cloud:
+  minio:
     environment:
-      APPFLOWY_MAILER_ENABLED: "false"
-  appflowy_worker:
-    environment:
-      APPFLOWY_MAILER_ENABLED: "false"
+      MINIO_UPDATE: "off"
 ```
 
-Append `:compose.mail-off.yml` to the existing `COMPOSE_FILE` value in `.env`, then run `docker compose up -d appflowy_cloud appflowy_worker` to apply it. GoTrue uses its own `GOTRUE_SMTP_*` settings for sign-in email.
+Append `:compose.offline.yml` to the existing `COMPOSE_FILE` value in `.env`, then run `docker compose up -d minio` to apply it. To set one of Cloud’s variables the same way, add an `appflowy_cloud` entry with its own `environment` to this file and run `docker compose up -d appflowy_cloud`.
+
+## Reading a firewall entry
+
+Start with the container that opened the connection. Your firewall may also record the DNS lookup, or a connection to your proxy instead of the destination.
+
+- **GitHub from `appflowy_cloud`.** Automatic updates are on in **Admin → Desktop updates**, or a member uses a connected GitHub account. If the connection came from a user’s computer, the desktop app may be checking its own update feed or downloading an installer. Desktop `0.14.0` is one version that reads its feed directly from GitHub. [Desktop 0.14.0 update feed](https://github.com/AppFlowy-IO/AppFlowy/blob/5cf3a365dec0d59f64bad1ee4bb1050471a39b93/frontend/appflowy_flutter/lib/startup/tasks/auto_update_task.dart#L20-L21)
+- **`beta.appflowy.cloud` from a server without a license.** Someone opened Admin’s license or upgrade pages, or another client called `/api/commercial/billing/`. See [billing pages in Admin](#when-does-cloud-contact-appflowy-about-a-license).
+- **`dl.min.io` when the deployment starts.** This is MinIO’s update check; see the [example](#example-turn-off-minios-update-check).
+- **GitHub, Pixabay or Medium from a user’s computer after an email.** AppFlowy’s emails load their images from `raw.githubusercontent.com`, and access request emails can show default icons from `cdn.pixabay.com` and `miro.medium.com`. The recipient’s mail app fetches them, not your server.
+- **A mail relay or AI provider while everyone is idle.** Check whether an administrator opened Admin’s health page. While mail and AI are on, it tests the mail relay and sends the words `health check` to the configured embedding model. Docker’s scheduled health check only reads `/api/health` at `127.0.0.1:8000`, which contacts nothing.
+
+## Releases before 0.22.1
+
+Images `0.22.0` and earlier make these connections by default:
+
+- **Desktop updates.** Cloud looks up a release on `api.github.com` whenever a desktop asks, even with automatic updates turned off.
+- **PDF exports** download every image URL in the exported content, uploads included, and don’t check whether an address is private.
+- **The disposable email domain list** is imported from `raw.githubusercontent.com` unless `APPFLOWY_DISPOSABLE_DOMAINS_URL` names another source, and redirects are followed.
+- **Email.** With the example SMTP block of `deploy.env`, Cloud connects to `smtp.gmail.com:465` with the example credentials, for example for an access request or an invitation to an existing account. The Worker does the same for import results.
+- **AI.** Admin’s overall health check sends the words `health check` to a configured embedding model, and the vision and AssemblyAI tests contact their providers, even with AI turned off.
+- **Apple.** Cloud asks Apple to revoke a supplied token even without Apple credentials.
+- **Billing.** The billing relay has no switch.
+- **License binding** asks `checkip.amazonaws.com`, `api.ipify.org`, `ipv4.icanhazip.com` and `ifconfig.me` in turn for the server’s public address. In Cloud’s environment, `APPFLOWY_IP_SERVICES` replaces that list, and `APPFLOWY_DISABLE_IP_DETECTION=true` turns the lookup off.
+- **Web search.** The AI service offers web search through DuckDuckGo, and web fetch, unless `WEB_SEARCH_ENABLED=false` is set for it.
+- **GoTrue mail.** With the example SMTP block of `deploy.env`, a magic-link or recovery request makes GoTrue contact `smtp.gmail.com`.
+- **MCP.** Connection lists can fetch AI apps’ metadata documents while MCP is off.
+
+Older images differ further:
+
+- **Before 0.22.0**, an enrolled installation sends a usage report at startup and every 30 minutes.
+- **Up to 0.21.8**, Cloud’s commercial account token exchange sent the requesting account’s email and the installation’s GoTrue JWT signing secret to `beta.appflowy.cloud`. The 0.21.9 image omits it. [Cloud 0.21.9 image build](https://github.com/AppFlowy-IO/AppFlowy-Docker-CI/actions/runs/44224795649)
+
+After you upgrade to 0.22.1, desktop update lookups, image downloads in PDF exports, disposable list imports, the license IP lookup and web search stay off unless a saved Admin value or an environment variable turns them on.
