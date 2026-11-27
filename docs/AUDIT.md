@@ -6,6 +6,8 @@ AppFlowy Self-Hosted can record the [supported actions listed below](#what-is-re
 
 Audit logging is disabled by default. Enabling it applies to the whole deployment. Once enabled, the page shows the latest 50 recorded events across all workspaces. Every search filter is optional.
 
+To forward events continuously to a SIEM or log collector, see [Send audit logs to a SIEM](SIEM.md).
+
 ## Before you begin
 
 - Run matching AppFlowy Cloud and Admin Frontend versions that include Audit Log administration. Upgrading only one component can leave the page unavailable or unable to load its status.
