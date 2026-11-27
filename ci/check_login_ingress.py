@@ -42,12 +42,18 @@ def check(nginx_config):
         # PostgreSQL use the shipped Compose definitions and pinned images.
         (directory / 'cloud.conf').write_text('''events {}
 http { access_log off; server { listen 8000; add_header X-Request-ID $http_x_request_id always;
+    add_header Access-Control-Allow-Origin $http_origin always;
+    add_header Access-Control-Expose-Headers X-Request-ID always;
     add_header X-Fixture-Hit yes always; return 401; } }
 ''')
         (directory / 'probe.yml').write_text('''services:
   nginx:
     ports: !override ["127.0.0.1::80"]
     networks: !override [default]
+  gotrue:
+    environment:
+      GOTRUE_ADMIN_EMAIL: fixture-admin@example.org
+      GOTRUE_ADMIN_PASSWORD: disposable-fixture-correct-password
   appflowy_cloud: !override
     image: nginx
     networks:
@@ -84,16 +90,40 @@ networks:
                 ('Origin', 'http://localhost'), ('Access-Control-Request-Method', 'POST'),
                 ('Access-Control-Request-Headers', 'content-type,x-request-id')])
             assert status == 204 and 'x-request-id' in headers.get('Access-Control-Allow-Headers', '').lower()
-            status, headers = exchange(port, 'POST', path, provided + [
-                ('Origin', 'http://localhost'), ('Content-Type', 'application/json')],
-                json.dumps({'email': 'unknown-user@example.org', 'password': private[1]}).encode())
-            assert status == 400 and headers.get_all('X-Request-ID') == [login_id]
-            assert 'x-request-id' in ','.join(headers.get_all('Access-Control-Expose-Headers', [])).lower()
+            # Verify both an SDK-supplied ID and a proxy-generated ID for a headerless login.
+            # GoTrue, its startup-created user and its retained Docker log come from this stack.
+            login_attempts = set()
+            for supplied in (provided, []):
+                status, headers = exchange(port, 'POST', path, supplied + [
+                    ('Origin', 'http://localhost'), ('Content-Type', 'application/json')],
+                    json.dumps({'email': 'fixture-admin@example.org', 'password': private[1]}).encode())
+                assert status == 400 and len(headers.get_all('X-Request-ID', [])) == 1
+                actual = headers['X-Request-ID']
+                if supplied:
+                    assert actual == login_id
+                else:
+                    assert re.fullmatch('[a-f0-9]{32}', actual)
+                login_attempts.add(actual)
+                assert 'x-request-id' in ','.join(headers.get_all('Access-Control-Expose-Headers', [])).lower()
+            until = time.monotonic() + 5
+            while True:
+                records = (json.loads(line) for line in compose('logs', '--no-log-prefix', 'gotrue').splitlines()
+                           if line.startswith('{'))
+                logged = {record.get('request_id') for record in records
+                          if record.get('msg') == 'request completed' and record.get('path') == '/token'
+                          and record.get('grant_type') == 'password' and record.get('status') == 400}
+                if login_attempts <= logged:
+                    break
+                if time.monotonic() >= until:
+                    raise AssertionError('Returned ID missing from a rejected password grant in the GoTrue log')
+                time.sleep(.1)
 
             verify = '/api/user/verify/' + private[0] + '?token=' + private[2]
             for method, target in [('GET', verify), ('POST', '/api/auth/ldap/login')]:
-                status, headers = exchange(port, method, target, provided)
+                status, headers = exchange(port, method, target, provided + [('Origin', 'http://localhost')])
                 assert status == 401 and headers.get('X-Fixture-Hit') == 'yes'
+                assert headers.get_all('Access-Control-Allow-Origin') == ['http://localhost']
+                assert 'x-request-id' in headers['Access-Control-Expose-Headers'].lower()
                 assert headers.get_all('X-Request-ID') == [login_id]
             generated = set()
             for ids in [[], ['.'], ['..'], ['invalid id'], ['z' * 129], ['one', 'two']]:

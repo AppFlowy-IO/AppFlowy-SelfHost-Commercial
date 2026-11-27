@@ -69,9 +69,11 @@ The Compose proxy records a small JSON status line for a GoTrue token exchange, 
 or Cloud verification. It carries the request ID, operation, time and HTTP status. A
 verification URL contains an access token; the proxy keeps that URL, query string and referrer
 out of its access logs. For example, if a login fails, take the `X-Request-Id` from its response
-and search the Nginx service output for that exact ID. The current pinned GoTrue image generates
-its own native request ID internally. On a legacy GoTrue 5xx, `error_id` in its response body
-identifies its native log, while the proxy response ID identifies the Nginx record.
+and search the Nginx service output for that exact ID. For a rejected password grant the same
+ID appears on GoTrue's `request completed` log entry for `POST /token`. Compose configures
+`GOTRUE_API_REQUEST_ID_HEADER=X-Request-Id`, and Nginx supplies a validated ID on every
+proxied Auth request. Clients calling the pinned GoTrue image directly must send this header
+to retain an ID in its log and legacy 5xx error body.
 
 ```dotenv
 APPFLOWY_BACKUP_PROFILE=
