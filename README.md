@@ -84,7 +84,34 @@ Commercial self-hosting helps fund the continued development, maintenance, and s
 
 ## Release Notes
 
-### 🚀 v0.21.10 (Latest)
+### 🚀 v0.22.1 (Latest)
+
+#### New Features
+
+- **SIEM audit feed (Team and Enterprise)** — With audit logging enabled, system administrators could grant collectors read-only access to one workspace or the whole installation. Collectors could resume from a saved checkpoint. [SIEM setup](docs/SIEM.md)
+- **Database row API** — Cursor-based sync picked up edits that became visible after an earlier poll. Relation cells returned linked row IDs in pages, with optional titles for rows the caller could read.
+- **Delegated database access (opt-in)** — Dashboards could exchange Microsoft Entra ID tokens to read database fields and sync, create or edit rows as the signed-in user. This required a GoTrue build configured for token exchange and matching `APPFLOWY_TOKEN_EXCHANGE_ISSUER` and `APPFLOWY_TOKEN_EXCHANGE_AUDIENCE` settings in Cloud.
+
+#### Improvements
+
+- **Workspace search** — Keyword search matched Russian word forms and е/ё spellings and handled typos in other non-Latin scripts. English queries such as “show my todo tasks” found open assignments in recently visited documents and grids.
+- **Search indexing** — Reused embeddings for unchanged passages after edits and let other indexing work proceed while a task waited for a snapshot.
+
+#### Bug Fixes
+
+- Recovered stalled sidebar renames and favorite updates after incomplete syncs, preserving favorite order.
+- Fixed row pages failing to reopen from another linked view of the same database. Page and linked-view creation retried after temporary lock conflicts.
+- Protected resumed uploads from cleanup. Backup flagged missing row-page content and rejected captures when a ready attachment was missing or had the wrong size.
+
+#### ⚠️ Action Required
+
+- **Server and Backup upgrade** — Let Cloud apply its PostgreSQL migrations before starting the updated MCP service or running Backup jobs. Match Backup to your PostgreSQL major version. Incremental captures still need staging space for a full dump. Restoring one requires format-4-capable tools, the full base and every intervening increment. [Backup image selection](docs/BACKUP.md#choose-the-backup-image)
+- **SIEM recovery** — After a full restore, or a logical PostgreSQL restore that resets the feed, issue fresh collector tokens and replay retained events. Deduplicate by event ID.
+- **Worker rollback** — To revert to a Worker without delayed indexing retries, stop the upgraded Workers and let in-flight jobs finish. With indexing enabled, run the upgraded server’s `promote_due.lua` once per second until `af:realtime_index_task_retries` is empty.
+
+**Baseline:** [`50a7a1efb23ca144e40e35d9a78ab1b760dbb322`](https://github.com/AppFlowy-IO/AppFlowy-Cloud-Preminum/commit/50a7a1efb23ca144e40e35d9a78ab1b760dbb322)
+
+### 🚀 v0.21.10
 
 #### Improvements
 
