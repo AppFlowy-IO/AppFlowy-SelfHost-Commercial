@@ -76,9 +76,7 @@ You can also set AssemblyAI in `.env`. Both ways work together: a value saved in
 
 ## Import from YouTube
 
-Members can import a YouTube video’s captions into an AI Meeting block. The `appflowy_web` container reads them from `www.youtube.com`, so it needs outbound HTTPS access to YouTube. The import uses no AssemblyAI transcription minutes.
-
-The bundled Nginx and the Helm chart’s Ingress send `/api/youtube-audio` to AppFlowy Web, while every other `/api` path goes to `appflowy_cloud`. If you use your own reverse proxy, route that path to `appflowy_web` too.
+Importing a YouTube video into an AI Meeting block doesn’t work on self-hosted servers. AppFlowy Web first checks the workspace’s usage with an endpoint that self-hosted Cloud doesn’t provide, so the import fails before it contacts YouTube.
 
 ## Troubleshooting
 
