@@ -12,6 +12,7 @@ operational limits.
 | Install or upgrade with Docker Compose | [Docker Compose](docker-compose.md) |
 | Deploy with Docker Swarm | [Docker Swarm](docker-swarm.md) |
 | Deploy to Kubernetes | [Helm chart](../helm/appflowy-cloud/README.md) |
+| Review where Cloud connects and when it needs internet access | [Outbound connections from AppFlowy Cloud](OUTBOUND_CONNECTIONS.md) |
 | Back up and restore the instance | [Server backup](BACKUP.md) |
 | Investigate administrative and permission changes | [Audit logging](AUDIT.md) |
 | Send audit events to a SIEM or log collector | [SIEM integration](SIEM.md) |

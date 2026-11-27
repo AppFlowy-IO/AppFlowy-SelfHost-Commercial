@@ -11,6 +11,8 @@ Check out our [release notes](#Release-Notes) for the latest updates, improvemen
 For how component versions are selected and proposed for deployment releases, see
 [Release image updates](docs/RELEASE_IMAGES.md).
 
+To review firewall rules for self-hosted Cloud, see [Outbound connections from AppFlowy Cloud](docs/OUTBOUND_CONNECTIONS.md).
+
 For audit configuration, event review, and CSV export in the Admin console, see the illustrated [Audit Logging guide](docs/AUDIT.md).
 
 For Google Drive and Google Calendar setup in Admin and account connections from web and desktop, see the illustrated [Connections guide](docs/CONNECTION.md).
