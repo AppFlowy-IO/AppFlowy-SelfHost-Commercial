@@ -132,7 +132,8 @@ networks:
                 assert status == 401 and len(actual) == 1 and re.fullmatch('[a-f0-9]{32}', actual[0])
                 assert actual[0] not in generated
                 generated.add(actual[0])
-            status, headers = exchange(port, 'GET', '/api/ordinary', provided + [('Referer', verify)])
+            referrer = ('Referer', 'http://localhost' + verify)
+            status, headers = exchange(port, 'GET', '/api/ordinary', provided + [referrer])
             assert status == 401 and re.fullmatch('[a-f0-9]{32}', headers['X-Request-ID'])
             # Keep the container's DNS/IP stable but close the Cloud port. This
             # reproduces a real upstream refusal without waiting on an ARP timeout.
@@ -158,6 +159,8 @@ networks:
                     raise AssertionError('Missing request-correlated proxy status')
                 time.sleep(.1)
             assert all(set(e) == {'request_id', 'operation', 'status', 'time'} for e in events)
+            assert re.search(r'"GET /api/ordinary HTTP/1\.1" 401 \d+ "-"', logs), (
+                'Missing redacted ordinary access record')
         finally:
             compose('down', '--volumes', '--remove-orphans')
     print('Password, LDAP, verification, proxy outage, ID validation, CORS and log privacy passed.')
