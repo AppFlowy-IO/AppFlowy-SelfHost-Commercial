@@ -87,6 +87,15 @@ spec:
                   number: {{ index .Values "admin-frontend" "service" "port" }}
           {{- end }}
           {{- if index .Values "appflowy-web" "enabled" }}
+          # AI Meeting's YouTube import, served by Web's server. The longer, exact path wins over
+          # the /api prefix, which sends every other /api request to Cloud.
+          - path: /api/youtube-audio
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "appflowy.web.fullname" . }}
+                port:
+                  number: {{ index .Values "appflowy-web" "service" "port" }}
           # Web frontend (catch-all, must be last)
           - path: /
             pathType: Prefix
