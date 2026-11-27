@@ -73,7 +73,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.0@sha256:8792c04f21551bc43fd788d18b4911e36bb66362b8ae2d6ea483fa133c98036b}
+    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.1@sha256:1284b81cbc2cbeeeed401645b44efc60a781812a6106dd5f48baacaff5c7654b}
     environment:
       # There are a lot of options to configure GoTrue. You can reference the example config:
       # https://github.com/supabase/auth/blob/master/example.env
@@ -192,7 +192,7 @@ services:
       # No collector dependency or startup probe when server logs are disabled.
       - APPFLOWY_SERVER_LOGS_URL=${APPFLOWY_SERVER_LOGS_PROFILE:+http://appflowy_log_collector:8088}
       - APPFLOWY_SERVER_LOGS_TOKEN=${APPFLOWY_SERVER_LOGS_PROFILE:+${APPFLOWY_SERVER_LOGS_TOKEN:-}}
-    image: appflowyinc/appflowy_cloud:0.22.0@sha256:b09a23b19de9942843b0c4c69420df61bcc7e80069ba267acc3ddcc69565f0d6
+    image: appflowyinc/appflowy_cloud:0.22.1@sha256:153b3c92a4067f5c571031751d774e8a08e8b31f07419afe6b3f3ae87e4e8705
     healthcheck:
       test: "curl --fail http://127.0.0.1:8000/api/health || exit 1"
       interval: 5s
@@ -223,7 +223,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_ai:0.22.0@sha256:ab61a54e3c54f4c374f9bf9ece7f7c977c98d001d13f4a77c5ca7bd5d8768f71
+    image: appflowyinc/appflowy_ai:0.22.1@sha256:953ac75bbce489f967069d5890a7f2b9e851b558c292138260af74189527ac2b
     environment:
       - AI_SERVER_PORT=${AI_SERVER_PORT}
       - OPENAI_API_KEY=${AI_OPENAI_API_KEY}
@@ -260,7 +260,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_worker:0.22.0@sha256:577d7ca0dd5b3fcaaffa8c7fd99897e8b4a33850f5312e331cb017fd0004f651
+    image: appflowyinc/appflowy_worker:0.22.1@sha256:e284b765cfbbd455c2e8d330336133354d858ed95b00028ac5915edc3bc5ded9
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_ENVIRONMENT=production
@@ -293,7 +293,7 @@ services:
         required: false
         format: raw
     restart: on-failure
-    image: appflowyinc/appflowy_search:0.22.0@sha256:cd883ad1631a9de134e03b4bb0ab852f17174e6ad60512e7f01182b8002463a4
+    image: appflowyinc/appflowy_search:0.22.1@sha256:2eb3ab4a14953a1807773679a1cf5fc1c5f2a0bcff2b91335e7d9c1cffb130d8
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_SEARCH_HOST=${APPFLOWY_SEARCH_HOST:-[::]}
@@ -359,7 +359,7 @@ services:
       default: {}
       mcp_proxy:
         aliases: [mcp-ingress]
-    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.0@sha256:ed763b979e3a2eba2c961bb92d784d84c9d00a82be66347e396eeeae7f507066}
+    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.1@sha256:771d34b4e57a445fd6449b354875093f05be881f7b62f458555f2c0ea1dafc65}
     environment:
       - RUST_LOG=${RUST_LOG:-info}
       - APPFLOWY_APPLICATION_HOST=[::]
@@ -444,14 +444,14 @@ services:
         required: false
         format: raw
     profiles: [backup]
-    image: appflowyinc/appflowy_backup:0.22.0@sha256:851bb996df5b9d4d79a0d5b89180d226622d0c94de2993e70c68bf24358365e7
+    image: appflowyinc/appflowy_backup:0.22.1@sha256:d9ce1cbe93d7385663dba979f1b5981b145eace336a0b11ee1a58fae24195cb5
     restart: unless-stopped
 
   # The only Docker socket added for server-log viewing belongs to this isolated reader.
   # A read-only bind does not itself restrict Docker's API; the reader exposes only scoped logs.
   appflowy_log_collector:
     profiles: [server-logs]
-    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.22.0@sha256:6510dace86e633fad45eabf7f4e96849ade62ea32f3b0c85fdbb871ac5979f1a}
+    image: ${APPFLOWY_SERVER_LOGS_IMAGE:-appflowyinc/appflowy_log_collector:0.22.1@sha256:22f8809e5beea72a789b2193ed9982bf6e53cffb4e85fcaf455fff13b1039600}
     restart: unless-stopped
     user: "0:0"
     read_only: true
