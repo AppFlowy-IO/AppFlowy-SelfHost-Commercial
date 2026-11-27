@@ -107,7 +107,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.1@sha256:1284b81cbc2cbeeeed401645b44efc60a781812a6106dd5f48baacaff5c7654b}
+    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.2@sha256:e5939e8b2f2c304ec0c0406784906d764ccc74e293c7f3e7361b8a4767375aee}
     environment:
     - GOTRUE_ADMIN_EMAIL=${GOTRUE_ADMIN_EMAIL}
     - GOTRUE_ADMIN_PASSWORD=${GOTRUE_ADMIN_PASSWORD}
@@ -206,7 +206,7 @@ services:
     - AI_ENABLED=${AI_ENABLED:-true}
     - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
     - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:0.22.1@sha256:153b3c92a4067f5c571031751d774e8a08e8b31f07419afe6b3f3ae87e4e8705
+    image: appflowyinc/appflowy_cloud:0.22.2@sha256:06a2eeb329a2275ef8763f47cf025e525fc478cd35a4433bceabad9cd5037ba8
     healthcheck:
       test: curl --fail http://127.0.0.1:8000/api/health || exit 1
       interval: 5s
@@ -230,7 +230,7 @@ services:
         parallelism: 1
         order: stop-first
   ai:
-    image: appflowyinc/appflowy_ai:0.22.1@sha256:953ac75bbce489f967069d5890a7f2b9e851b558c292138260af74189527ac2b
+    image: appflowyinc/appflowy_ai:0.22.2@sha256:ef8cb3c95f72d8acd0ec7f6d45d671b15757889da6258c4b99e3a467c6deb62c
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - AI_REDIS_URL=${APPFLOWY_REDIS_URI}
@@ -266,7 +266,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_worker:
-    image: appflowyinc/appflowy_worker:0.22.1@sha256:e284b765cfbbd455c2e8d330336133354d858ed95b00028ac5915edc3bc5ded9
+    image: appflowyinc/appflowy_worker:0.22.2@sha256:1d130de3abc225afa68275c494223952d911097736418d76011293df0593db40
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_WORKER_REDIS_URL=${APPFLOWY_WORKER_REDIS_URL:-redis://redis:6379}
@@ -294,7 +294,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_search:
-    image: appflowyinc/appflowy_search:0.22.1@sha256:2eb3ab4a14953a1807773679a1cf5fc1c5f2a0bcff2b91335e7d9c1cffb130d8
+    image: appflowyinc/appflowy_search:0.22.2@sha256:ac3fe90070c6213f404a9879211aa4f65df8d07f609ab9a4da99f1d975b09322
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI}
@@ -353,7 +353,7 @@ services:
       mcp_proxy:
         aliases:
         - mcp-ingress
-    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.1@sha256:771d34b4e57a445fd6449b354875093f05be881f7b62f458555f2c0ea1dafc65}
+    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.2@sha256:672d437b2c14c32cfb8f68be3c50c24e9103dcece2671ca212f1d4a62df93c59}
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI}
