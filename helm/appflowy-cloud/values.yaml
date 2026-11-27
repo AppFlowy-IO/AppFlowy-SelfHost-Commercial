@@ -173,6 +173,10 @@ minio:
     - /bitnami/minio/data
     - --console-address
     - ":9001"
+  # MinIO otherwise asks dl.min.io for a newer release each time it starts.
+  extraEnvVars:
+    - name: MINIO_UPDATE
+      value: "off"
   auth:
     rootUser: minioadmin
     rootPassword: "minioadmin"  # MUST be set
@@ -210,8 +214,8 @@ gotrue:
 
   image:
     repository: appflowyinc/gotrue
-    tag: "0.22.0"
-    digest: sha256:8792c04f21551bc43fd788d18b4911e36bb66362b8ae2d6ea483fa133c98036b
+    tag: "0.22.2"
+    digest: sha256:e5939e8b2f2c304ec0c0406784906d764ccc74e293c7f3e7361b8a4767375aee
     pullPolicy: IfNotPresent
 
   service:
@@ -275,6 +279,26 @@ gotrue:
       enabled: false
       privateKey: ""
 
+    # Delegated row access for a dashboard backend (docs/DELEGATED_ACCESS.md). GoTrue exchanges
+    # a signed-in user's Microsoft Entra access token for a short-lived AppFlowy token. There
+    # is no switch: it is off while tenantId, provider, clients and signingKeys are all empty,
+    # and the chart requires tenantId and provider once any of them is set. Set
+    # appflowy-cloud.config.tokenExchangeAudience as well so that Cloud accepts the tokens.
+    tokenExchange:
+      # Lowercase Entra tenant UUID, and the identifier of that tenant's OIDC provider.
+      tenantId: ""
+      provider: ""  # for example custom:entra
+      # Registered backends by GoTrue client UUID:
+      #   <gotrue-client-uuid>: {entra_client_id: <dashboard-app-id>, audience: <api-app-id>,
+      #                          scopes: [data.read, data.write]}
+      clients: {}
+      # JSON array of ES256 P-256 JWKs used only for these tokens. Stored in the GoTrue
+      # secret; leave empty on an upgrade to keep the stored keys.
+      signingKeys: ""
+      # Exchanges per backend per five minutes, and exchanges in progress at once.
+      rateLimit: 150
+      maxConcurrent: 8
+
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -293,8 +317,8 @@ appflowy-backup:
   enabled: false
   image:
     repository: appflowyinc/appflowy_backup
-    tag: "0.22.0"
-    digest: sha256:851bb996df5b9d4d79a0d5b89180d226622d0c94de2993e70c68bf24358365e7
+    tag: "0.22.2"
+    digest: sha256:d2e4ae2b2d38df132ef5ebba3528ffb5aca7e3567ac263d9cd27743361774a85
     pullPolicy: IfNotPresent
   # Exact kubernetes.io/hostname shared with Search's local LMDB volume.
   nodeName: ""
@@ -321,8 +345,8 @@ appflowy-cloud:
 
   image:
     repository: appflowyinc/appflowy_cloud
-    tag: "0.22.0"
-    digest: sha256:b09a23b19de9942843b0c4c69420df61bcc7e80069ba267acc3ddcc69565f0d6
+    tag: "0.22.2"
+    digest: sha256:06a2eeb329a2275ef8763f47cf025e525fc478cd35a4433bceabad9cd5037ba8
     pullPolicy: IfNotPresent
 
   service:
@@ -348,6 +372,11 @@ appflowy-cloud:
     # Audit logging fallback for the switch in Admin -> Audit Log, used until Admin saves one.
     # Empty leaves it unset (off). The bundled appflowy-mcp service receives the same value.
     auditEnable: ""
+
+    # Accept the tokens GoTrue exchanges for a dashboard backend on the database row API.
+    # Set it to the Entra application ID used as "audience" in gotrue.config.tokenExchange
+    # .clients. The chart supplies GoTrue's public URL as the issuer. Empty leaves it off.
+    tokenExchangeAudience: ""
 
     # WebSocket configuration
     websocketMailboxSize: 6000
@@ -416,8 +445,8 @@ appflowy-worker:
 
   image:
     repository: appflowyinc/appflowy_worker
-    tag: "0.22.0"
-    digest: sha256:577d7ca0dd5b3fcaaffa8c7fd99897e8b4a33850f5312e331cb017fd0004f651
+    tag: "0.22.2"
+    digest: sha256:1d130de3abc225afa68275c494223952d911097736418d76011293df0593db40
     pullPolicy: IfNotPresent
 
   service:
@@ -463,8 +492,8 @@ appflowy-search:
   replicaCount: 1
   image:
     repository: appflowyinc/appflowy_search
-    tag: "0.22.0"
-    digest: sha256:cd883ad1631a9de134e03b4bb0ab852f17174e6ad60512e7f01182b8002463a4
+    tag: "0.22.2"
+    digest: sha256:ac3fe90070c6213f404a9879211aa4f65df8d07f609ab9a4da99f1d975b09322
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -551,8 +580,8 @@ admin-frontend:
 
   image:
     repository: appflowyinc/admin_frontend
-    tag: "0.20.5"
-    digest: sha256:bc935929b81ebaf7a9a282962695fa679c6eb7f912b2e48342e6bcacae8fc0ae
+    tag: "0.21.0"
+    digest: sha256:4aedbdb4ccc882bc34244dae5960826f46904d57a9efc4752573cd09b0af85ee
     pullPolicy: IfNotPresent
 
   service:
@@ -587,8 +616,8 @@ appflowy-ai:
 
   image:
     repository: appflowyinc/appflowy_ai
-    tag: "0.22.0"
-    digest: sha256:ab61a54e3c54f4c374f9bf9ece7f7c977c98d001d13f4a77c5ca7bd5d8768f71
+    tag: "0.22.2"
+    digest: sha256:ef8cb3c95f72d8acd0ec7f6d45d671b15757889da6258c4b99e3a467c6deb62c
     pullPolicy: IfNotPresent
 
   service:
@@ -653,8 +682,8 @@ appflowy-mcp:
 
   image:
     repository: appflowyinc/appflowy_mcp
-    tag: "0.22.0"
-    digest: sha256:ed763b979e3a2eba2c961bb92d784d84c9d00a82be66347e396eeeae7f507066
+    tag: "0.22.2"
+    digest: sha256:672d437b2c14c32cfb8f68be3c50c24e9103dcece2671ca212f1d4a62df93c59
     pullPolicy: IfNotPresent
 
   service:

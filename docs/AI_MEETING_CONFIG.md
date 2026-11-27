@@ -74,6 +74,10 @@ You can also set AssemblyAI in `.env`. Both ways work together: a value saved in
 - Docker Compose and Docker Swarm pass these variables to `appflowy_cloud`. The Helm chart does not, so use the Meeting tab on Kubernetes.
 - The card's **Source** line tells you which one is in use. **Reset to environment** removes what was saved in Admin and returns to these variables.
 
+## Import from YouTube
+
+Importing a YouTube video into an AI Meeting block doesn’t work on self-hosted servers. AppFlowy Web first checks the workspace’s usage with an endpoint that self-hosted Cloud doesn’t provide, so the import fails before it contacts YouTube.
+
 ## Troubleshooting
 
 | Problem | What to check |

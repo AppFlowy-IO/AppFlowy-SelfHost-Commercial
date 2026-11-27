@@ -145,6 +145,13 @@ spec:
             - name: APPFLOWY_AUDIT_ENABLE
               value: {{ . | quote }}
             {{- end }}
+            {{- with $cloud.config.tokenExchangeAudience }}
+            # Delegated row access: accept GoTrue's exchanged tokens for this audience.
+            - name: APPFLOWY_TOKEN_EXCHANGE_ISSUER
+              value: {{ include "appflowy.gotrue.externalUrl" $ | quote }}
+            - name: APPFLOWY_TOKEN_EXCHANGE_AUDIENCE
+              value: {{ . | quote }}
+            {{- end }}
 
             # WebSocket configuration
             - name: APPFLOWY_WEBSOCKET_MAILBOX_SIZE

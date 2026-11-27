@@ -34,6 +34,7 @@ services:
     - MINIO_BROWSER_REDIRECT_URL=${APPFLOWY_BASE_URL?:err}/minio
     - MINIO_ROOT_USER=${APPFLOWY_S3_ACCESS_KEY:-minioadmin}
     - MINIO_ROOT_PASSWORD=${APPFLOWY_S3_SECRET_KEY:-minioadmin}
+    - MINIO_UPDATE=off
     command: server /data --console-address ":9001"
     healthcheck:
       test:
@@ -106,7 +107,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
-    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.0@sha256:8792c04f21551bc43fd788d18b4911e36bb66362b8ae2d6ea483fa133c98036b}
+    image: appflowyinc/gotrue:${GOTRUE_VERSION:-0.22.2@sha256:e5939e8b2f2c304ec0c0406784906d764ccc74e293c7f3e7361b8a4767375aee}
     environment:
     - GOTRUE_ADMIN_EMAIL=${GOTRUE_ADMIN_EMAIL}
     - GOTRUE_ADMIN_PASSWORD=${GOTRUE_ADMIN_PASSWORD}
@@ -149,6 +150,12 @@ services:
     - GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI=${GOTRUE_EXTERNAL_DISCORD_REDIRECT_URI}
     - GOTRUE_SAML_ENABLED=${GOTRUE_SAML_ENABLED}
     - GOTRUE_SAML_PRIVATE_KEY=${GOTRUE_SAML_PRIVATE_KEY}
+    - GOTRUE_TOKEN_EXCHANGE_TENANT_ID=${GOTRUE_TOKEN_EXCHANGE_TENANT_ID:-}
+    - GOTRUE_TOKEN_EXCHANGE_PROVIDER=${GOTRUE_TOKEN_EXCHANGE_PROVIDER:-}
+    - GOTRUE_TOKEN_EXCHANGE_CLIENTS=${GOTRUE_TOKEN_EXCHANGE_CLIENTS:-}
+    - GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS=${GOTRUE_TOKEN_EXCHANGE_SIGNING_KEYS:-}
+    - GOTRUE_TOKEN_EXCHANGE_RATE_LIMIT=${GOTRUE_TOKEN_EXCHANGE_RATE_LIMIT:-150}
+    - GOTRUE_TOKEN_EXCHANGE_MAX_CONCURRENT=${GOTRUE_TOKEN_EXCHANGE_MAX_CONCURRENT:-8}
     deploy:
       restart_policy:
         condition: on-failure
@@ -189,6 +196,8 @@ services:
     - APPFLOWY_MCP_ALLOWED_EMAILS=${APPFLOWY_MCP_ALLOWED_EMAILS:-}
     - APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE=${APPFLOWY_MCP_OAUTH_IP_RATE_LIMIT_PER_MINUTE:-}
     - APPFLOWY_AUDIT_ENABLE=${APPFLOWY_AUDIT_ENABLE:-}
+    - APPFLOWY_TOKEN_EXCHANGE_ISSUER=${APPFLOWY_TOKEN_EXCHANGE_ISSUER:-}
+    - APPFLOWY_TOKEN_EXCHANGE_AUDIENCE=${APPFLOWY_TOKEN_EXCHANGE_AUDIENCE:-}
     - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
     - ASSEMBLYAI_API_BASE=${ASSEMBLYAI_API_BASE}
     - ASSEMBLYAI_STREAMING_API_BASE=${ASSEMBLYAI_STREAMING_API_BASE}
@@ -198,7 +207,7 @@ services:
     - AI_ENABLED=${AI_ENABLED:-true}
     - SIGNUP_WHITELIST_ENABLED=${SIGNUP_WHITELIST_ENABLED:-false}
     - GUEST_INVITES_REQUIRE_ADMIN_APPROVAL=${GUEST_INVITES_REQUIRE_ADMIN_APPROVAL:-false}
-    image: appflowyinc/appflowy_cloud:0.22.0@sha256:b09a23b19de9942843b0c4c69420df61bcc7e80069ba267acc3ddcc69565f0d6
+    image: appflowyinc/appflowy_cloud:0.22.2@sha256:06a2eeb329a2275ef8763f47cf025e525fc478cd35a4433bceabad9cd5037ba8
     healthcheck:
       test: curl --fail http://127.0.0.1:8000/api/health || exit 1
       interval: 5s
@@ -211,7 +220,7 @@ services:
         parallelism: 1
         order: stop-first
   admin_frontend:
-    image: appflowyinc/admin_frontend:0.20.5@sha256:bc935929b81ebaf7a9a282962695fa679c6eb7f912b2e48342e6bcacae8fc0ae
+    image: appflowyinc/admin_frontend:0.21.0@sha256:4aedbdb4ccc882bc34244dae5960826f46904d57a9efc4752573cd09b0af85ee
     environment:
     - APPFLOWY_GOTRUE_BASE_URL=${APPFLOWY_GOTRUE_BASE_URL:-http://gotrue:9999}
     - APPFLOWY_BASE_URL=${APPFLOWY_BASE_URL:-http://appflowy_cloud:8000}
@@ -222,7 +231,7 @@ services:
         parallelism: 1
         order: stop-first
   ai:
-    image: appflowyinc/appflowy_ai:0.22.0@sha256:ab61a54e3c54f4c374f9bf9ece7f7c977c98d001d13f4a77c5ca7bd5d8768f71
+    image: appflowyinc/appflowy_ai:0.22.2@sha256:ef8cb3c95f72d8acd0ec7f6d45d671b15757889da6258c4b99e3a467c6deb62c
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - AI_REDIS_URL=${APPFLOWY_REDIS_URI}
@@ -258,7 +267,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_worker:
-    image: appflowyinc/appflowy_worker:0.22.0@sha256:577d7ca0dd5b3fcaaffa8c7fd99897e8b4a33850f5312e331cb017fd0004f651
+    image: appflowyinc/appflowy_worker:0.22.2@sha256:1d130de3abc225afa68275c494223952d911097736418d76011293df0593db40
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_WORKER_REDIS_URL=${APPFLOWY_WORKER_REDIS_URL:-redis://redis:6379}
@@ -286,7 +295,7 @@ services:
         parallelism: 1
         order: stop-first
   appflowy_search:
-    image: appflowyinc/appflowy_search:0.22.0@sha256:cd883ad1631a9de134e03b4bb0ab852f17174e6ad60512e7f01182b8002463a4
+    image: appflowyinc/appflowy_search:0.22.2@sha256:ac3fe90070c6213f404a9879211aa4f65df8d07f609ab9a4da99f1d975b09322
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_SEARCH_REDIS_URL=${APPFLOWY_REDIS_URI}
@@ -345,7 +354,7 @@ services:
       mcp_proxy:
         aliases:
         - mcp-ingress
-    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.0@sha256:ed763b979e3a2eba2c961bb92d784d84c9d00a82be66347e396eeeae7f507066}
+    image: appflowyinc/appflowy_mcp:${APPFLOWY_MCP_VERSION:-0.22.2@sha256:672d437b2c14c32cfb8f68be3c50c24e9103dcece2671ca212f1d4a62df93c59}
     environment:
     - APPFLOWY_S3_BUCKET=${APPFLOWY_S3_BUCKET}
     - APPFLOWY_REDIS_URI=${APPFLOWY_REDIS_URI}

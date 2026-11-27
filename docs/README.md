@@ -12,6 +12,7 @@ operational limits.
 | Install or upgrade with Docker Compose | [Docker Compose](docker-compose.md) |
 | Deploy with Docker Swarm | [Docker Swarm](docker-swarm.md) |
 | Deploy to Kubernetes | [Helm chart](../helm/appflowy-cloud/README.md) |
+| Review where Cloud connects and when it needs internet access | [Outbound connections from AppFlowy Cloud](OUTBOUND_CONNECTIONS.md) |
 | Back up and restore the instance | [Server backup](BACKUP.md) |
 | Investigate administrative and permission changes | [Audit logging](AUDIT.md) |
 | Send audit events to a SIEM or log collector | [SIEM integration](SIEM.md) |
@@ -29,6 +30,7 @@ keeps workspace users and groups synchronized; sign-in is configured separately.
 | Configure OIDC / OAuth sign-in | [OIDC](OIDC.md) |
 | Configure SAML sign-in | [SAML with Okta](OKTA_SAML.md) |
 | Sign in against Windows AD or another LDAP directory | [LDAP](LDAP.md) |
+| Let a backend read and edit rows as its Entra-signed-in users | [Delegated row access](DELEGATED_ACCESS.md) |
 | Set up the SCIM endpoint, token, and attribute mappings | [SCIM setup and API reference](SCIM.md) |
 | Understand roles, group moves, offboarding, and recovery | [SCIM operations](SCIM_OPERATIONS.md) |
 | Verify eight users’ group roles and content access with screenshots | [SCIM permission matrix demo](SCIM_DEMO.md) |
